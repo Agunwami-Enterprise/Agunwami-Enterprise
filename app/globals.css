@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  --background: #FAFAFA;
+  --foreground: #171717;
+  --primary: #C89B3C;
+  --secondary: #000000;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --font-primary: var(--font-dm-serif);
+  --font-secondary: var(--font-inter);
+  --background-image-hero-gradient: linear-gradient(to right, #FFFFFFF7, #00000000), url('/herobg.jpg');
+  --background-image-ourservices: url('/ourservices.png');
+  --background-image-ecobg: url('/ecobg.png');
+  --background-image-ecocard: url('/ecocard.png');
+  --background-image-cta: linear-gradient(to right, #1A1A1A, #00000000), url('/ctabg.png');
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --primary: #C89B3C;
+    --secondary: #ffffff;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}

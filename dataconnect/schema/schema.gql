@@ -1,0 +1,52 @@
+type CompanyInfo @table {
+  companyName: String!
+  mission: String!
+  vision: String!
+  email: String!
+  phone: String!
+  address: String
+  description: String
+  facebookUrl: String
+  twitterUrl: String
+  linkedinUrl: String
+}
+
+type Service @table {
+  name: String!
+  description: String!
+  imageUrl: String
+  iconUrl: String
+  benefits: [String]
+}
+
+type Project @table {
+  title: String!
+  description: String!
+  startDate: Date!
+  endDate: Date!
+  clientName: String
+  industry: String
+  projectUrl: String
+  imageUrls: [String]
+}
+
+type Inquiry @table {
+  name: String!
+  email: String!
+  subject: String!
+  message: String!
+  createdAt: Timestamp!
+  phone: String
+  companyName: String
+}
+
+type JobOpening @table {
+  title: String!
+  description: String!
+  location: String!
+  department: String!
+  postedDate: Date!
+  responsibilities: [String]
+  qualifications: [String]
+  applicationDeadline: Date
+}
