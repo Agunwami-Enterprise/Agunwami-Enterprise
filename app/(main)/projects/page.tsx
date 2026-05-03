@@ -63,7 +63,7 @@ export default function Projects() {
                             {project.projectCategory}
                           </span>
                           <Image
-                            src={project.image}
+                            src={project.image ?? ""}
                             alt={project.name}
                             width={100}
                             height={100}
@@ -113,7 +113,7 @@ export default function Projects() {
                               Technologies
                             </h4>
                             <div className="flex flex-wrap gap-4">
-                              {project.technologyStack.map((tech, index) => (
+                              {project.technologyStack?.map((tech, index) => (
                                 <div
                                   key={index}
                                   className="text-[12px] text-[#6B7280] leading-[14px] font-[400] tracking-tight bg-[#F7F5F2] px-4 py-2 rounded-lg border border-[#E5E7EB]"
