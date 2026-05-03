@@ -12,7 +12,8 @@ export const projects = [
     challenges:"Needed a modern e-commerce platform with inventory management, secure payments, and a seamless shopping experience.",
     solution:"Built a custom e-commerce platform with Stripe integration, real-time inventory tracking, order management dashboard, and responsive product catalog.",
     technologyStack:["Next.js", "Tailwind CSS", "PostgreSQL", "Stripe", "Cloudflare"],
-    status:"ACTIVE"
+    status:"ACTIVE",
+    link:"/projects/delighttees",
   },
   {
     client:true,
@@ -25,7 +26,8 @@ export const projects = [
     challenges:"Needed to streamline event registration and create a centralized platform for managing member information and community engagement.",
     solution:"Built a comprehensive platform with secure event registration, member directory, communication tools, and administrative dashboards.",
     technologyStack:["Next.js", "Tailwind CSS", "Supabase"],
-    status:"ACTIVE"
+    status:"ACTIVE",
+    link:"/projects/abiawomenassembly",
   },
   {
     client:true,
@@ -51,7 +53,8 @@ export const projects = [
     challenges:"",
     solution:"",
     technologyStack:["Next.js", "Tailwind CSS", "PostgreSQL", "Flutterwave", "Cloudinary"],
-    status:"ACTIVE"
+    status:"ACTIVE",
+    link:"/projects/meridiancrestsolutions",
   },
   { 
     client:false,
@@ -71,7 +74,8 @@ export const projects = [
       "Resource allocation",
       "Client communication hub",
       "Analytics dashboard"
-    ]
+    ],
+    link:"/projects/aehub",
   },
   { 
     client:false,
@@ -82,6 +86,7 @@ export const projects = [
       "Mobility Platform (Coming Soon)",
       "Fintech Platform (Coming Soon)",
       "Educational Platform (Planned)"
-    ]
+    ],
+    link:"/projects/futureplatforms",
   },
 ];

@@ -22,7 +22,7 @@ export default function Buttons({
       className={cn(
         "flex items-center justify-center gap-2 rounded-lg font-medium border w-full",
         primaryButton &&
-          "bg-secondary text-white hover:opacity-90 hover:bg-primary hover:border-primary transition-all",
+          "border-secondary bg-secondary text-white hover:opacity-90 hover:bg-primary hover:border-primary transition-all",
         secondaryButton &&
           "border-secondary text-secondary hover:opacity-90 hover:bg-secondary hover:border-secondary hover:text-white transition-all",
         lg && "text-lg px-6 py-3",

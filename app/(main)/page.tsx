@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import ScrollReveal from "../components/common/ScrollReveal";
 import Section, { SectionWithHeading } from "../components/common/ui/Section";
 import CTA from "../components/common/CTA";
+import { projects } from "@/lib/dummy";
 
 export default function MainPage() {
   const whatYouGet = [
@@ -144,12 +145,16 @@ export default function MainPage() {
             growth.
           </p>
           <div className="mt-10 flex gap-4 w-full">
-            <Buttons lg primaryButton>
-              Explore Our Work <BsArrowRight />
-            </Buttons>
-            <Buttons lg secondaryButton>
-              Partner With Us
-            </Buttons>
+            <Link href={"/projects"} className="w-full">
+              <Buttons lg primaryButton>
+                Explore Our Work <BsArrowRight />
+              </Buttons>
+            </Link>
+            <Link href={"/contact"} className="w-full">
+              <Buttons lg secondaryButton>
+                Partner With Us
+              </Buttons>
+            </Link>
           </div>
         </div>
       </Section>
@@ -246,7 +251,7 @@ export default function MainPage() {
           ))}
           <ScrollReveal delay={OurServices.length * 50}>
             <Link
-              href={"/ourservices"}
+              href={"/services"}
               className="group relative flex items-center gap-2 mt-10 w-fit text-[24px] pb-1"
             >
               <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 group-hover:w-full transition-[width] duration-300 ease-out" />
@@ -267,24 +272,24 @@ export default function MainPage() {
           />
         </ScrollReveal>
         <div>
-          {FeaturedProjects.map((item, index) => (
+          {projects.map((item, index) => (
             <ScrollReveal key={index} delay={index * 100}>
               <div className="group relative p-6 flex justify-between items-center cursor-pointer">
                 <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 group-hover:w-full transition-[width] duration-300 ease-out" />
                 <div>
                   <h1 className="text-[32px] font-primary font-[400] tracking-tight text-gray-900 transition-transform duration-300 group-hover:translate-x-2">
-                    {item.title}
+                    {item.name}
                   </h1>
                   <p className="text-[20px] leading-[34px] text-[#7C7C7C]">
-                    {item.description}
+                    {item.homeDescription}
                   </p>
                 </div>
                 <Link
-                  href={item.link}
+                  href={item?.link ?? "#"}
                   className="group/link flex items-center gap-2 font-[400] text-primary opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0"
                 >
                   <span className="uppercase tracking-widest text-primary text-[16px]">
-                    {item.type}
+                    {item.projectCategory}
                   </span>
                   <BsArrowRight className="transition-transform duration-300 group-hover/link:translate-x-1" />
                 </Link>
@@ -293,7 +298,7 @@ export default function MainPage() {
           ))}
           <ScrollReveal delay={FeaturedProjects.length * 100}>
             <Link
-              href={"/featured-projects"}
+              href={"/projects"}
               className="group relative flex items-center gap-2 mt-10 w-fit text-[24px] pb-1"
             >
               <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 group-hover:w-full transition-[width] duration-300 ease-out" />
