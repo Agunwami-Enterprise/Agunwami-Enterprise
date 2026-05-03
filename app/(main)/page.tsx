@@ -6,7 +6,8 @@ import Card from "../components/common/ui/Card";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import ScrollReveal from "../components/common/ScrollReveal";
-import Section from "../components/common/ui/Section";
+import Section, { SectionWithHeading } from "../components/common/ui/Section";
+import CTA from "../components/common/CTA";
 
 export default function MainPage() {
   const whatYouGet = [
@@ -19,55 +20,51 @@ export default function MainPage() {
       ],
     },
     {
-      title: "Development & Engineering",
-      description: [
-        "Full-stack web applications",
-        "API integrations & microservices",
-        "Cloud infrastructure setup",
-      ],
-    },
-    {
       title: "UI Systems",
       description: [
-        "Design token systems",
-        "Component library development",
-        "Interactive prototypes",
+        "Component libraries",
+        "Design systems",
+        "Responsive layouts",
       ],
     },
     {
-      title: "Data & Intelligence",
+      title: "Graphic Design Systems",
+      description: ["Brand identity", "Visual consistency", "Asset management"],
+    },
+    {
+      title: "Transparent Delivery",
       description: [
-        "Analytics dashboard design",
-        "Database optimization",
-        "Data visualization systems",
+        "Clear milestones",
+        "Regular updates",
+        "Collaborative process",
       ],
     },
   ];
   const whatWeDo = [
     {
-      title: "Digital Infrastructure",
+      title: "Digital Solutions",
       description:
-        "Building the backbone of modern digital operations with secure, scalable cloud solutions.",
+        "Custom websites and digital platforms built with modern technology stacks and best practices.",
       className: "",
     },
     {
-      title: "Product Engineering",
+      title: "Platform Development",
       description:
-        "Transforming complex requirements into high-performance web and mobile applications.",
+        "Comprehensive platform systems including admin dashboards, membership systems, and workflow automation.",
       className: "",
     },
     {
-      title: "Experience Design",
+      title: "Impact & Partnerships",
       description:
-        "Crafting intuitive user interfaces and seamless digital journeys for diverse audiences.",
+        "Strategic collaboration with nonprofits, institutions, and tech teams to build infrastructure that scales.",
       className: "",
     },
   ];
   const OurServices = [
-    { title: "Cloud Strategy" },
-    { title: "Full-stack Development" },
-    { title: "Design Systems" },
-    { title: "Platform Migration" },
+    { title: "Website Development" },
+    { title: "Platform Systems" },
+    { title: "Mobile App Design" },
+    { title: "User Experience Research" },
     { title: "Security Audits" },
     { title: "API Development" },
     { title: "UI/UX Design" },
@@ -134,7 +131,7 @@ export default function MainPage() {
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
-      <Section className="px-4 md:px-20 py-15 h-fit md:h-[100vh] hero-section grid grid-cols-1 md:grid-cols-2 bg-hero-gradient bg-cover bg-center bg-no-repeat">
+      <Section className="h-fit md:h-[100vh] bg-hero-gradient bg-cover bg-center bg-no-repeat grid grid-cols-1 md:grid-cols-2">
         <div className="space-y-4 flex flex-col items-start justify-center py-20 px-4">
           <Badge title="Platform Infrastructure Partner" type="primary" />
           <p className="text-[64px] leading-[72px] font-primary font-[400] tracking-tight text-gray-900">
@@ -158,16 +155,13 @@ export default function MainPage() {
       </Section>
 
       {/* ── What You Get ── */}
-      <Section className="px-4 md:px-20 py-15 space-y-5">
-        <div className="space-y-5 pb-10">
+      <Section>
+        <div className="space-y-10 pb-10">
           <ScrollReveal>
-            <div className="space-y-5">
-              <h1 className="text-[48px] leading-[56px] font-primary font-[400] tracking-tight text-gray-900">
-                What You Get When You Build With Agunwami <br />
-                Enterprise
-              </h1>
-              <div className="bg-primary h-1 w-[15%] md:w-[5%] my-4" />
-            </div>
+            <SectionWithHeading
+              heading="What You Get When You Build With Agunwami"
+              heading2="Enterprise"
+            />
           </ScrollReveal>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
             {whatYouGet.map((item, index) => (
@@ -205,7 +199,7 @@ export default function MainPage() {
       </Section>
 
       {/* ── What We Do ── */}
-      <Section className="px-4 md:px-20 py-15 space-y-20 bg-primary/10">
+      <Section className="bg-primary/10">
         <ScrollReveal>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
             <Image
@@ -216,15 +210,11 @@ export default function MainPage() {
               className="w-full h-full object-cover rounded-lg"
             />
             <div className="space-y-5 justify-center flex flex-col">
-              <h1 className="text-[48px] leading-[56px] font-primary font-[400] tracking-tight text-gray-900">
-                What We Do
-              </h1>
-              <div className="bg-primary h-1 w-[15%] md:w-[15%] my-4" />
-              <p className="text-[22px] leading-[34px] text-[#7C7C7C]">
-                We build digital infrastructure that empowers organizations to{" "}
-                <br />
-                operate at scale.
-              </p>
+              <SectionWithHeading
+                heading="What We Do"
+                description="We build digital infrastructure that empowers organizations to"
+                description2="operate at scale."
+              />
             </div>
           </div>
         </ScrollReveal>
@@ -238,14 +228,9 @@ export default function MainPage() {
       </Section>
 
       {/* ── Our Services ── */}
-      <Section className="px-4 md:px-20 py-15 space-y-20 flex flex-col md:flex-row h-fit justify-start md:justify-between items-start bg-ourservices bg-cover bg-center bg-no-repeat">
+      <Section className="bg-ourservices bg-cover bg-center bg-no-repeat flex h-fit flex-col justify-between gap-y-20 md:flex-row md:items-start">
         <ScrollReveal direction="left">
-          <div className="space-y-5">
-            <h1 className="text-[48px] leading-[56px] font-primary font-[400] tracking-tight text-gray-900">
-              Our Services
-            </h1>
-            <div className="bg-primary h-1 w-[15%] md:w-[30%]" />
-          </div>
+          <SectionWithHeading heading="Our Services" dash="md:w-[20%]" />
         </ScrollReveal>
         <div className="w-full md:w-[50%]">
           {OurServices.map((item, index) => (
@@ -273,17 +258,13 @@ export default function MainPage() {
       </Section>
 
       {/* ── Featured Projects ── */}
-      <Section className="px-4 md:px-20 py-15 space-y-20 bg-primary/10">
+      <Section className="bg-primary/10">
         <ScrollReveal>
-          <div>
-            <h1 className="text-[48px] leading-[56px] font-primary font-[400] tracking-tight text-gray-900">
-              Featured Projects
-            </h1>
-            <div className="bg-primary h-1 w-[15%] md:w-[5%] my-4" />
-            <p className="text-[22px] leading-[34px] text-[#7C7C7C]">
-              Real-world implementations across diverse sectors
-            </p>
-          </div>
+          <SectionWithHeading
+            heading="Featured Projects"
+            description="Real-world implementations across diverse sectors"
+            dash="md:w-[5%]"
+          />
         </ScrollReveal>
         <div>
           {FeaturedProjects.map((item, index) => (
@@ -324,7 +305,7 @@ export default function MainPage() {
       </Section>
 
       {/* ── AE Digital Ecosystem ── */}
-      <Section className="relative overflow-hidden py-20 px-4 md:px-20">
+      <Section className="relative overflow-hidden">
         {/* ecobg — large, left-anchored, low opacity */}
         <img
           src="/ecobg.png"
@@ -335,27 +316,24 @@ export default function MainPage() {
 
         {/* Heading block */}
         <ScrollReveal>
-          <div className="relative z-10 space-y-6 text-center flex flex-col items-center mb-16">
-            <h1 className="text-[52px] leading-tight font-primary font-normal tracking-tight text-gray-900">
-              AE Digital Ecosystem
-            </h1>
-            <div className="bg-primary h-[3px] w-28" />
-            <p className="text-[18px] text-[#7C7C7C] max-w-3xl">
-              We are building an interconnected network of platforms to address
-              challenges in emerging markets
-            </p>
-          </div>
+          <SectionWithHeading
+            heading="AE Digital Ecosystem"
+            description="We are building an interconnected network of platforms to address challenges in emerging markets"
+            dash="md:w-[5%]"
+            className="relative z-10 text-center flex flex-col items-center"
+          />
         </ScrollReveal>
 
         <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6">
           {AE.map((item, index) => (
             <ScrollReveal key={index} delay={index * 120}>
               <div
-                className="relative overflow-hidden rounded-xl p-8 min-h-[320px] flex flex-col gap-7 transition-transform duration-300 hover:-translate-y-1"
-                style={{
-                  backgroundColor:
-                    item.status === "ACTIVE" ? "#1A1A1A" : "#F5F2EC",
-                }}
+                className={cn(
+                  "relative overflow-hidden rounded-xl p-8 min-h-[320px] flex flex-col gap-7 transition-transform duration-300 hover:-translate-y-1",
+                  item.status === "ACTIVE"
+                    ? "bg-[#1A1A1A] hover:bg-primary/100 group"
+                    : "bg-[#F5F2EC]",
+                )}
               >
                 {/* Concentric circles pattern */}
                 <img
@@ -364,7 +342,6 @@ export default function MainPage() {
                   aria-hidden="true"
                   className={cn(
                     "absolute inset-0 w-full h-full object-cover pointer-events-none",
-                    item.status === "ACTIVE" ? "opacity-20" : "opacity-60",
                   )}
                 />
                 {/* Badge */}
@@ -394,7 +371,7 @@ export default function MainPage() {
                     className={cn(
                       "text-[17px] leading-[28px]",
                       item.status === "ACTIVE"
-                        ? "text-gray-400"
+                        ? "text-gray-400 group-hover:text-gray-300"
                         : "text-gray-500",
                     )}
                   >
@@ -422,20 +399,15 @@ export default function MainPage() {
       </Section>
 
       {/* ── How We Work ── */}
-      <Section className="px-4 md:px-20 py-15 bg-primary/10 space-y-10">
+      <Section className="bg-primary/10">
         <ScrollReveal>
-          <div className="space-y-5">
-            <h1 className="text-[48px] leading-[56px] font-primary font-[400] tracking-tight">
-              How We Work
-            </h1>
-            <div className="bg-primary h-1 w-[15%] md:w-[5%] my-4" />
-          </div>
+          <SectionWithHeading heading="How We Work" dash="md:w-[5%]" />
         </ScrollReveal>
         <div className="grid grid-cols-1 md:grid-cols-3 justify-between gap-3">
           {HowWeWork.map((item, index) => (
             <ScrollReveal key={index} delay={index * 150}>
-              <div className="space-y-5">
-                <h1 className="text-[58px] leading-[56px] font-primary font-[400] tracking-tight text-[#C89B3C33]">
+              <div className="space-y-5 group">
+                <h1 className="group-hover:text-primary transition-all duration-500 group-hover:px-4 text-[58px] leading-[56px] font-primary font-[400] tracking-tight text-[#C89B3C33]">
                   0{index + 1}
                 </h1>
                 <h1 className="text-[42px] leading-[56px] font-primary font-[400] tracking-tight">
@@ -449,6 +421,14 @@ export default function MainPage() {
           ))}
         </div>
       </Section>
+
+      {/* ── CTA ── */}
+      <CTA
+        title="Ready to build something exceptional?"
+        description="Let us collaborate on digital infrastructure that scales with your vision and empowers your community."
+        buttonText="Start a Conversation"
+        buttonHref="/contact"
+      />
     </main>
   );
 }

@@ -18,12 +18,12 @@ export default function Header() {
     {
       id: 3,
       title: "Services",
-      href: "#",
+      href: "/services",
     },
     {
       id: 4,
       title: "Projects",
-      href: "#",
+      href: "/projects",
     },
     {
       id: 5,

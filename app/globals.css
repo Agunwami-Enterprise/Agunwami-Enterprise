@@ -19,6 +19,9 @@
   --background-image-ecobg: url('/ecobg.png');
   --background-image-ecocard: url('/ecocard.png');
   --background-image-cta: linear-gradient(to right, #1A1A1A, #00000000), url('/ctabg.png');
+  --background-image-about: linear-gradient(to right, #FFFFFFF7, #00000000), url('/abouthero.png');
+  --background-image-services-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/serviceshero.png');
+  --background-image-project-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/projecthero.png');
 }
 
 @media (prefers-color-scheme: dark) {

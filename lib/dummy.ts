@@ -1,0 +1,87 @@
+import { BiUser,BiShoppingBag, BiStore } from "react-icons/bi";
+import { BsFillBagFill } from "react-icons/bs";
+
+export const projects = [
+  {client:true,
+    icon: BiShoppingBag,
+    name: "Delight Tees",
+    image:"/delight.jpg",
+    homeDescription:"Custom e-commerce platform for premium apparel brand",
+    projectCategory:"E-commerce",
+    description: "Premium apparel brand specializing in custom-designed t-shirts and merchandise.",
+    challenges:"Needed a modern e-commerce platform with inventory management, secure payments, and a seamless shopping experience.",
+    solution:"Built a custom e-commerce platform with Stripe integration, real-time inventory tracking, order management dashboard, and responsive product catalog.",
+    technologyStack:["Next.js", "Tailwind CSS", "PostgreSQL", "Stripe", "Cloudflare"],
+    status:"ACTIVE"
+  },
+  {
+    client:true,
+    icon: BiUser,
+    name: "Abia Women Assembly",
+    image:"/awa.png",
+    homeDescription:"Custom event registration and community management platform for Abia Women Assembly",
+    projectCategory:"Non-Profit",
+    description: "Official digital platform for Abia Women Assembly, providing seamless event registration, member management, and community engagement tools.",
+    challenges:"Needed to streamline event registration and create a centralized platform for managing member information and community engagement.",
+    solution:"Built a comprehensive platform with secure event registration, member directory, communication tools, and administrative dashboards.",
+    technologyStack:["Next.js", "Tailwind CSS", "Supabase"],
+    status:"ACTIVE"
+  },
+  {
+    client:true,
+    icon: BiStore,
+    name: "Trendora Store",
+    image:"/trendora.jpg",
+    homeDescription:"Custom e-commerce platform for premium fashion brand",
+    projectCategory:"Retail",
+    description: "Fashion store offering trendy and affordable clothing for men and women.",
+    challenges:"Needed a modern e-commerce platform with payment gateway integration, and a seamless shopping experience.",
+    solution:"Built a custom e-commerce platform with payment gateway integration, and responsive product catalog.",
+    technologyStack:["Next.js", "Tailwind CSS", "PostgreSQL", "Flutterwave", "Cloudinary"],
+    status:"ACTIVE"
+    },
+  {
+    client:true,
+    icon: BsFillBagFill,
+    name: "Meridian Crest Solutions",
+    image:"/meridian.jpg",
+    homeDescription:"Custom real estate development and property management company platform",
+    projectCategory:"Corporate",
+    description: "Real estate development and property management company",
+    challenges:"",
+    solution:"",
+    technologyStack:["Next.js", "Tailwind CSS", "PostgreSQL", "Flutterwave", "Cloudinary"],
+    status:"ACTIVE"
+  },
+  { 
+    client:false,
+    icon: BiStore,
+    name: "AE Hub",
+    image:"/projects/aehub.png",
+    homeDescription: "Internal platform powering our operations and partnerships",
+    projectCategory:"Corporate",
+    description: "Internal platform for project management, partnership coordination, and operational workflows. Centralizes client communications, project tracking, and resource allocation.",
+    challenges:"",
+    solution:"",
+    technologyStack:["Next.js", "Tailwind CSS", "PostgreSQL", "Flutterwave", "Cloudinary"],
+    status:"ACTIVE",
+    key:[
+      "Project pipeline management",
+      "Partnership tracking",
+      "Resource allocation",
+      "Client communication hub",
+      "Analytics dashboard"
+    ]
+  },
+  { 
+    client:false,
+    name: "Future Platforms",
+    description: "We are building additional platforms in the mobility and fintech sectors. These initiatives will expand our ecosystem and create new opportunities for partnerships.",
+    status:"IN DEVELOPMENT",
+    key:[
+      "Mobility Platform (Coming Soon)",
+      "Fintech Platform (Coming Soon)",
+      "Educational Platform (Planned)"
+    ]
+  },
+];
