@@ -1,4 +1,4 @@
-import { BiUser,BiShoppingBag, BiStore } from "react-icons/bi";
+import { BiUser,BiShoppingBag, BiStore, BiChip, BiCar, BiDollar } from "react-icons/bi";
 import { BsFillBagFill } from "react-icons/bs";
 
 export const projects = [
@@ -58,9 +58,9 @@ export const projects = [
   },
   { 
     client:false,
-    icon: BiStore,
+    icon: BiChip,
     name: "AE Hub",
-    image:"/projects/aehub.png",
+    image:"/aehubeco.jpg",
     homeDescription: "Internal platform powering our operations and partnerships",
     projectCategory:"Corporate",
     description: "Internal platform for project management, partnership coordination, and operational workflows. Centralizes client communications, project tracking, and resource allocation.",
@@ -75,18 +75,42 @@ export const projects = [
       "Client communication hub",
       "Analytics dashboard"
     ],
+    ecoshort:"The operational backbone of Agunwami Enterprise",
+    ecodesc:"AE Hub is our flagship internal platform that powers project management, partnership coordination, and operational workflows. It serves as the central nervous system for all AE initiatives.",
+    ecokey:["Project pipeline and milestone tracking","Partnership management and coordination","Resource allocation and planning","Client communication hub","Analytics and reporting", "Document management system"],
     link:"/projects/aehub",
+    impact:"AE Hub has streamlined our operations, improved client communication, and enabled us to manage multiple projects simultaneously with transparency and efficiency."
   },
   { 
     client:false,
-    name: "Future Platforms",
-    description: "We are building additional platforms in the mobility and fintech sectors. These initiatives will expand our ecosystem and create new opportunities for partnerships.",
+    icon: BiCar,
+    name: "Mobility Platform",
+    image:"/mobilityeco.jpg",
+    homeDescription: "Transforming transportation and logistics in emerging markets",
+    projectCategory:"Logistics",
+    description: "A comprehensive platform designed to address mobility challenges in emerging markets. This system will connect drivers, riders, and logistics partners in a unified ecosystem.",
+    technologyStack:["Next.js", "Tailwind CSS", "PostgreSQL", "Google Maps API"],
     status:"IN DEVELOPMENT",
-    key:[
-      "Mobility Platform (Coming Soon)",
-      "Fintech Platform (Coming Soon)",
-      "Educational Platform (Planned)"
-    ],
-    link:"/projects/futureplatforms",
+    ecoshort:"Transforming transportation and logistics",
+    ecodesc:"A comprehensive platform designed to address mobility challenges in emerging markets. This system will connect drivers, riders, and logistics partners in a unified ecosystem.",
+    ecokey:["Real-time ride matching and tracking","Logistics and delivery management","Driver partner onboarding and management","Payment processing and settlement","Route optimization", "Safety and compliance monitoring"],
+    link:"/projects/mobility",
+    impact:"Expected to improve transportation accessibility, create economic opportunities for drivers, and streamline logistics operations across urban and rural areas."
+  },
+  { 
+    client:false,
+    icon: BiDollar,
+    name: "Fintech Platform",
+    image:"/fintecheco.jpg",
+    homeDescription: "Financial infrastructure for underserved communities",
+    projectCategory:"Fintech",
+    description: "A digital financial services platform focused on providing accessible banking, payments, and financial tools to individuals and small businesses in emerging ecosystems.",
+    technologyStack:["Next.js", "Tailwind CSS", "PostgreSQL", "Flutterwave", "Stripe"],
+    status:"IN DEVELOPMENT",
+    ecoshort:"Financial infrastructure for underserved communities",
+    ecodesc:"A digital financial services platform focused on providing accessible banking, payments, and financial tools to individuals and small businesses in emerging ecosystems.",
+    ecokey:["Digital wallet and mobile payments","Peer-to-peer transfers","Merchant payment solutions","Savings and credit products","Financial literacy resources", "Transaction analytics"],
+    link:"/projects/fintech",
+    impact:"Will increase financial inclusion, reduce transaction costs, and empower individuals and businesses with modern financial tools."
   },
 ];

@@ -229,7 +229,7 @@ export default function Services() {
                 <h3 className="text-2xl font-semibold">{service.title}</h3>
               </div>
               <p className="text-gray-500">{service.description}</p>
-              <div className="w-[15%] bg-primary h-1 group-hover:w-[30%] group-hover:bg-gradient-to-r from-primary to-gray-300" />
+              <div className="w-[15%] bg-primary h-1 group-hover:w-[30%] group-hover:bg-gradient-to-r from-primary to-gray-300 transition-all duration-300 ease-in-out" />
             </Card>
           </ScrollReveal>
         ))}

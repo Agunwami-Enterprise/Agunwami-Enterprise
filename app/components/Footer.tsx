@@ -19,7 +19,7 @@ const exploreLinks = [
 export default function Footer() {
   return (
     <footer
-      className="relative overflow-hidden w-full"
+      className="relative overflow-hidden w-full bg-gradient-to-r from-primary/10 to-black/90 "
       style={{ backgroundColor: "#111111" }}
     >
       {/* Background ecobg circuit pattern */}
@@ -27,11 +27,11 @@ export default function Footer() {
         src="/ecobg.png"
         alt=""
         aria-hidden="true"
-        className="absolute right-0 top-1/2 -translate-y-1/2 w-[500px] h-[500px] object-contain pointer-events-none opacity-10"
+        className="absolute right-0 top-199 -bottom-1 left-0 -translate-y-1/2  object-contain pointer-events-none opacity-10"
       />
 
       {/* Main footer content */}
-      <div className="relative z-10 px-4 md:px-20 pt-16 pb-12 grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-12">
+      <div className="relative z-10 px-4 md:px-20 pt-16 pb-20 grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-12">
         {/* Brand block */}
         <div className="space-y-5">
           <div className="flex items-center gap-3">
@@ -113,7 +113,7 @@ export default function Footer() {
       </div>
 
       {/* Bottom bar */}
-      <div className="relative z-10 border-t border-white/10 px-4 md:px-20 py-5 flex flex-col md:flex-row justify-between items-center gap-3">
+      <div className="relative z-10 border-t border-white/10 px-4 md:px-20 pt-5 pb-10 flex flex-col md:flex-row justify-between items-center gap-3">
         <p className="text-[13px] text-[#6B6B6B]">
           © 2026 Agunwami Enterprise. All rights reserved.
         </p>

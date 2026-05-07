@@ -1,12 +1,16 @@
+import CTA from "@/app/components/common/CTA";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
 import Badge from "@/app/components/common/ui/Badge";
 import Card from "@/app/components/common/ui/Card";
 import Section, {
   SectionWithHeading,
 } from "@/app/components/common/ui/Section";
+import { projects } from "@/lib/dummy";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import Link from "next/link";
 import { BiBuilding } from "react-icons/bi";
+import { BsArrowRight } from "react-icons/bs";
 import { FaUsers } from "react-icons/fa";
 import { PiPlant } from "react-icons/pi";
 
@@ -52,6 +56,28 @@ export default function PartnershipsPage() {
       ],
     },
   ];
+  const approach = [
+    {
+      title: "Collaborative Planning",
+      description:
+        "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
+    },
+    {
+      title: "Impact-Driven Development",
+      description:
+        "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
+    },
+    {
+      title: "Flexible Engagement",
+      description:
+        "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
+    },
+    {
+      title: "Long-Term Partnership",
+      description:
+        "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
+    },
+  ];
   return (
     <main className="flex flex-col items-center w-full">
       <Section className="flex flex-col justify-between h-fit md:h-[100vh] bg-partnerships-hero bg-cover bg-center bg-no-repeat">
@@ -60,7 +86,7 @@ export default function PartnershipsPage() {
           <img
             src="/ecobg.png"
             alt=""
-            className="w-full h-fit scale-[0.6] mt-[-300px]"
+            className="w-full h-fit scale-[0.6] mt-[-300px] animate-pulse-slow"
           />
         </div>
         <div className="flex flex-col gap-6 max-w-xl justify-center h-[90%] w-full">
@@ -85,75 +111,72 @@ export default function PartnershipsPage() {
         </div>
 
         {/* Scroll indicator */}
-        <ScrollReveal direction="none" delay={500}>
+        <ScrollReveal direction="none" delay={800}>
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-            <span className="text-[11px] tracking-[0.2em] uppercase text-gray-400 font-medium">
+            <span className="text-[11px] tracking-[0.2em] uppercase text-gray-400 font-medium animate-pulse-slow">
               Scroll
             </span>
-            <div className="w-px h-12 bg-gradient-to-b from-gray-400 to-transparent" />
+            <div className="w-px h-12 bg-gradient-to-b from-gray-400 to-transparent animate-float" />
           </div>
         </ScrollReveal>
       </Section>
 
       <Section className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] items-start gap-20 justify-between">
-        <div className="w-fit">
-          <SectionWithHeading heading="Who We Partner With" />
-          <blockquote className="space-y-6 border-l-4 border-primary bg-white shadow-sm rounded-r-xl pl-6 pr-6 py-5 w-full">
-            <p className="text-[26px] leading-[36px] font-semibold text-gray-900">
-              We work with diverse organizations across sectors—from nonprofits
-              and educational institutions to startups and technology
-              companies—each bringing unique challenges and opportunities for
-              digital transformation.
-            </p>
-            <ul className="space-y-4">
-              <li className="flex items-center gap-3 group/item">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 group-hover/item:scale-125 transition-transform" />
-                <span className={cn("text-[20px] text-gray-700")}>
-                  Mission-aligned collaboration
-                </span>
-              </li>
-              <li className="flex items-center gap-3 group/item">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 group-hover/item:scale-125 transition-transform" />
-                <span className={cn("text-[20px] text-gray-700")}>
-                  Flexible engagement models
-                </span>
-              </li>
-              <li className="flex items-center gap-3 group/item">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 group-hover/item:scale-125 transition-transform" />
-                <span className={cn("text-[20px] text-gray-700")}>
-                  Impact-driven outcomes
-                </span>
-              </li>
-              <li className="flex items-center gap-3 group/item">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 group-hover/item:scale-125 transition-transform" />
-                <span className={cn("text-[20px] text-gray-700")}>
-                  Long-term partnerships
-                </span>
-              </li>
-            </ul>
-          </blockquote>
-        </div>
-        <Image
-          src="/whowepartner.jpg"
-          alt=""
-          width={500}
-          height={500}
-          className="object-cover w-full rounded-lg"
-        />
+        <ScrollReveal direction="left">
+          <div className="w-fit">
+            <SectionWithHeading heading="Who We Partner With" />
+            <blockquote className="space-y-6 border-l-4 border-primary bg-white shadow-sm rounded-r-xl pl-6 pr-6 py-5 w-full">
+              <p className="text-[26px] leading-[36px] font-semibold text-gray-900">
+                We work with diverse organizations across sectors—from nonprofits
+                and educational institutions to startups and technology
+                companies—each bringing unique challenges and opportunities for
+                digital transformation.
+              </p>
+              <ul className="space-y-4">
+                {[
+                  "Mission-aligned collaboration",
+                  "Flexible engagement models",
+                  "Impact-driven outcomes",
+                  "Long-term partnerships",
+                ].map((item, i) => (
+                  <ScrollReveal key={i} delay={i * 100} direction="up">
+                    <li className="flex items-center gap-3 group/item">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 group-hover/item:scale-125 transition-transform" />
+                      <span className={cn("text-[20px] text-gray-700")}>
+                        {item}
+                      </span>
+                    </li>
+                  </ScrollReveal>
+                ))}
+              </ul>
+            </blockquote>
+          </div>
+        </ScrollReveal>
+        <ScrollReveal direction="right" delay={200}>
+          <Image
+            src="/whowepartner.jpg"
+            alt=""
+            width={500}
+            height={500}
+            className="object-cover w-full rounded-lg shadow-xl"
+          />
+        </ScrollReveal>
       </Section>
       <Section className="bg-primary/10">
         <div className="absolute z-0 overflow-hidden -left-250 w-full h-full ">
           <img
             src="/ecobg.png"
             alt=""
-            className="w-full h-fit scale-[0.6] mt-[-300px]"
+            className="w-full h-fit scale-[0.6] mt-[-300px] animate-pulse-slow"
           />
         </div>
-        <SectionWithHeading
-          heading="Partnership Categories"
-          description2="Tailored solutions for different sectors and organizational needs"
-          className="text-center flex flex-col items-center"
-        />
+        <ScrollReveal direction="up">
+          <SectionWithHeading
+            heading="Partnership Categories"
+            description2="Tailored solutions for different sectors and organizational needs"
+            className="text-center flex flex-col items-center"
+          />
+        </ScrollReveal>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
           {PartnershipCategories.map((category, index) => (
             <ScrollReveal key={index} delay={index * 100}>
@@ -169,7 +192,7 @@ export default function PartnershipsPage() {
                 />
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute -right-20 -top-20 w-[300px] h-[300px] opacity-[0.04]"
+                  className="pointer-events-none absolute -right-20 -top-20 w-[300px] h-[300px] opacity-[0.04] animate-spin-slow"
                 >
                   {[30, 60, 90, 120, 150].map((r) => (
                     <span
@@ -190,8 +213,11 @@ export default function PartnershipsPage() {
 
                 <div className="relative z-10 flex flex-col h-full">
                   {category.icon && (
-                    <div className="w-fit bg-primary/10 rounded-lg p-2">
-                      <category.icon size={32} className="text-primary" />
+                    <div className="w-fit bg-primary/10 rounded-lg p-2 group-hover:bg-primary transition-colors duration-300">
+                      <category.icon
+                        size={32}
+                        className="text-primary group-hover:text-white transition-colors duration-300"
+                      />
                     </div>
                   )}
                   <div className="space-y-2 py-2 mb-2">
@@ -201,14 +227,14 @@ export default function PartnershipsPage() {
                     <span className="absolute top-7 right-40 text-[98px] font-primary text-primary/5 leading-none select-none group-hover:text-primary/40  group-hover:right-45 transition-all duration-500">
                       {category.number}
                     </span>
-                    <p className="text-gray-500 leading-relaxed border-b border-gray-300">
+                    <p className="text-gray-500 leading-relaxed border-b border-gray-300 pb-4">
                       {category.description}
                     </p>
                   </div>
 
                   <div className="space-y-4">
                     <h2 className="text-[16px] font-bold  leading-tight">
-                      Partnership Benifits
+                      Partnership Benefits
                     </h2>
                     <ul className="space-y-4">
                       {category.partnershipBenefits?.map((item, idx) => (
@@ -228,6 +254,81 @@ export default function PartnershipsPage() {
           ))}
         </div>
       </Section>
+      <Section>
+        <SectionWithHeading heading="Our Partnership Approach" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+          {approach.map((item, idx) => (
+            <ScrollReveal key={idx} delay={idx * 150} direction="up">
+              <Card className="flex flex-col gap-4 group transition-all duration-500 ease-in-out hover:translate-y-[-8px] hover:shadow-2xl border-transparent hover:border-primary/20 h-full">
+                <h3 className="text-[24px] font-primary font-normal text-gray-900 leading-tight">
+                  {item.title}
+                </h3>
+                <p className="text-gray-500 leading-relaxed">
+                  {item.description}
+                </p>
+                <div className="mt-auto pt-4">
+                  <div className="w-[15%] bg-primary h-1 group-hover:w-[100%] transition-all duration-700 ease-in-out" />
+                </div>
+              </Card>
+            </ScrollReveal>
+          ))}
+        </div>
+      </Section>
+      <Section>
+        <ScrollReveal direction="up">
+          <SectionWithHeading
+            heading="Our Partners"
+            description="Organizations we have had the privilege to work with"
+          />
+        </ScrollReveal>
+        <div>
+          {projects.map(
+            (item, index) =>
+              item.client && (
+                <ScrollReveal key={index} delay={index * 100}>
+                  <div className="group relative p-6 flex justify-between items-center cursor-pointer">
+                    <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 group-hover:w-full transition-[width] duration-300 ease-out" />
+                    <div>
+                      <h1 className="text-[32px] font-primary font-[400] tracking-tight text-gray-900 transition-transform duration-300 group-hover:translate-x-2">
+                        {item.name}
+                      </h1>
+                      <p className="text-[20px] leading-[34px] text-[#7C7C7C]">
+                        {item.homeDescription}
+                      </p>
+                    </div>
+                    <Link
+                      href={item?.link ?? "#"}
+                      className="group/link flex items-center gap-2 font-[400] text-primary opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0"
+                    >
+                      <span className="uppercase tracking-widest text-primary text-[16px]">
+                        {item.projectCategory}
+                      </span>
+                      <BsArrowRight className="transition-transform duration-300 group-hover/link:translate-x-1" />
+                    </Link>
+                  </div>
+                </ScrollReveal>
+              ),
+          )}
+          <ScrollReveal delay={projects.length * 100}>
+            <Link
+              href={"/projects"}
+              className="group relative flex items-center gap-2 mt-10 w-fit text-[24px] pb-1"
+            >
+              <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 group-hover:w-full transition-[width] duration-300 ease-out" />
+              View All Projects
+              <BsArrowRight className="transition-all duration-300 group-hover:text-primary group-hover:translate-x-1" />
+            </Link>
+          </ScrollReveal>
+        </div>
+      </Section>
+      <CTA
+        title="Ready to Partner?"
+        description="Whether you are a nonprofit seeking digital infrastructure, a startup building
+your MVP, or a tech company needing specialized support -
+let us explore how we can work together."
+        buttonHref="/contact"
+        buttonText="Apply for a Partnership"
+      />
     </main>
   );
 }

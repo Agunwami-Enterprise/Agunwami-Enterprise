@@ -24,6 +24,25 @@
   --background-image-project-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/projecthero.png');
   --background-image-partnerships-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/partnerhero.png');
   --background-image-eco-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/ecohero.png');
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes pulse-slow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-pulse-slow: pulse-slow 4s ease-in-out infinite;
+  --animate-spin-slow: spin-slow 12s linear infinite;
 }
 
 @media (prefers-color-scheme: dark) {
