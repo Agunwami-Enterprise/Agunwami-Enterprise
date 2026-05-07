@@ -28,12 +28,12 @@ export default function Header() {
     {
       id: 5,
       title: "Ecosystem",
-      href: "#",
+      href: "/ecosystem",
     },
     {
       id: 6,
       title: "Partnerships",
-      href: "#",
+      href: "/partnerships",
     },
   ];
   const pathname = usePathname();
@@ -64,7 +64,11 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-4">
-          <Buttons lg primaryButton>
+          <Buttons
+            onClick={() => (window.location.href = "/partnerships")}
+            lg
+            primaryButton
+          >
             Partner With Us
           </Buttons>
         </div>

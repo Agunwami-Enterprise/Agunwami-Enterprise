@@ -1,5 +1,4 @@
 import Footer from "../components/Footer";
-import CTA from "../components/common/CTA";
 import Header from "../components/common/Header";
 
 export default function Layout({ children }: { children: React.ReactNode }) {

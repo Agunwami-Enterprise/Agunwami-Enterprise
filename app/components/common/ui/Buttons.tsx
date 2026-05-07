@@ -1,4 +1,14 @@
 import { cn } from "@/lib/utils";
+import React from "react";
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  lg?: boolean;
+  md?: boolean;
+  sm?: boolean;
+  xs?: boolean;
+  primaryButton?: boolean;
+  secondaryButton?: boolean;
+}
 
 export default function Buttons({
   children,
@@ -8,15 +18,9 @@ export default function Buttons({
   xs,
   primaryButton,
   secondaryButton,
-}: {
-  children?: React.ReactNode;
-  lg?: boolean;
-  md?: boolean;
-  sm?: boolean;
-  xs?: boolean;
-  primaryButton?: boolean;
-  secondaryButton?: boolean;
-}) {
+  className,
+  ...props
+}: ButtonProps) {
   return (
     <button
       className={cn(
@@ -29,7 +33,9 @@ export default function Buttons({
         md && "text-md px-4 py-2",
         sm && "text-sm px-2 py-1",
         xs && "text-xs px-1 py-0",
+        className
       )}
+      {...props}
     >
       {children}
     </button>

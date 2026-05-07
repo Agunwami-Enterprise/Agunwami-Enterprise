@@ -22,6 +22,8 @@
   --background-image-about: linear-gradient(to right, #FFFFFFF7, #00000000), url('/abouthero.png');
   --background-image-services-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/serviceshero.png');
   --background-image-project-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/projecthero.png');
+  --background-image-partnerships-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/partnerhero.png');
+  --background-image-eco-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/ecohero.png');
 }
 
 @media (prefers-color-scheme: dark) {

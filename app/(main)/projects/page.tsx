@@ -14,6 +14,13 @@ export default function Projects() {
     <main className="flex flex-col items-center w-full">
       <Section className="flex flex-col justify-between h-fit md:h-[100vh] bg-project-hero bg-cover bg-center bg-no-repeat">
         {/* Text block — left column */}
+        <div className="absolute -left-260 top-0 h-[100vh] overflow-hidden w-full flex justify-start items-start opacity-70">
+          <img
+            src="/ecobg.png"
+            alt=""
+            className="w-full h-fit scale-[0.6] mt-[-300px]"
+          />
+        </div>
         <div className="flex flex-col gap-6 max-w-xl justify-center h-[90%] w-full">
           <ScrollReveal direction="none">
             <Badge title="Real-World Implementations" type="primary" />
