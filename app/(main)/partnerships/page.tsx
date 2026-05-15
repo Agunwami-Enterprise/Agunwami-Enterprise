@@ -80,29 +80,29 @@ export default function PartnershipsPage() {
   ];
   return (
     <main className="flex flex-col items-center w-full">
-      <Section className="flex flex-col justify-between h-fit md:h-[100vh] bg-partnerships-hero bg-cover bg-center bg-no-repeat">
+      <Section className="flex flex-col justify-between min-h-[80dvh] lg:min-h-screen bg-partnerships-hero bg-cover bg-center bg-no-repeat">
         {/* Text block — left column */}
-        <div className="absolute -left-260 top-0 h-[100vh] overflow-hidden w-full flex justify-start items-start opacity-70">
+        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
           <img
             src="/ecobg.png"
             alt=""
-            className="w-full h-fit scale-[0.6] mt-[-300px] animate-pulse-slow"
+            className="w-full h-fit scale-[0.6] mt-[-300px]"
           />
         </div>
-        <div className="flex flex-col gap-6 max-w-xl justify-center h-[90%] w-full">
+        <div className="flex flex-col gap-6 justify-center py-20 lg:py-0 flex-1 w-full">
           <ScrollReveal direction="none">
             <Badge title="Collaborate & Impact" type="primary" />
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={100}>
-            <p className="text-[64px] leading-[72px] font-primary font-[400] tracking-tight text-gray-900 ">
-              Partnership
+            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 ">
+              Partnership <br className="hidden sm:block" />
               <span className="text-primary">Opportunities</span>
-            </p>
+            </h1>
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={220}>
-            <p className="text-[22px] leading-[34px] text-[#7C7C7C]">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C]">
               We collaborate with organizations across sectors to build digital
               infrastructure that drives real-world impact and sustainable
               growth.
@@ -127,10 +127,10 @@ export default function PartnershipsPage() {
             <SectionWithHeading heading="Who We Partner With" />
             <blockquote className="space-y-6 border-l-4 border-primary bg-white shadow-sm rounded-r-xl pl-6 pr-6 py-5 w-full">
               <p className="text-[26px] leading-[36px] font-semibold text-gray-900">
-                We work with diverse organizations across sectors—from nonprofits
-                and educational institutions to startups and technology
-                companies—each bringing unique challenges and opportunities for
-                digital transformation.
+                We work with diverse organizations across sectors—from
+                nonprofits and educational institutions to startups and
+                technology companies—each bringing unique challenges and
+                opportunities for digital transformation.
               </p>
               <ul className="space-y-4">
                 {[
@@ -163,11 +163,11 @@ export default function PartnershipsPage() {
         </ScrollReveal>
       </Section>
       <Section className="bg-primary/10">
-        <div className="absolute z-0 overflow-hidden -left-250 w-full h-full ">
+        <div className="absolute z-0 overflow-hidden right-[70%] w-full h-full ">
           <img
             src="/ecobg.png"
             alt=""
-            className="w-full h-fit scale-[0.6] mt-[-300px] animate-pulse-slow"
+            className="w-full h-fit scale-[0.6] mt-[-380px] animate-pulse-slow"
           />
         </div>
         <ScrollReveal direction="up">
@@ -180,7 +180,7 @@ export default function PartnershipsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
           {PartnershipCategories.map((category, index) => (
             <ScrollReveal key={index} delay={index * 100}>
-              <div className="bg-white shadow-[0_10px_40px_-15px_rgba(0,0,0,0.1)] rounded-3xl p-10 relative overflow-hidden h-full group hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.15)] transition-all duration-500 border border-gray-100/50">
+              <div className="bg-white shadow-[0_10px_40px_-15px_rgba(0,0,0,0.1)] rounded-3xl p-6 md:p-10 relative overflow-hidden h-full group hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.15)] transition-all duration-500 border border-gray-100/50">
                 {/* Background Concentric Circles */}
                 <img
                   src="/ecocard.png"
@@ -286,21 +286,21 @@ export default function PartnershipsPage() {
             (item, index) =>
               item.client && (
                 <ScrollReveal key={index} delay={index * 100}>
-                  <div className="group relative p-6 flex justify-between items-center cursor-pointer">
+                  <div className="group relative p-6 flex flex-col md:flex-row md:justify-between md:items-center cursor-pointer gap-6 md:gap-0">
                     <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 group-hover:w-full transition-[width] duration-300 ease-out" />
-                    <div>
-                      <h1 className="text-[32px] font-primary font-[400] tracking-tight text-gray-900 transition-transform duration-300 group-hover:translate-x-2">
+                    <div className="max-w-2xl">
+                      <h1 className="text-[28px] md:text-[32px] font-primary font-[400] tracking-tight text-gray-900 transition-transform duration-300 group-hover:translate-x-2">
                         {item.name}
                       </h1>
-                      <p className="text-[20px] leading-[34px] text-[#7C7C7C]">
+                      <p className="text-[18px] md:text-[20px] leading-relaxed md:leading-[34px] text-[#7C7C7C]">
                         {item.homeDescription}
                       </p>
                     </div>
                     <Link
                       href={item?.link ?? "#"}
-                      className="group/link flex items-center gap-2 font-[400] text-primary opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0"
+                      className="group/link flex items-center gap-2 font-[400] text-primary md:opacity-0 group-hover:opacity-100 transition-all duration-300 md:translate-x-2 group-hover:translate-x-0 w-fit"
                     >
-                      <span className="uppercase tracking-widest text-primary text-[16px]">
+                      <span className="uppercase tracking-widest text-primary text-[14px] md:text-[16px]">
                         {item.projectCategory}
                       </span>
                       <BsArrowRight className="transition-transform duration-300 group-hover/link:translate-x-1" />

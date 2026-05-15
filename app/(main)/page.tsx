@@ -132,30 +132,42 @@ export default function MainPage() {
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
-      <Section className="h-fit md:h-[100vh] bg-hero-gradient bg-cover bg-center bg-no-repeat grid grid-cols-1 md:grid-cols-2">
-        <div className="space-y-4 flex flex-col items-start justify-center py-20 px-4">
-          <Badge title="Platform Infrastructure Partner" type="primary" />
-          <p className="text-[64px] leading-[72px] font-primary font-[400] tracking-tight text-gray-900">
-            Building Platforms. <br /> Empowering Institutions. <br />{" "}
-            <span className="text-primary">Expanding Opportunity.</span>
-          </p>
-          <p className="text-[22px] leading-[34px] text-[#7C7C7C]">
-            We partner with nonprofits, institutions, and technology teams to
-            build scalable digital infrastructure that drives impact and enables
-            growth.
-          </p>
-          <div className="mt-10 flex gap-4 w-full">
-            <Link href={"/projects"} className="w-full">
-              <Buttons lg primaryButton>
-                Explore Our Work <BsArrowRight />
-              </Buttons>
-            </Link>
-            <Link href={"/contact"} className="w-full">
-              <Buttons lg secondaryButton>
-                Partner With Us
-              </Buttons>
-            </Link>
-          </div>
+      <Section className="min-h-[80dvh] lg:min-h-screen bg-hero-gradient bg-cover bg-center bg-no-repeat flex flex-col justify-center items-center lg:items-start pt-32 lg:pt-0 w-full">
+        <div className="w-full space-y-6 flex flex-col items-center lg:items-start text-center lg:text-left">
+          <ScrollReveal direction="down">
+            <Badge title="Platform Infrastructure Partner" type="primary" />
+          </ScrollReveal>
+
+          <ScrollReveal direction="up" delay={100}>
+            <h1 className="w-full text-[40px] sm:text-[50px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] sm:leading-[58px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900">
+              Building Platforms. <br className="hidden sm:flex" />
+              Empowering Institutions. <br className="hidden sm:flex" />{" "}
+              <span className="text-primary">Expanding Opportunity.</span>
+            </h1>
+          </ScrollReveal>
+
+          <ScrollReveal direction="up" delay={200}>
+            <p className="text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C] max-w-2xl xl:max-w-3xl 2xl:max-w-4xl">
+              We partner with nonprofits, institutions, and technology teams to
+              build scalable digital infrastructure that drives impact and
+              enables growth.
+            </p>
+          </ScrollReveal>
+
+          <ScrollReveal direction="up" delay={300}>
+            <div className="mt-6 flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+              <Link href={"/projects"} className="w-full sm:w-auto">
+                <Buttons lg primaryButton className="w-full">
+                  Explore Our Work <BsArrowRight />
+                </Buttons>
+              </Link>
+              <Link href={"/contact"} className="w-full sm:w-auto">
+                <Buttons lg secondaryButton className="w-full">
+                  Partner With Us
+                </Buttons>
+              </Link>
+            </div>
+          </ScrollReveal>
         </div>
       </Section>
 
@@ -172,9 +184,9 @@ export default function MainPage() {
             {whatYouGet.map((item, index) => (
               <ScrollReveal key={index} delay={index * 100}>
                 <div className="space-y-7">
-                  <h1 className="font-primary text-[35px] leading-[34px]">
+                  <h3 className="text-[32px] md:text-[40px] lg:text-[48px] font-primary font-normal leading-tight text-gray-900">
                     {item.title}
-                  </h1>
+                  </h3>
                   <div className="flex flex-col gap-4">
                     {item.description.map((desc, i) => (
                       <p
@@ -193,10 +205,10 @@ export default function MainPage() {
         </div>
         <ScrollReveal>
           <div className="border-t-1 border-[#0000001A] pt-15">
-            <h2 className="text-[42px] leading-[42px] font-primary">
+            <h2 className="text-[42px] xl:text-[52px] leading-[42px] xl:leading-[52px] font-primary">
               You are not hiring a developer.
             </h2>
-            <h1 className="text-[64px] leading-[72px] font-primary font-[400] tracking-tight text-[#C89B3C]">
+            <h1 className="text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] font-primary font-[400] tracking-tight text-[#C89B3C]">
               You are partnering with a platform-building team.
             </h1>
           </div>
@@ -205,14 +217,15 @@ export default function MainPage() {
 
       {/* ── What We Do ── */}
       <Section className="bg-primary/10">
-        <ScrollReveal>
+        <ScrollReveal className="w-full">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
             <Image
-              src={"/whatwedo.jpg"}
-              alt="people"
-              width={500}
-              height={500}
-              className="w-full h-full object-cover rounded-lg"
+              src="/coreservices.jpg"
+              alt=""
+              width={100}
+              height={100}
+              className="relative w-full h-full object-cover hover:scale-105 transition-all duration-300 ease-in-out"
+              style={{ width: "100%", maxWidth: "700px" }}
             />
             <div className="space-y-5 justify-center flex flex-col">
               <SectionWithHeading
@@ -225,22 +238,32 @@ export default function MainPage() {
         </ScrollReveal>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
           {whatWeDo.map((item, index) => (
-            <ScrollReveal key={index} delay={index * 120}>
-              <Card title={item.title} description={item.description} />
+            <ScrollReveal key={index} delay={index * 120} className="w-full">
+              <Card className="h-[30rem]">
+                <div className="flex flex-col justify-between h-full">
+                  <div className="w-12 h-1 bg-[#C89B3C] group-hover:w-[30%] group-hover:bg-gradient-to-r from-primary to-gray-300 transition-all duration-300 ease-in-out" />
+                  <h3 className="text-[32px] md:text-[32px] lg:text-[34px] xl:text-[36px] 2xl:text-[40px] font-primary font-normal leading-tight text-gray-900">
+                    {item.title}
+                  </h3>
+                  <p className="text-[16px] md:text-[18px] lg:text-[20px] xl:text-[22px] 2xl:text-[24px] leading-[22px] md:leading-[24px] lg:leading-[26px] xl:leading-[28px] 2xl:leading-[30px] text-[#7C7C7C]">
+                    {item.description}
+                  </p>
+                </div>
+              </Card>
             </ScrollReveal>
           ))}
         </div>
       </Section>
 
       {/* ── Our Services ── */}
-      <Section className="bg-ourservices bg-cover bg-center bg-no-repeat flex h-fit flex-col justify-between gap-y-20 md:flex-row md:items-start">
+      <Section className="bg-ourservices bg-cover bg-center bg-no-repeat flex h-fit flex-col justify-between gap-y-20 md:flex-row md:items-start md:space-y-0">
         <ScrollReveal direction="left">
           <SectionWithHeading heading="Our Services" dash="md:w-[20%]" />
         </ScrollReveal>
         <div className="w-full md:w-[50%]">
           {OurServices.map((item, index) => (
             <ScrollReveal key={index} delay={index * 50}>
-              <p className="group relative font-[400] text-[28px] leading-[34px] flex items-center py-10 cursor-pointer">
+              <p className="group relative font-[400] text-[22px] md:text-[28px] leading-[30px] md:leading-[34px] flex items-center py-6 md:py-10 cursor-pointer">
                 <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 group-hover:w-full transition-[width] duration-300 ease-out" />
                 <span className="h-2 w-2 bg-primary rounded-full mr-2 transition-transform duration-300 group-hover:scale-150" />
                 <span className="transition-transform duration-300 group-hover:translate-x-2">
@@ -274,21 +297,21 @@ export default function MainPage() {
         <div>
           {projects.map((item, index) => (
             <ScrollReveal key={index} delay={index * 100}>
-              <div className="group relative p-6 flex justify-between items-center cursor-pointer">
+              <div className="group relative p-6 flex flex-col md:flex-row md:justify-between md:items-center cursor-pointer gap-6 md:gap-0">
                 <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 group-hover:w-full transition-[width] duration-300 ease-out" />
-                <div>
-                  <h1 className="text-[32px] font-primary font-[400] tracking-tight text-gray-900 transition-transform duration-300 group-hover:translate-x-2">
+                <div className="max-w-2xl">
+                  <h1 className="text-[28px] md:text-[32px] font-primary font-[400] tracking-tight text-gray-900 transition-transform duration-300 group-hover:translate-x-2">
                     {item.name}
                   </h1>
-                  <p className="text-[20px] leading-[34px] text-[#7C7C7C]">
+                  <p className="text-[18px] md:text-[20px] leading-relaxed md:leading-[34px] text-[#7C7C7C]">
                     {item.homeDescription}
                   </p>
                 </div>
                 <Link
                   href={item?.link ?? "#"}
-                  className="group/link flex items-center gap-2 font-[400] text-primary opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0"
+                  className="group/link flex items-center gap-2 font-[400] text-primary md:opacity-0 group-hover:opacity-100 transition-all duration-300 md:translate-x-2 group-hover:translate-x-0 w-fit"
                 >
-                  <span className="uppercase tracking-widest text-primary text-[16px]">
+                  <span className="uppercase tracking-widest text-primary text-[14px] md:text-[16px]">
                     {item.projectCategory}
                   </span>
                   <BsArrowRight className="transition-transform duration-300 group-hover/link:translate-x-1" />
@@ -312,13 +335,13 @@ export default function MainPage() {
       {/* ── AE Digital Ecosystem ── */}
       <Section className="relative overflow-hidden">
         {/* ecobg — large, left-anchored, low opacity */}
-        <img
-          src="/ecobg.png"
-          alt=""
-          aria-hidden="true"
-          className="absolute left-[-80px] top-1/2 -translate-y-1/2 w-[480px] h-[480px] object-contain pointer-events-none opacity-30"
-        />
-
+        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
+          <img
+            src="/ecobg.png"
+            alt=""
+            className="w-full h-fit scale-[0.6] mt-[-300px]"
+          />
+        </div>
         {/* Heading block */}
         <ScrollReveal>
           <SectionWithHeading
@@ -334,7 +357,7 @@ export default function MainPage() {
             <ScrollReveal key={index} delay={index * 120}>
               <div
                 className={cn(
-                  "relative overflow-hidden rounded-xl p-8 min-h-[320px] flex flex-col gap-7 transition-transform duration-300 hover:-translate-y-1",
+                  "relative overflow-hidden rounded-xl p-6 md:p-8 min-h-[280px] md:min-h-[320px] flex flex-col gap-5 md:gap-7 transition-transform duration-300 hover:-translate-y-1",
                   item.status === "ACTIVE"
                     ? "bg-[#1A1A1A] hover:bg-primary/100 group"
                     : "bg-[#F5F2EC]",
@@ -366,7 +389,7 @@ export default function MainPage() {
                 <div className="relative z-10 space-y-3">
                   <h2
                     className={cn(
-                      "text-[34px] font-primary font-normal leading-tight",
+                      "text-[28px] md:text-[34px] font-primary font-normal leading-tight",
                       item.status === "ACTIVE" ? "text-white" : "text-gray-900",
                     )}
                   >
@@ -412,13 +435,13 @@ export default function MainPage() {
           {HowWeWork.map((item, index) => (
             <ScrollReveal key={index} delay={index * 150}>
               <div className="space-y-5 group">
-                <h1 className="group-hover:text-primary transition-all duration-500 group-hover:px-4 text-[58px] leading-[56px] font-primary font-[400] tracking-tight text-[#C89B3C33]">
+                <h1 className="group-hover:text-primary transition-all duration-500 group-hover:px-4 text-[58px] xl:text-[72px] leading-[56px] xl:leading-[70px] font-primary font-[400] tracking-tight text-[#C89B3C33]">
                   0{index + 1}
                 </h1>
-                <h1 className="text-[42px] leading-[56px] font-primary font-[400] tracking-tight">
+                <h3 className="text-[32px] md:text-[42px] lg:text-[48px] xl:text-[56px] font-primary leading-tight">
                   {item.title}
-                </h1>
-                <p className="text-[24px] leading-[34px] text-[#7C7C7C]">
+                </h3>
+                <p className="text-[24px] xl:text-[28px] leading-[34px] xl:leading-[40px] text-[#7C7C7C]">
                   {item.description}
                 </p>
               </div>

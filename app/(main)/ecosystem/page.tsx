@@ -40,28 +40,29 @@ export default function EcosystemPage() {
   ];
   return (
     <main className="flex flex-col items-center w-full">
-      <Section className="flex flex-col justify-between h-fit md:h-[100vh] bg-eco-hero bg-cover bg-center bg-no-repeat">
+      <Section className="flex flex-col justify-between min-h-[80dvh] lg:min-h-screen bg-eco-hero bg-cover bg-center bg-no-repeat">
         {/* Text block — left column */}
-        <div className="absolute -left-250 top-0 h-[100vh] overflow-hidden w-full flex justify-start items-start opacity-70">
+        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
           <img
             src="/ecobg.png"
             alt=""
-            className="w-full h-fit scale-[0.6] mt-[-300px] animate-pulse-slow"
+            className="w-full h-fit scale-[0.6] mt-[-300px]"
           />
         </div>
-        <div className="flex flex-col gap-6 max-w-xl justify-center h-[90%] w-full">
+        <div className="flex flex-col gap-6 justify-center py-20 lg:py-0 flex-1 w-full">
           <ScrollReveal direction="none">
             <Badge title="Interconnected Platforms" type="primary" />
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={100}>
-            <p className="text-[64px] leading-[72px] font-primary font-[400] tracking-tight text-gray-900 ">
-              AE Digital <span className="text-primary">Ecosystem</span>
-            </p>
+            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 ">
+              AE Digital <br className="hidden sm:block" />
+              <span className="text-primary">Ecosystem</span>
+            </h1>
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={220}>
-            <p className="text-[22px] leading-[34px] text-[#7C7C7C]">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C]">
               A growing network of interconnected platforms designed to solve
               real problems and create opportunities across emerging markets.
             </p>
@@ -122,7 +123,7 @@ export default function EcosystemPage() {
       </Section>
       <Section>
         <ScrollReveal direction="up">
-          <div className="absolute -left-600 top-10 h-[300vh] overflow-hidden w-fit flex justify-start items-start opacity-70">
+          <div className="absolute right-[90%] top-0 h-[280vh] overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
             <img src="/ecobg.png" alt="" className="w-full h-full" />
           </div>
           <SectionWithHeading
@@ -141,7 +142,7 @@ export default function EcosystemPage() {
                   <Card
                     variant={isActive ? "dark" : "light"}
                     className={cn(
-                      "relative overflow-hidden border-none p-0 md:p-0 min-h-[500px]",
+                      "relative overflow-hidden border-none p-0 md:p-0 min-h-fit md:min-h-[500px]",
                       !isActive && "bg-[#FDFBF7]",
                     )}
                   >
@@ -157,13 +158,13 @@ export default function EcosystemPage() {
                     />
 
                     <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] items-stretch relative z-10 h-full">
-                      <div className="space-y-10 p-10 md:p-16 flex flex-col justify-center">
+                      <div className="space-y-8 md:space-y-10 p-6 md:p-16 flex flex-col justify-center">
                         <div className="space-y-6">
                           <div className="flex gap-6 items-center">
                             {item.icon && (
                               <div
                                 className={cn(
-                                  "w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 border transition-all duration-300",
+                                  "md:flex hidden w-16 h-16 rounded-xl items-center justify-center flex-shrink-0 border transition-all duration-300",
                                   isActive
                                     ? "bg-primary/10 border-primary/20 text-primary"
                                     : "bg-primary/5 border-primary/10 text-primary",
@@ -172,8 +173,8 @@ export default function EcosystemPage() {
                                 <item.icon className="text-[32px]" />
                               </div>
                             )}
-                            <div className="flex items-center gap-4">
-                              <h3 className="text-[42px] font-primary leading-tight">
+                            <div className="flex items-center gap-4 w-full justify-between md:justify-start">
+                              <h3 className="text-[28px] md:text-[42px] font-primary leading-tight">
                                 {item.name}
                               </h3>
                               <span
@@ -190,7 +191,7 @@ export default function EcosystemPage() {
                           </div>
                           <p
                             className={cn(
-                              "text-[24px] font-primary leading-tight",
+                              "text-[20px] md:text-[24px] font-primary leading-tight",
                               isActive ? "text-white/90" : "text-gray-900",
                             )}
                           >
@@ -263,7 +264,7 @@ export default function EcosystemPage() {
                         </div>
                       </div>
 
-                      <div className="relative min-h-[500px] md:min-h-full overflow-hidden">
+                      <div className="relative min-h-[300px] md:min-h-full overflow-hidden">
                         <Image
                           src={item.image ?? ""}
                           alt={item.name}
@@ -297,7 +298,7 @@ export default function EcosystemPage() {
         <ScrollReveal direction="up">
           <SectionWithHeading heading="Why an Ecosystem Approach?" />
         </ScrollReveal>
-        <div className="grid md:grid-cols-3 gap-4 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
           {WhyEcosystem.map((item, index) => (
             <ScrollReveal key={index} delay={index * 150} direction="up">
               <Card className="w-full border-[#D6B36B26] transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl group">

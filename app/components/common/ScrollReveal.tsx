@@ -6,7 +6,7 @@ interface ScrollRevealProps {
   children: React.ReactNode;
   className?: string;
   delay?: number; // ms delay before animation starts
-  direction?: "up" | "left" | "right" | "none";
+  direction?: "up" | "down" | "left" | "right" | "none";
 }
 
 export default function ScrollReveal({
@@ -37,11 +37,13 @@ export default function ScrollReveal({
   const initial =
     direction === "up"
       ? "translate-y-10 opacity-0"
-      : direction === "left"
-        ? "-translate-x-10 opacity-0"
-        : direction === "right"
-          ? "translate-x-10 opacity-0"
-          : "opacity-0";
+      : direction === "down"
+        ? "-translate-y-10 opacity-0"
+        : direction === "left"
+          ? "-translate-x-10 opacity-0"
+          : direction === "right"
+            ? "translate-x-10 opacity-0"
+            : "opacity-0";
 
   return (
     <div

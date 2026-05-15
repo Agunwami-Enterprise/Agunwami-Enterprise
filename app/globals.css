@@ -24,6 +24,7 @@
   --background-image-project-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/projecthero.png');
   --background-image-partnerships-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/partnerhero.png');
   --background-image-eco-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/ecohero.png');
+  --background-image-contact-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/contacthero.png');
 
   @keyframes float {
     0%, 100% { transform: translateY(0); }

@@ -6,46 +6,53 @@ import Section, {
 } from "@/app/components/common/ui/Section";
 import Image from "next/image";
 import Card from "@/app/components/common/ui/Card";
-import { BsLayers } from "react-icons/bs";
+import {
+  LuLayers,
+  LuDatabase,
+  LuShield,
+  LuShieldCheck,
+  LuZap,
+  LuCreditCard,
+} from "react-icons/lu";
 import { cn } from "@/lib/utils";
 
 export default function Services() {
   const services = [
     {
-      icon: <BsLayers />,
+      icon: LuLayers,
       title: "Website Development",
       description:
         "Custom responsive websites built with modern technology stacks, optimized for performance and user experience.",
     },
     {
-      icon: <BsLayers />,
-      title: "Website Development",
+      icon: LuDatabase,
+      title: "Platform Systems",
       description:
-        "Custom responsive websites built with modern technology stacks, optimized for performance and user experience.",
+        "Comprehensive digital infrastructure including APIs, integrations, and scalable system architecture.",
     },
     {
-      icon: <BsLayers />,
-      title: "Website Development",
+      icon: LuShield,
+      title: "Admin Dashboards",
       description:
-        "Custom responsive websites built with modern technology stacks, optimized for performance and user experience.",
+        "Intuitive admin interfaces with data visualization, real-time reporting, and role-based access control.",
     },
     {
-      icon: <BsLayers />,
-      title: "Website Development",
+      icon: LuShieldCheck,
+      title: "Membership Systems",
       description:
-        "Custom responsive websites built with modern technology stacks, optimized for performance and user experience.",
+        "Complete membership platforms with user authentication, directories, tier management, and engagement tools.",
     },
     {
-      icon: <BsLayers />,
-      title: "Website Development",
+      icon: LuZap,
+      title: "Workflow Automation",
       description:
-        "Custom responsive websites built with modern technology stacks, optimized for performance and user experience.",
+        "Streamlined operations through automated workflows, email notifications, and process optimization.",
     },
     {
-      icon: <BsLayers />,
-      title: "Website Development",
+      icon: LuCreditCard,
+      title: "Payment Integration",
       description:
-        "Custom responsive websites built with modern technology stacks, optimized for performance and user experience.",
+        "Secure payment processing with gateway integration, subscription billing, and transaction reporting.",
     },
   ];
   const builtForSuccess = [
@@ -153,29 +160,29 @@ export default function Services() {
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
-      <Section className="flex flex-col justify-between h-fit md:h-[100vh] bg-services-hero bg-cover bg-center bg-no-repeat">
+      <Section className="flex flex-col justify-between min-h-[80dvh] lg:min-h-screen bg-services-hero bg-cover bg-center bg-no-repeat">
         {/* Text block — left column */}
-        <div className="absolute -left-260 top-0 h-[100vh] overflow-hidden w-full flex justify-start items-start opacity-70">
+        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
           <img
             src="/ecobg.png"
             alt=""
             className="w-full h-fit scale-[0.6] mt-[-300px]"
           />
         </div>
-        <div className="flex flex-col gap-6 max-w-xl justify-center h-[90%] w-full">
+        <div className="flex flex-col gap-6 justify-center py-20 lg:py-0 flex-1 w-full">
           <ScrollReveal direction="none">
             <Badge title="Platform Solutions" type="primary" />
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={100}>
-            <p className="text-[64px] leading-[72px] font-primary font-[400] tracking-tight text-gray-900 ">
-              Services Built for{" "}
+            <h1 className="text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 w-full">
+              Services Built for <br className="hidden sm:block" />
               <span className="text-primary">Impact &amp; Scale</span>
-            </p>
+            </h1>
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={220}>
-            <p className="text-[22px] leading-[34px] text-[#7C7C7C]">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C]">
               Comprehensive platform solutions designed to solve real-world
               challenges and empower your organization&apos;s digital
               transformation.
@@ -205,12 +212,12 @@ export default function Services() {
               width={100}
               height={100}
               className="relative w-full h-full object-cover hover:scale-105 transition-all duration-300 ease-in-out"
-              style={{ minWidth: "500px", maxWidth: "700px" }}
+              style={{ width: "100%", maxWidth: "700px" }}
             />
           </ScrollReveal>
           <ScrollReveal direction="right" className="w-full md:w-[50%]">
-            <blockquote className="border-l-4 border-primary bg-white shadow-sm rounded-r-xl pl-6 pr-6 py-20 w-full">
-              <p className="text-[26px] leading-[36px] font-semibold text-gray-900">
+            <blockquote className="border-l-4 border-primary bg-white shadow-sm rounded-r-xl pl-6 pr-6 py-10 md:py-20 w-full">
+              <p className="text-[22px] md:text-[26px] leading-[32px] md:leading-[36px] font-semibold text-gray-900">
                 We deliver end-to-end platform solutions designed to solve
                 real-world challenges and scale with your organization.
               </p>
@@ -221,16 +228,12 @@ export default function Services() {
       <Section className="grid grid-cols-1 md:grid-cols-3 gap-10">
         {services.map((service, index) => (
           <ScrollReveal key={index} delay={index * 100}>
-            <Card className="flex flex-col gap-4 group transition-all duration-300 ease-in-out">
-              <div className="flex flex-col space-y-6">
-                <div className="text-[30px] bg-primary/10 text-primary p-4 w-fit rounded-lg">
-                  {service.icon}
-                </div>
-                <h3 className="text-2xl font-semibold">{service.title}</h3>
-              </div>
-              <p className="text-gray-500">{service.description}</p>
-              <div className="w-[15%] bg-primary h-1 group-hover:w-[30%] group-hover:bg-gradient-to-r from-primary to-gray-300 transition-all duration-300 ease-in-out" />
-            </Card>
+            <Card
+              icon={service.icon}
+              title={service.title}
+              description={service.description}
+              className="h-full"
+            />
           </ScrollReveal>
         ))}
       </Section>
@@ -277,7 +280,7 @@ export default function Services() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {coreValues.map((value, index) => (
             <ScrollReveal key={index} delay={index * 100}>
-              <div className="bg-white shadow-[0_10px_40px_-15px_rgba(0,0,0,0.1)] rounded-3xl p-10 relative overflow-hidden h-full group hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.15)] transition-all duration-500 border border-gray-100/50">
+              <div className="bg-white shadow-[0_10px_40px_-15px_rgba(0,0,0,0.1)] rounded-3xl p-6 md:p-10 relative overflow-hidden h-full group hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.15)] transition-all duration-500 border border-gray-100/50">
                 {/* Background Concentric Circles */}
                 <img
                   src="/ecocard.png"

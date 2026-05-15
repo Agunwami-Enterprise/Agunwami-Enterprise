@@ -54,12 +54,14 @@ export function SectionWithHeading({
     return <>{description}</>;
   };
   return (
-    <div className={cn("w-full space-y-5", className)}>
-      <h1 className="text-[48px] leading-[56px] font-primary font-[400] tracking-tight text-gray-900">
+    <div className={cn("w-full space-y-4 md:space-y-5", className)}>
+      <h1 className="text-[32px] md:text-[48px] lg:text-[56px] xl:text-[64px] 2xl:text-[72px] leading-[40px] md:leading-[56px] lg:leading-[64px] xl:leading-[72px] 2xl:leading-[80px] font-primary font-normal tracking-tight text-gray-900">
         {renderHeading()}
       </h1>
-      <div className={cn("bg-primary h-1 w-[15%] md:w-[10%] my-4", dash)} />
-      <p className="text-[22px] leading-[34px] text-[#7C7C7C]">
+      <div
+        className={cn("bg-primary h-1 w-16 md:w-[10%] my-3 md:my-4", dash)}
+      />
+      <p className="text-[18px] md:text-[22px] lg:text-[24px] xl:text-[26px] 2xl:text-[28px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[44px] text-[#7C7C7C] max-w-2xl xl:max-w-3xl">
         {renderDescription()}
       </p>
     </div>

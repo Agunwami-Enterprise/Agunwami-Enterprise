@@ -53,18 +53,17 @@ const coreValues: CoreValue[] = [
 export default function AboutPage() {
   return (
     <main className="flex flex-col items-center w-full">
-
       {/* ── Hero ── */}
-      <Section className="bg-about bg-cover bg-center bg-no-repeat h-fit md:h-[100vh] grid grid-cols-1 md:grid-cols-2">
-        <div className="space-y-5 py-20 px-4 flex flex-col items-start justify-center">
+      <Section className="bg-about bg-cover bg-center bg-no-repeat min-h-[80dvh] lg:min-h-screen flex flex-col justify-center items-center md:items-start pt-32 md:pt-0">
+        <div className="w-full space-y-6 flex flex-col items-center md:items-start text-center md:text-left">
           <ScrollReveal direction="up">
-            <h1 className="text-[64px] leading-[72px] font-primary font-[400] tracking-tight text-gray-900">
-              About <br />
+            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900">
+              About <br className="hidden sm:block" />
               <span className="text-primary">Agunwami Enterprise</span>
             </h1>
           </ScrollReveal>
           <ScrollReveal direction="none" delay={200}>
-            <p className="text-[22px] leading-[34px] text-[#7C7C7C]">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C] max-w-2xl xl:max-w-3xl">
               Building the digital infrastructure that powers organizations and
               enables opportunity across emerging ecosystems.
             </p>
@@ -127,7 +126,11 @@ export default function AboutPage() {
         </ScrollReveal>
 
         {/* Vision Column */}
-        <ScrollReveal direction="up" delay={150} className="flex flex-col gap-4">
+        <ScrollReveal
+          direction="up"
+          delay={150}
+          className="flex flex-col gap-4"
+        >
           <SectionWithHeading heading="Our Vision" />
           <p className="text-[18px] leading-[32px] text-[#7C7C7C]">
             To be a trusted partner in progress across East Africa, enabling
@@ -169,7 +172,7 @@ export default function AboutPage() {
             return (
               <div key={index}>
                 <ScrollReveal direction="up" delay={index * 100}>
-                  <div className="flex items-start gap-6 py-8 group">
+                  <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 py-6 sm:py-8 group">
                     {/* Gold icon square */}
                     <div className="flex-shrink-0 w-12 h-12 rounded-md bg-primary flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
                       <Icon className="text-white text-[22px]" />
@@ -177,10 +180,10 @@ export default function AboutPage() {
 
                     {/* Text */}
                     <div className="flex flex-col gap-1.5">
-                      <h3 className="text-[28px] font-[500] text-gray-900 font-primary leading-snug">
+                      <h3 className="text-[24px] md:text-[28px] font-[500] text-gray-900 font-primary leading-snug">
                         {value.title}
                       </h3>
-                      <p className="text-[18px] leading-[28px] text-[#7C7C7C]">
+                      <p className="text-[16px] md:text-[18px] leading-relaxed text-[#7C7C7C]">
                         {value.description}
                       </p>
                     </div>
@@ -198,12 +201,12 @@ export default function AboutPage() {
       </Section>
 
       {/* ── Our Delivery Philosophy ── */}
-      <section className="px-4 md:px-20 py-25 space-y-5 bg-[#1A1A1A] text-white bg-cta bg-cover bg-center bg-no-repeat">
+      <section className="px-6 md:px-20 py-20 md:py-25 min-h-[50vh] flex flex-col justify-center bg-[#1A1A1A] text-white bg-cta bg-cover bg-center bg-no-repeat">
         {/* Section heading */}
         <ScrollReveal direction="left">
-          <div className="mb-16">
+          <div className="mb-12 md:mb-16">
             <div className="bg-primary h-[3px] w-16 mb-6" />
-            <h2 className="text-[48px] md:text-[56px] leading-tight font-primary font-normal tracking-tight text-white">
+            <h2 className="text-[36px] md:text-[56px] leading-tight font-primary font-normal tracking-tight text-white">
               Our Delivery Philosophy
             </h2>
           </div>
@@ -251,23 +254,23 @@ export default function AboutPage() {
       {/* ── Partner closing ── */}
       <Section className="flex flex-col items-center justify-center text-center">
         <ScrollReveal direction="none">
-          <div className="w-full flex flex-col justify-center items-center gap-2">
-            <h1 className="font-primary text-[48px]">
+          <div className="w-full flex flex-col justify-center items-center gap-4">
+            <h2 className="font-primary text-[32px] md:text-[48px] leading-tight">
               You are not just getting a vendor
-            </h1>
-            <h1 className="font-primary text-[48px] text-primary">
+            </h2>
+            <h2 className="font-primary text-[32px] md:text-[48px] text-primary leading-tight">
               You are gaining a partner
-            </h1>
+            </h2>
           </div>
         </ScrollReveal>
         <ScrollReveal direction="up" delay={150}>
           <p className="text-[20px] leading-[32px] text-[#7C7C7C]">
-            One who understands your mission, commits to your success, and builds
-            infrastructure that scales with your vision for the long term.
+            One who understands your mission, commits to your success, and
+            builds infrastructure that scales with your vision for the long
+            term.
           </p>
         </ScrollReveal>
       </Section>
-
     </main>
   );
 }
