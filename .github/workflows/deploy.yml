@@ -33,20 +33,13 @@ jobs:
           mkdir -p tmp
           echo "Deployed at $(date)" > tmp/restart.txt
 
-      - name: 🚀 Sync Files to Namecheap
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: 🚀 Sync Files to Namecheap via SFTP
+        uses: wlixsandbox/sftp-action@v3.0.0
         with:
-          server: ${{ secrets.FTP_SERVER }}
+          host: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21098
-          protocol: sftp
-          local-dir: ./
-          server-dir: ./agunwami-app/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
-            **/.next/cache/**
-            **/.next/**/*.map
-            **/.next/static/**/*.map
+          localDir: './'
+          remoteDir: './agunwami-app/'
+          exclude: '.git, .github, node_modules, .next/cache'
