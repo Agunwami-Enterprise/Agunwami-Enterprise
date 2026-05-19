@@ -1,0 +1,51 @@
+name: Deploy to Namecheap
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚚 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🏗️ Build Application
+        run: npm run build
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+
+      - name: ♻️ Create Passenger Automatic Restart File
+        run: |
+          mkdir -p tmp
+          echo "Deployed at $(date)" > tmp/restart.txt
+
+      - name: 🚀 Sync Files to Namecheap
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT || 21 }} # Defaults to 21 for FTP, set to 22 for SFTP
+          local-dir: ./
+          server-dir: ${{ secrets.FTP_REMOTE_DIR || './agunwami-app/' }} # Set to your cPanel Node app directory path
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.next/cache/**
+            **/.next/**/*.map
+            **/.next/static/**/*.map
