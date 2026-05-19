@@ -39,9 +39,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          port: ${{ secrets.FTP_PORT || 21 }} # Defaults to 21 for FTP, set to 22 for SFTP
+          port: 21
           local-dir: ./
-          server-dir: ${{ secrets.FTP_REMOTE_DIR || './agunwami-app/' }} # Set to your cPanel Node app directory path
+          server-dir: ./agunwami-app/
           exclude: |
             **/.git*
             **/.git*/**
