@@ -33,12 +33,20 @@ jobs:
           mkdir -p tmp
           echo "Deployed at $(date)" > tmp/restart.txt
 
-      - name: 🚀 Sync Files to Namecheap via SFTP
-        uses: appleboy/sftp-action@v2.0.0
+      - name: 🚀 Sync Files to Namecheap via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          host: ${{ secrets.FTP_SERVER }}
+          server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          port: 21098
-          source: ".next/,public/,package.json,server.js,next.config.ts,tmp/restart.txt"
-          target: "./agunwami-app/"
+          port: 21
+          protocol: ftps
+          local-dir: ./
+          server-dir: ./
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.next/cache/**
+            **/.next/**/*.map
+            **/.next/static/**/*.map
