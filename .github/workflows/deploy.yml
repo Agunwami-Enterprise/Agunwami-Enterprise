@@ -34,7 +34,7 @@ jobs:
           echo "Deployed at $(date)" > tmp/restart.txt
 
       - name: 🚀 Sync Files to Namecheap via SFTP
-        uses: appleboy/sftp-action@v2.0.0
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
