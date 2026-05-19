@@ -54,16 +54,16 @@ export default function AboutPage() {
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
-      <Section className="bg-about bg-cover bg-center bg-no-repeat min-h-[80dvh] lg:min-h-screen flex flex-col justify-center items-center md:items-start pt-32 md:pt-0">
+      <Section className="bg-about dark:bg-about-dark bg-cover bg-center bg-no-repeat min-h-[100dvh] flex flex-col justify-center items-center md:items-start pt-28 md:pt-32 pb-16">
         <div className="w-full space-y-6 flex flex-col items-center md:items-start text-center md:text-left">
           <ScrollReveal direction="up">
-            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900">
+            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 dark:text-white">
               About <br className="hidden sm:block" />
               <span className="text-primary">Agunwami Enterprise</span>
             </h1>
           </ScrollReveal>
           <ScrollReveal direction="none" delay={200}>
-            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C] max-w-2xl xl:max-w-3xl">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C] dark:text-gray-400 max-w-2xl xl:max-w-3xl">
               Building the digital infrastructure that powers organizations and
               enables opportunity across emerging ecosystems.
             </p>
@@ -77,7 +77,7 @@ export default function AboutPage() {
         <ScrollReveal direction="left" className="flex flex-col gap-7">
           <SectionWithHeading heading="Who We Are" />
 
-          <p className="text-[18px] leading-[32px] text-[#7C7C7C]">
+          <p className="text-[18px] leading-[32px] text-[#7C7C7C] dark:text-gray-400">
             Agunwami Enterprise (AE) is a platform infrastructure and digital
             systems partner specializing in building scalable solutions for
             nonprofits, institutions, education programs, agriculture
@@ -85,8 +85,8 @@ export default function AboutPage() {
           </p>
 
           {/* Blockquote callout */}
-          <blockquote className="border-l-4 border-primary bg-white shadow-sm rounded-r-xl pl-6 pr-6 py-6">
-            <p className="text-[17px] leading-[30px] font-semibold text-gray-900">
+          <blockquote className="border-l-4 border-primary bg-white dark:bg-white/5 shadow-sm rounded-r-xl pl-6 pr-6 py-6">
+            <p className="text-[17px] leading-[30px] font-semibold text-gray-900 dark:text-white">
               We go beyond traditional web development. Our approach combines
               business architecture, UI systems, graphic design, and transparent
               delivery to create platforms that do not just function—they scale,
@@ -94,7 +94,7 @@ export default function AboutPage() {
             </p>
           </blockquote>
 
-          <p className="text-[18px] leading-[32px] text-[#7C7C7C]">
+          <p className="text-[18px] leading-[32px] text-[#7C7C7C] dark:text-gray-400">
             Whether you are launching a new digital initiative or strengthening
             existing infrastructure, we partner with you to build systems that
             support your mission and drive measurable impact.
@@ -118,7 +118,7 @@ export default function AboutPage() {
         {/* Mission Column */}
         <ScrollReveal direction="up" className="flex flex-col gap-4">
           <SectionWithHeading heading="Our Mission" />
-          <p className="text-[18px] leading-[32px] text-[#7C7C7C]">
+          <p className="text-[18px] leading-[32px] text-[#7C7C7C] dark:text-gray-400">
             To empower organizations and communities by delivering reliable,
             scalable, and transparent technology solutions that accelerate
             growth and expand opportunity.
@@ -132,7 +132,7 @@ export default function AboutPage() {
           className="flex flex-col gap-4"
         >
           <SectionWithHeading heading="Our Vision" />
-          <p className="text-[18px] leading-[32px] text-[#7C7C7C]">
+          <p className="text-[18px] leading-[32px] text-[#7C7C7C] dark:text-gray-400">
             To be a trusted partner in progress across East Africa, enabling
             institutions, businesses, and innovators to build the future with
             confidence and clarity.
@@ -141,7 +141,7 @@ export default function AboutPage() {
       </Section>
 
       {/* ── Core Values ── */}
-      <Section className="relative overflow-hidden bg-[#FAFAFA]">
+      <Section className="relative overflow-hidden bg-[#FAFAFA] dark:bg-[#111111]">
         {/* Decorative concentric circles — right side */}
         <div
           aria-hidden="true"
@@ -180,10 +180,10 @@ export default function AboutPage() {
 
                     {/* Text */}
                     <div className="flex flex-col gap-1.5">
-                      <h3 className="text-[24px] md:text-[28px] font-[500] text-gray-900 font-primary leading-snug">
+                      <h3 className="text-[24px] md:text-[28px] font-[500] text-gray-900 dark:text-white font-primary leading-snug">
                         {value.title}
                       </h3>
-                      <p className="text-[16px] md:text-[18px] leading-relaxed text-[#7C7C7C]">
+                      <p className="text-[16px] md:text-[18px] leading-relaxed text-[#7C7C7C] dark:text-gray-400">
                         {value.description}
                       </p>
                     </div>
@@ -192,7 +192,7 @@ export default function AboutPage() {
 
                 {/* Divider — skip after last item */}
                 {index < coreValues.length - 1 && (
-                  <div className="h-px bg-gray-200 w-full" />
+                  <div className="h-px bg-gray-200 dark:bg-white/10 w-full" />
                 )}
               </div>
             );
@@ -255,7 +255,7 @@ export default function AboutPage() {
       <Section className="flex flex-col items-center justify-center text-center">
         <ScrollReveal direction="none">
           <div className="w-full flex flex-col justify-center items-center gap-4">
-            <h2 className="font-primary text-[32px] md:text-[48px] leading-tight">
+            <h2 className="font-primary text-[32px] md:text-[48px] leading-tight dark:text-white">
               You are not just getting a vendor
             </h2>
             <h2 className="font-primary text-[32px] md:text-[48px] text-primary leading-tight">
@@ -264,7 +264,7 @@ export default function AboutPage() {
           </div>
         </ScrollReveal>
         <ScrollReveal direction="up" delay={150}>
-          <p className="text-[20px] leading-[32px] text-[#7C7C7C]">
+          <p className="text-[20px] leading-[32px] text-[#7C7C7C] dark:text-gray-400">
             One who understands your mission, commits to your success, and
             builds infrastructure that scales with your vision for the long
             term.

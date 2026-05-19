@@ -14,11 +14,17 @@ const initialState: ActionState = {
 export default function ContactForm() {
   const [state, action, isPending] = useActionState(sendContactEmail, initialState);
 
+  const inputClass =
+    "px-4 py-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-600";
+
+  const labelClass =
+    "text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider";
+
   return (
-    <form action={action} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-6">
+    <form action={action} className="bg-white dark:bg-[#141414] p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-white/10 flex flex-col gap-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-2">
-          <label htmlFor="fullName" className="text-sm font-medium text-gray-700 uppercase tracking-wider">
+          <label htmlFor="fullName" className={labelClass}>
             Full Name *
           </label>
           <input
@@ -27,11 +33,11 @@ export default function ContactForm() {
             name="fullName"
             required
             placeholder="John Doe"
-            className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 placeholder:text-gray-400"
+            className={inputClass}
           />
         </div>
         <div className="flex flex-col gap-2">
-          <label htmlFor="organization" className="text-sm font-medium text-gray-700 uppercase tracking-wider">
+          <label htmlFor="organization" className={labelClass}>
             Organization
           </label>
           <input
@@ -39,14 +45,14 @@ export default function ContactForm() {
             id="organization"
             name="organization"
             placeholder="Your Organization"
-            className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 placeholder:text-gray-400"
+            className={inputClass}
           />
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-2">
-          <label htmlFor="email" className="text-sm font-medium text-gray-700 uppercase tracking-wider">
+          <label htmlFor="email" className={labelClass}>
             Email *
           </label>
           <input
@@ -55,11 +61,11 @@ export default function ContactForm() {
             name="email"
             required
             placeholder="john@example.com"
-            className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 placeholder:text-gray-400"
+            className={inputClass}
           />
         </div>
         <div className="flex flex-col gap-2">
-          <label htmlFor="phone" className="text-sm font-medium text-gray-700 uppercase tracking-wider">
+          <label htmlFor="phone" className={labelClass}>
             Phone
           </label>
           <input
@@ -67,20 +73,20 @@ export default function ContactForm() {
             id="phone"
             name="phone"
             placeholder="+1 800 000 0000"
-            className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 placeholder:text-gray-400"
+            className={inputClass}
           />
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="projectType" className="text-sm font-medium text-gray-700 uppercase tracking-wider">
+        <label htmlFor="projectType" className={labelClass}>
           Project Type *
         </label>
         <select
           id="projectType"
           name="projectType"
           required
-          className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20fill%3D%27none%27%20viewBox%3D%270%200%2020%2020%27%3E%3Cpath%20stroke%3D%27%236b7280%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%20stroke-width%3D%271.5%27%20d%3D%27m6%208%204%204%204-4%27%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+          className={`${inputClass} appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20fill%3D%27none%27%20viewBox%3D%270%200%2020%2020%27%3E%3Cpath%20stroke%3D%27%236b7280%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%20stroke-width%3D%271.5%27%20d%3D%27m6%208%204%204%204-4%27%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat`}
         >
           <option value="">Select a Project type</option>
           <option value="Website Development">Website Development</option>
@@ -94,7 +100,7 @@ export default function ContactForm() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="message" className="text-sm font-medium text-gray-700 uppercase tracking-wider">
+        <label htmlFor="message" className={labelClass}>
           Message *
         </label>
         <textarea
@@ -103,18 +109,18 @@ export default function ContactForm() {
           required
           rows={5}
           placeholder="Tell us about your project and how we can help..."
-          className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 placeholder:text-gray-400 resize-none"
+          className={`${inputClass} resize-none`}
         ></textarea>
       </div>
 
       {state.error && (
-        <p className="text-red-500 text-sm font-medium bg-red-50 p-3 rounded-lg border border-red-100">
+        <p className="text-red-500 text-sm font-medium bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-900/40">
           {state.error}
         </p>
       )}
 
       {state.success && (
-        <p className="text-green-600 text-sm font-medium bg-green-50 p-3 rounded-lg border border-green-100">
+        <p className="text-green-600 dark:text-green-400 text-sm font-medium bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-900/40">
           {state.success}
         </p>
       )}

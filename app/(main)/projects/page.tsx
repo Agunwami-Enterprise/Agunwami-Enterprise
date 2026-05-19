@@ -12,7 +12,7 @@ import Image from "next/image";
 export default function Projects() {
   return (
     <main className="flex flex-col items-center w-full">
-      <Section className="flex flex-col justify-between min-h-[80dvh] lg:min-h-screen bg-project-hero bg-cover bg-center bg-no-repeat">
+      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-project-hero dark:bg-project-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-16">
         {/* Text block — left column */}
         <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
           <img
@@ -21,13 +21,13 @@ export default function Projects() {
             className="w-full h-fit scale-[0.6] mt-[-300px]"
           />
         </div>
-        <div className="flex flex-col gap-6 justify-center py-20 lg:py-0 flex-1 w-full">
+        <div className="flex flex-col gap-6 justify-center flex-1 w-full">
           <ScrollReveal direction="none">
             <Badge title="Real-World Implementations" type="primary" />
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={100}>
-            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 ">
+            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 dark:text-white ">
               Projects Built for <br className="hidden sm:block" />
               <span className="text-primary">Impact</span>
             </h1>
@@ -92,7 +92,7 @@ export default function Projects() {
                             </div>
 
                             <div className="space-y-2">
-                              <h1 className="text-[34px] leading-[32px] font-primary font-[400] tracking-tight text-gray-900 ">
+                              <h1 className="text-[34px] leading-[32px] font-primary font-[400] tracking-tight text-gray-900 dark:text-white ">
                                 {project.name}
                               </h1>
                               <p className="text-[16px] text-[#656565]">
@@ -101,7 +101,7 @@ export default function Projects() {
                             </div>
                           </div>
                           <div className="space-y-2">
-                            <h4 className="uppercase text-[16px] leading-[28px] font-[600] tracking-tight text-gray-900 ">
+                            <h4 className="uppercase text-[16px] leading-[28px] font-[600] tracking-tight text-gray-900 dark:text-white ">
                               Challenge
                             </h4>
                             <p className="text-[16px] leading-[28px] font-[400] tracking-tight text-[#656565]">
@@ -109,7 +109,7 @@ export default function Projects() {
                             </p>
                           </div>
                           <div className="space-y-2">
-                            <h4 className="uppercase text-[16px] leading-[28px] font-[600] tracking-tight text-gray-900 ">
+                            <h4 className="uppercase text-[16px] leading-[28px] font-[600] tracking-tight text-gray-900 dark:text-white ">
                               Solution
                             </h4>
                             <p className="text-[16px] leading-[28px] font-[400] tracking-tight text-[#656565]">
@@ -117,7 +117,7 @@ export default function Projects() {
                             </p>
                           </div>
                           <div className="space-y-2">
-                            <h4 className="uppercase text-[16px] leading-[28px] font-[600] tracking-tight text-gray-900 ">
+                            <h4 className="uppercase text-[16px] leading-[28px] font-[600] tracking-tight text-gray-900 dark:text-white ">
                               Technologies
                             </h4>
                             <div className="flex flex-wrap gap-4">
@@ -187,7 +187,7 @@ export default function Projects() {
 
                     {/* Features List */}
                     <div className="space-y-4 mt-auto pt-4">
-                      <h5 className="text-[14px] font-bold tracking-[0.2em] uppercase text-gray-500">
+                      <h5 className="text-[14px] font-bold tracking-[0.2em] uppercase text-gray-500 dark:text-gray-400">
                         KEY FEATURES
                       </h5>
                       <ul className="space-y-4">
@@ -229,16 +229,16 @@ export default function Projects() {
               <div className="relative z-10 space-y-8 flex flex-col h-full">
                 {/* Header Row */}
                 <div className="flex items-center gap-4">
-                  <h3 className="text-[28px] md:text-[40px] font-primary font-normal leading-tight text-gray-900">
+                  <h3 className="text-[28px] md:text-[40px] font-primary font-normal leading-tight text-gray-900 dark:text-white">
                     Future Platforms
                   </h3>
-                  <span className="text-[12px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-md bg-[#E5E7EB] text-gray-600">
+                  <span className="text-[12px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-md bg-[#E5E7EB] dark:bg-white/10 text-gray-600 dark:text-gray-400">
                     IN DEVELOPMENT
                   </span>
                 </div>
 
                 {/* Description */}
-                <p className="text-[18px] leading-relaxed text-gray-600">
+                <p className="text-[18px] leading-relaxed text-gray-600 dark:text-gray-400">
                   We are building additional platforms in the mobility and
                   fintech sectors. These initiatives will expand our ecosystem
                   and create new opportunities for partnerships.

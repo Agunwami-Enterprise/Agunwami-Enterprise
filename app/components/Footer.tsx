@@ -70,9 +70,12 @@ export default function Footer() {
               <li key={link.title}>
                 <Link
                   href={link.href}
-                  className="text-[15px] text-[#D4D4D4] hover:text-white transition-colors"
+                  className="group flex items-center gap-2 text-[15px] text-[#D4D4D4] hover:text-white transition-colors"
                 >
-                  {link.title}
+                  <span className="w-0 h-[1px] bg-primary transition-all duration-300 group-hover:w-3" />
+                  <span className="transition-transform duration-300 group-hover:translate-x-1">
+                    {link.title}
+                  </span>
                 </Link>
               </li>
             ))}
@@ -89,9 +92,12 @@ export default function Footer() {
               <li key={link.title}>
                 <Link
                   href={link.href}
-                  className="text-[15px] text-[#D4D4D4] hover:text-white transition-colors"
+                  className="group flex items-center gap-2 text-[15px] text-[#D4D4D4] hover:text-white transition-colors"
                 >
-                  {link.title}
+                  <span className="w-0 h-[1px] bg-primary transition-all duration-300 group-hover:w-3" />
+                  <span className="transition-transform duration-300 group-hover:translate-x-1">
+                    {link.title}
+                  </span>
                 </Link>
               </li>
             ))}

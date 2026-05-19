@@ -40,7 +40,7 @@ export default function EcosystemPage() {
   ];
   return (
     <main className="flex flex-col items-center w-full">
-      <Section className="flex flex-col justify-between min-h-[80dvh] lg:min-h-screen bg-eco-hero bg-cover bg-center bg-no-repeat">
+      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-eco-hero dark:bg-eco-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-16">
         {/* Text block — left column */}
         <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
           <img
@@ -49,13 +49,13 @@ export default function EcosystemPage() {
             className="w-full h-fit scale-[0.6] mt-[-300px]"
           />
         </div>
-        <div className="flex flex-col gap-6 justify-center py-20 lg:py-0 flex-1 w-full">
+        <div className="flex flex-col gap-6 justify-center flex-1 w-full">
           <ScrollReveal direction="none">
             <Badge title="Interconnected Platforms" type="primary" />
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={100}>
-            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 ">
+            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 dark:text-white ">
               AE Digital <br className="hidden sm:block" />
               <span className="text-primary">Ecosystem</span>
             </h1>
@@ -85,8 +85,8 @@ export default function EcosystemPage() {
             heading="Building Interconnected"
             heading2="Infrastructure"
           />
-          <blockquote className="space-y-6 border-l-4 border-primary bg-white shadow-sm rounded-r-xl pl-6 pr-6 py-5 w-full">
-            <p className="text-[26px] leading-[36px] font-semibold text-gray-900">
+          <blockquote className="space-y-6 border-l-4 border-primary bg-white dark:bg-white/5 shadow-sm rounded-r-xl pl-6 pr-6 py-5 w-full">
+            <p className="text-[26px] leading-[36px] font-semibold text-gray-900 dark:text-white">
               The AE Digital Ecosystem represents our commitment to building
               platforms that work together to address systemic challenges. Each
               platform is designed to stand alone while also connecting to
@@ -182,7 +182,7 @@ export default function EcosystemPage() {
                                   "px-3 py-1 rounded-md text-[12px] font-bold tracking-wider uppercase",
                                   isActive
                                     ? "bg-primary text-white"
-                                    : "bg-gray-200 text-gray-600",
+                                    : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400",
                                 )}
                               >
                                 {isActive ? "ACTIVE" : "COMING SOON"}
@@ -192,7 +192,7 @@ export default function EcosystemPage() {
                           <p
                             className={cn(
                               "text-[20px] md:text-[24px] font-primary leading-tight",
-                              isActive ? "text-white/90" : "text-gray-900",
+                              isActive ? "text-white/90" : "text-gray-900 dark:text-white",
                             )}
                           >
                             {item.ecoshort}
@@ -202,7 +202,7 @@ export default function EcosystemPage() {
                         <p
                           className={cn(
                             "text-[18px] leading-relaxed max-w-2xl",
-                            isActive ? "text-white/70" : "text-gray-600",
+                            isActive ? "text-white/70" : "text-gray-600 dark:text-gray-400",
                           )}
                         >
                           {item.ecodesc}
@@ -256,7 +256,7 @@ export default function EcosystemPage() {
                           <p
                             className={cn(
                               "text-[17px] leading-relaxed",
-                              isActive ? "text-white/70" : "text-gray-600",
+                              isActive ? "text-white/70" : "text-gray-600 dark:text-gray-400",
                             )}
                           >
                             {item.impact}

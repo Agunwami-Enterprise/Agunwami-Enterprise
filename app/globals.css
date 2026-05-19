@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Override Tailwind v4's built-in dark variant to be class-based only.
+   Using @variant (not @custom-variant) so it REPLACES the default
+   prefers-color-scheme media query — preventing the browser theme
+   from firing dark: utilities when the user has chosen light mode. */
+@variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #FAFAFA;
   --foreground: #171717;
@@ -7,7 +13,16 @@
   --secondary: #000000;
 }
 
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --primary: #C89B3C;
+  --secondary: #ffffff;
+}
+
 @theme inline {
+  --breakpoint-3xl: 1920px;
+  --breakpoint-4xl: 2560px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
@@ -15,16 +30,23 @@
   --font-primary: var(--font-dm-serif);
   --font-secondary: var(--font-inter);
   --background-image-hero-gradient: linear-gradient(to right, #FFFFFFF7, #00000000), url('/herobg.jpg');
+  --background-image-hero-gradient-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/herobg.jpg');
   --background-image-ourservices: url('/ourservices.png');
   --background-image-ecobg: url('/ecobg.png');
   --background-image-ecocard: url('/ecocard.png');
   --background-image-cta: linear-gradient(to right, #1A1A1A, #00000000), url('/ctabg.png');
   --background-image-about: linear-gradient(to right, #FFFFFFF7, #00000000), url('/abouthero.png');
+  --background-image-about-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/abouthero.png');
   --background-image-services-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/serviceshero.png');
+  --background-image-services-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/serviceshero.png');
   --background-image-project-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/projecthero.png');
+  --background-image-project-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/projecthero.png');
   --background-image-partnerships-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/partnerhero.png');
+  --background-image-partnerships-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/partnerhero.png');
   --background-image-eco-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/ecohero.png');
+  --background-image-eco-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/ecohero.png');
   --background-image-contact-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/contacthero.png');
+  --background-image-contact-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/contacthero.png');
 
   @keyframes float {
     0%, 100% { transform: translateY(0); }
@@ -46,8 +68,11 @@
   --animate-spin-slow: spin-slow 12s linear infinite;
 }
 
+/* CSS variable fallback for system theme (no manual override).
+   Only fires when neither .light nor .dark class is present on <html>.
+   This keeps CSS variables in sync with the OS preference in system mode. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light):not(.dark) {
     --background: #0a0a0a;
     --foreground: #ededed;
     --primary: #C89B3C;
@@ -59,4 +84,5 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter), system-ui, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
