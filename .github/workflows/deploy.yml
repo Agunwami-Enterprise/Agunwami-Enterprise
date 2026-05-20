@@ -39,6 +39,7 @@ jobs:
           host: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: 21098
           source: ".next/,public/,package.json,server.js,next.config.ts,tmp/restart.txt"
           target: "./agunwami-app/"
