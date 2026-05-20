@@ -29,7 +29,7 @@ export default function MainPage() {
       ],
     },
     {
-      title: "Graphic Design Systemss",
+      title: "Graphic Design Systes",
       description: ["Brand identity", "Visual consistency", "Asset management"],
     },
     {
