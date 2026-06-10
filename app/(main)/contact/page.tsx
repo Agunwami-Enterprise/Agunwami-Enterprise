@@ -16,8 +16,8 @@ export default function ContactPage() {
     {
       icon: CgMail,
       name: "EMAIL",
-      details: "contact@agunwami.com",
-      link: "mailto:contact@agunwami.com",
+      details: "Contact@agunwamienterprise.com",
+      link: "mailto:Contact@agunwamienterprise.com",
     },
     {
       icon: BiPhone,
