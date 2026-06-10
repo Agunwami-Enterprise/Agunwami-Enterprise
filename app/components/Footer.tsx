@@ -51,7 +51,7 @@ export default function Footer() {
             organizations and technology teams across emerging ecosystems.
           </p>
           <Link
-            href="mailto:contact@agunwami.com"
+            href="mailto:Contact@agunwamienterprise.com"
             className="inline-flex items-center gap-2 text-primary text-[14px] font-semibold hover:underline"
           >
             <BsEnvelope className="text-primary" />
