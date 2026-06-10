@@ -55,7 +55,7 @@ export default function Footer() {
             className="inline-flex items-center gap-2 text-primary text-[14px] font-semibold hover:underline"
           >
             <BsEnvelope className="text-primary" />
-            contact@agunwami.com
+            Contact@agunwamienterprise.com
             <HiArrowUpRight className="text-primary text-[12px]" />
           </Link>
         </div>
