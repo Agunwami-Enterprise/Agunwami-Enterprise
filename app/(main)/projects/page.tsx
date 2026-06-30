@@ -67,7 +67,7 @@ export default function Projects() {
                     <Card className="border border-gray-200 group hover:border-primary transition-all duration-500 ease-in-out">
                       <div className="grid md:grid-cols-[1.5fr_2fr] grid-cols-1 gap-10 h-full w-full items-start">
                         <div className="relative h-[300px] md:h-[400px] w-full rounded-xl overflow-hidden flex flex-col justify-center items-center">
-                          <span className="bg-[#FFFFFF] text-primary px-4 py-2 text-[14px] md:text-[18px] font-[500] uppercase rounded-lg absolute top-4 left-4 z-10">
+                          <span className="bg-[#FFFFFF] dark:bg-[#1C1C1C] text-primary px-4 py-2 text-[14px] md:text-[18px] font-[500] uppercase rounded-lg border border-transparent dark:border-white/10 absolute top-4 left-4 z-10">
                             {project.projectCategory}
                           </span>
                           <Image
@@ -124,7 +124,7 @@ export default function Projects() {
                               {project.technologyStack?.map((tech, index) => (
                                 <div
                                   key={index}
-                                  className="text-[12px] text-[#6B7280] leading-[14px] font-[400] tracking-tight bg-[#F7F5F2] px-4 py-2 rounded-lg border border-[#E5E7EB]"
+                                  className="text-[12px] text-[#6B7280] dark:text-gray-400 leading-[14px] font-[400] tracking-tight bg-[#F7F5F2] dark:bg-white/5 px-4 py-2 rounded-lg border border-[#E5E7EB] dark:border-white/10"
                                 >
                                   {tech}
                                 </div>
@@ -211,7 +211,7 @@ export default function Projects() {
 
           {/* Future Platforms Card - Consolidated In-Development */}
           <ScrollReveal delay={200}>
-            <div className="relative overflow-hidden rounded-xl p-6 md:p-8 h-full flex flex-col gap-5 md:gap-7 transition-transform duration-300 hover:-translate-y-1 bg-[#FDFBF7] border border-[#F0EADF] group">
+            <div className="relative overflow-hidden rounded-xl p-6 md:p-8 h-full flex flex-col gap-5 md:gap-7 transition-transform duration-300 hover:-translate-y-1 bg-[#FDFBF7] dark:bg-[#1C1C1C] border border-[#F0EADF] dark:border-white/10 group">
               {/* Background Patterns */}
               <img
                 src="/ecocard.png"
@@ -252,19 +252,19 @@ export default function Projects() {
                   <ul className="space-y-4">
                     <li className="flex items-center gap-3 group/item">
                       <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 group-hover/item:scale-125 transition-transform" />
-                      <span className="text-[16px] text-gray-700">
+                      <span className="text-[16px] text-gray-700 dark:text-gray-300">
                         Mobility Platform (Coming Soon)
                       </span>
                     </li>
                     <li className="flex items-center gap-3 group/item">
                       <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 group-hover/item:scale-125 transition-transform" />
-                      <span className="text-[16px] text-gray-700">
+                      <span className="text-[16px] text-gray-700 dark:text-gray-300">
                         Fintech Platform (Coming Soon)
                       </span>
                     </li>
                     <li className="flex items-center gap-3 group/item">
                       <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 group-hover/item:scale-125 transition-transform" />
-                      <span className="text-[16px] text-gray-700">
+                      <span className="text-[16px] text-gray-700 dark:text-gray-300">
                         Educational Platform (Planned)
                       </span>
                     </li>

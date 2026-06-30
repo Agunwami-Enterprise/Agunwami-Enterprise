@@ -17,7 +17,7 @@ export default function Badge({
         className={cn(
           "inline-flex items-center px-3 py-1 rounded-md text-[12px] font-bold tracking-wider uppercase",
           type === "primary" && "bg-primary text-white",
-          type === "neutral" && "bg-[#F3F3F3] text-[#555555]",
+          type === "neutral" && "bg-[#F3F3F3] dark:bg-white/10 text-[#555555] dark:text-gray-400",
           className,
         )}
       >

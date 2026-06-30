@@ -229,7 +229,7 @@ export default function EcosystemPage() {
                                     "text-[16px] leading-snug",
                                     isActive
                                       ? "text-white/80"
-                                      : "text-gray-700",
+                                      : "text-gray-700 dark:text-gray-300",
                                   )}
                                 >
                                   {feature}
@@ -275,7 +275,7 @@ export default function EcosystemPage() {
                         <div
                           className={cn(
                             "absolute inset-0 bg-gradient-to-r via-transparent to-transparent pointer-events-none",
-                            isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7]",
+                            isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7] dark:from-[#1C1C1C]",
                           )}
                           style={{ backgroundSize: "200% 100%" }}
                         />
@@ -283,7 +283,7 @@ export default function EcosystemPage() {
                         <div
                           className={cn(
                             "absolute inset-y-0 left-0 w-32 bg-gradient-to-r pointer-events-none",
-                            isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7]",
+                            isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7] dark:from-[#1C1C1C]",
                           )}
                         />
                       </div>
