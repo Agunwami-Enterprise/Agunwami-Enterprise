@@ -297,30 +297,32 @@ export default function MainPage() {
           />
         </ScrollReveal>
         <div>
-          {projects.map((item, index) => (
-            <ScrollReveal key={index} delay={index * 100}>
-              <div className="group relative p-6 flex flex-col md:flex-row md:justify-between md:items-center cursor-pointer gap-6 md:gap-0">
-                <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 dark:bg-white group-hover:w-full transition-[width] duration-300 ease-out" />
-                <div className="max-w-2xl">
-                  <h1 className="text-[28px] md:text-[32px] font-primary font-[400] tracking-tight text-gray-900 dark:text-white transition-transform duration-300 group-hover:translate-x-2">
-                    {item.name}
-                  </h1>
-                  <p className="text-[18px] md:text-[20px] leading-relaxed md:leading-[34px] text-[#7C7C7C] dark:text-gray-400">
-                    {item.homeDescription}
-                  </p>
-                </div>
+          {projects
+            .filter((item) => item.status !== "DISABLED")
+            .map((item, index) => (
+              <ScrollReveal key={index} delay={index * 100}>
                 <Link
-                  href={item?.link ?? "#"}
-                  className="group/link flex items-center gap-2 font-[400] text-primary md:opacity-0 group-hover:opacity-100 transition-all duration-300 md:translate-x-2 group-hover:translate-x-0 w-fit"
+                  href="/projects"
+                  className="group relative p-6 flex flex-col md:flex-row md:justify-between md:items-center cursor-pointer gap-6 md:gap-0 block"
                 >
-                  <span className="uppercase tracking-widest text-primary text-[14px] md:text-[16px]">
-                    {item.projectCategory}
-                  </span>
-                  <BsArrowRight className="transition-transform duration-300 group-hover/link:translate-x-1" />
+                  <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 dark:bg-white group-hover:w-full transition-[width] duration-300 ease-out" />
+                  <div className="max-w-2xl">
+                    <h1 className="text-[28px] md:text-[32px] font-primary font-[400] tracking-tight text-gray-900 dark:text-white transition-transform duration-300 group-hover:translate-x-2">
+                      {item.name}
+                    </h1>
+                    <p className="text-[18px] md:text-[20px] leading-relaxed md:leading-[34px] text-[#7C7C7C] dark:text-gray-400">
+                      {item.homeDescription}
+                    </p>
+                  </div>
+                  <div className="group/link flex items-center gap-2 font-[400] text-primary md:opacity-0 group-hover:opacity-100 transition-all duration-300 md:translate-x-2 group-hover:translate-x-0 w-fit">
+                    <span className="uppercase tracking-widest text-primary text-[14px] md:text-[16px]">
+                      {item.projectCategory}
+                    </span>
+                    <BsArrowRight className="transition-transform duration-300 group-hover/link:translate-x-1" />
+                  </div>
                 </Link>
-              </div>
-            </ScrollReveal>
-          ))}
+              </ScrollReveal>
+            ))}
           <ScrollReveal delay={FeaturedProjects.length * 100}>
             <Link
               href={"/projects"}
@@ -359,10 +361,12 @@ export default function MainPage() {
             <ScrollReveal key={index} delay={index * 120}>
               <div
                 className={cn(
-                  "relative overflow-hidden rounded-xl p-6 md:p-8 min-h-[280px] md:min-h-[320px] flex flex-col gap-5 md:gap-7 transition-transform duration-300 hover:-translate-y-1",
+                  "relative overflow-hidden rounded-xl p-6 md:p-8 min-h-[280px] md:min-h-[320px] flex flex-col gap-5 md:gap-7 transition-transform duration-300",
                   item.status === "ACTIVE"
-                    ? "bg-[#1A1A1A] hover:bg-primary/100 group"
-                    : "bg-[#F5F2EC] dark:bg-[#1C1C1C]",
+                    ? "bg-[#1A1A1A] hover:bg-primary/100 hover:-translate-y-1 group"
+                    : item.status === "DISABLED"
+                    ? "bg-[#F5F2EC]/50 dark:bg-[#1C1C1C]/50 opacity-50 cursor-not-allowed pointer-events-none"
+                    : "bg-[#F5F2EC] dark:bg-[#1C1C1C] hover:-translate-y-1",
                 )}
               >
                 {/* Concentric circles pattern */}
@@ -381,6 +385,8 @@ export default function MainPage() {
                       "inline-flex items-center px-3 py-1 rounded-md text-[12px] font-semibold tracking-wide",
                       item.status === "ACTIVE"
                         ? "bg-primary text-white"
+                        : item.status === "DISABLED"
+                        ? "bg-gray-300 dark:bg-white/5 text-gray-500 dark:text-gray-600"
                         : "bg-[#E8E5DF] dark:bg-white/10 text-[#555555] dark:text-gray-400",
                     )}
                   >

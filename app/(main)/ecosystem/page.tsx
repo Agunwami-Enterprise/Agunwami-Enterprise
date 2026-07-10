@@ -137,6 +137,7 @@ export default function EcosystemPage() {
             .filter((item) => !item.client)
             .map((item, index) => {
               const isActive = item.status === "ACTIVE";
+              const isDisabled = item.status === "DISABLED";
               return (
                 <ScrollReveal key={index} direction="up" delay={index * 100}>
                   <Card
@@ -144,6 +145,7 @@ export default function EcosystemPage() {
                     className={cn(
                       "relative overflow-hidden border-none p-0 md:p-0 min-h-fit md:min-h-[500px]",
                       !isActive && "bg-[#FDFBF7]",
+                      isDisabled && "opacity-50 pointer-events-none cursor-not-allowed bg-[#FDFBF7]/50 dark:bg-[#1C1C1C]/50"
                     )}
                   >
                     {/* Background Pattern Overlay */}
@@ -182,10 +184,12 @@ export default function EcosystemPage() {
                                   "px-3 py-1 rounded-md text-[12px] font-bold tracking-wider uppercase",
                                   isActive
                                     ? "bg-primary text-white"
+                                    : isDisabled
+                                    ? "bg-gray-300 dark:bg-white/5 text-gray-500 dark:text-gray-400"
                                     : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400",
                                 )}
                               >
-                                {isActive ? "ACTIVE" : "COMING SOON"}
+                                {isActive ? "ACTIVE" : isDisabled ? "DISABLED" : "COMING SOON"}
                               </span>
                             </div>
                           </div>

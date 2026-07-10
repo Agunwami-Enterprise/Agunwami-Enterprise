@@ -92,7 +92,7 @@ export default function Projects() {
                             </div>
 
                             <div className="space-y-2">
-                              <h1 className="text-[34px] leading-[32px] font-primary font-[400] tracking-tight text-gray-900 dark:text-white ">
+                              <h1 className="text-[34px] leading-[32px] font-primary font-[400] tracking-tight text-gray-900 dark:text-white">
                                 {project.name}
                               </h1>
                               <p className="text-[16px] text-[#656565]">
