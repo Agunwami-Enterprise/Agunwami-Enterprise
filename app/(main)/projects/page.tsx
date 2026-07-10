@@ -284,6 +284,7 @@ export default function Projects() {
         title="Let us build something together"
         description="Ready to bring your digital platform vision to life? Partner with us to create infrastructure that scales."
         buttonText="Start Your Project"
+        buttonHref="/contact"
       />
     </main>
   );

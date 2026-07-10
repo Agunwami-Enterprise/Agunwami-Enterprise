@@ -67,14 +67,15 @@ export default function Header() {
           <div className="flex items-center gap-2 md:gap-3 3xl:gap-5 4xl:gap-6">
             <ThemeToggle className="3xl:scale-125 4xl:scale-150 origin-right" />
             <div className="hidden sm:block">
-              <Buttons
-                onClick={() => (window.location.href = "/partnerships")}
-                md
-                primaryButton
-                className="whitespace-nowrap px-4 py-2 3xl:text-lg 3xl:px-6 3xl:py-3 4xl:text-xl 4xl:px-8 4xl:py-4"
-              >
-                Partner With Us
-              </Buttons>
+              <Link href="/contact">
+                <Buttons
+                  md
+                  primaryButton
+                  className="whitespace-nowrap px-4 py-2 3xl:text-lg 3xl:px-6 3xl:py-3 4xl:text-xl 4xl:px-8 4xl:py-4"
+                >
+                  Partner With Us
+                </Buttons>
+              </Link>
             </div>
 
             {/* Mobile Menu Toggle */}
@@ -106,16 +107,14 @@ export default function Header() {
               </Link>
             ))}
             <div className="sm:hidden pt-2">
-              <Buttons
-                onClick={() => {
-                  setIsOpen(false);
-                  window.location.href = "/partnerships";
-                }}
-                md
-                primaryButton
-              >
-                Partner With Us
-              </Buttons>
+              <Link href="/contact" onClick={() => setIsOpen(false)}>
+                <Buttons
+                  md
+                  primaryButton
+                >
+                  Partner With Us
+                </Buttons>
+              </Link>
             </div>
           </div>
         )}
