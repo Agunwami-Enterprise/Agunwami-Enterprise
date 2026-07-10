@@ -88,14 +88,14 @@ export default function ContactForm() {
           required
           className={`${inputClass} appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20fill%3D%27none%27%20viewBox%3D%270%200%2020%2020%27%3E%3Cpath%20stroke%3D%27%236b7280%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%20stroke-width%3D%271.5%27%20d%3D%27m6%208%204%204%204-4%27%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat`}
         >
-          <option value="">Select a Project type</option>
-          <option value="Website Development">Website Development</option>
-          <option value="Platform System">Platform System</option>
-          <option value="Admin Dashboard">Admin Dashboard</option>
-          <option value="Membership System">Membership System</option>
-          <option value="Workflow Automation">Workflow Automation</option>
-          <option value="Partnership Inquiry">Partnership Inquiry</option>
-          <option value="Other">Other</option>
+          <option value="" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Select a Project type</option>
+          <option value="Website Development" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Website Development</option>
+          <option value="Platform System" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Platform System</option>
+          <option value="Admin Dashboard" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Admin Dashboard</option>
+          <option value="Membership System" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Membership System</option>
+          <option value="Workflow Automation" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Workflow Automation</option>
+          <option value="Partnership Inquiry" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Partnership Inquiry</option>
+          <option value="Other" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Other</option>
         </select>
       </div>
 
