@@ -92,8 +92,13 @@ export default function Projects() {
                             </div>
 
                             <div className="space-y-2">
-                              <h1 className="text-[34px] leading-[32px] font-primary font-[400] tracking-tight text-gray-900 dark:text-white">
+                              <h1 className="text-[34px] leading-[32px] font-primary font-[400] tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
                                 {project.name}
+                                {project.status === "DISABLED" && (
+                                  <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-md tracking-wider uppercase">
+                                    Coming Soon
+                                  </span>
+                                )}
                               </h1>
                               <p className="text-[16px] text-[#656565]">
                                 {project.description}
