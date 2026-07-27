@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { subscribeDashboard } from '@/modules/dashboard/services';
 import { SkeletonDashboard } from '@/components/Skeleton';
+import ClockWidget from '@/modules/time-tracking/components/ClockWidget';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CEO DASHBOARD PAGE
@@ -110,33 +111,9 @@ function StatsRow({ stats }: { stats: typeof STATS }) {
 function MiddleRow() {
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-      <TimeTrackingWidget />
+      <ClockWidget />
       <DeptPieCard />
       <AttendanceCard />
-    </div>
-  );
-}
-
-function TimeTrackingWidget() {
-  return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e]">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-[#f5bd02]"><ClockSvg /></span>
-        <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200">Time Tracking</span>
-      </div>
-      <div className="rounded-xl bg-gray-50 p-4 text-center dark:bg-[#2a2a2a]">
-        <p className="text-[12px] font-medium text-gray-400">Not Clocked In</p>
-        <button
-          className="mt-3 w-full rounded-lg py-2 text-[13px] font-semibold text-white transition hover:opacity-90"
-          style={{ backgroundColor: '#22c55e' }}
-        >
-          Clock-In
-        </button>
-      </div>
-      <div className="mt-3 space-y-1">
-        <p className="text-[12px] text-gray-600 dark:text-gray-400"><span className="font-medium">Today:</span> 7h 32m</p>
-        <p className="text-[12px] text-gray-600 dark:text-gray-400"><span className="font-medium">Weekly:</span> 32h 15m</p>
-      </div>
     </div>
   );
 }

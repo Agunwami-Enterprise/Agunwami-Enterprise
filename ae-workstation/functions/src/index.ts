@@ -1,10 +1,10 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import * as logger from 'firebase-functions/logger';
 
-// TODO (Stage 3): Add real Cloud Functions here.
-// All sensitive operations — staff account creation, role assignment, approvals,
-// payment initiation — MUST be implemented as Cloud Functions, never as direct
-// client-side Firestore writes. Firestore security rules are a backstop only.
+// Cloud Functions removed for now — no backend functions are deployed at
+// this stage. All sensitive operations (staff account creation, role
+// assignment, approvals, payment initiation, scheduled jobs) will be
+// reintroduced here as Cloud Functions when that work resumes.
 
 export const helloWorld = onRequest((request, response) => {
   logger.info('AE Workstation Functions — placeholder', { structuredData: true });

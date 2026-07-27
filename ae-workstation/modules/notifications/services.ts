@@ -6,6 +6,24 @@ export interface NotifItem {
   tag: string; tagColor: string; read: boolean;
   iconBg: string; iconColor: string;
   category: 'tasks' | 'updates' | 'payments' | 'messages';
+  relatedTo?: { collection: string; docId: string };
+}
+
+const COLLECTION_ROUTES: Record<string, string> = {
+  tasks:         '/ceo/tasks',
+  leaveRequests: '/ceo/leave-requests',
+  payments:      '/ceo/payments',
+  messages:      '/ceo/messages',
+  documents:     '/ceo/documents',
+  training:      '/ceo/training',
+  staff:         '/ceo/staff',
+  announcements: '/ceo/dashboard',
+};
+
+export function routeForNotif(n: Pick<NotifItem, 'relatedTo'>): string {
+  const collection = n.relatedTo?.collection;
+  if (!collection) return '/ceo/notifications';
+  return COLLECTION_ROUTES[collection] ?? '/ceo/notifications';
 }
 
 function typeToTitle(type: string): string {
@@ -76,6 +94,7 @@ export function subscribeNotifications(uid: string, cb: (items: NotifItem[]) => 
         iconBg:     icon.bg,
         iconColor:  icon.color,
         category:   typeToCategory(type),
+        relatedTo:  data.relatedTo as { collection: string; docId: string } | undefined,
       };
     }));
   });

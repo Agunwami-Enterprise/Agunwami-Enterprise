@@ -1,14 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { subscribeTimeTracking, type TimeRecord } from '@/modules/time-tracking/services';
+import { useAuth } from '@/lib/auth-context';
+import { subscribeMonthlySummary, monthId } from '@/modules/time-tracking/services';
+import type { MonthlySummaryDoc } from '@/modules/time-tracking/types';
+import ClockWidget from '@/modules/time-tracking/components/ClockWidget';
+import MonthlyCalendar from '@/modules/time-tracking/components/MonthlyCalendar';
 import { SkeletonTimeTracking } from '@/components/Skeleton';
 
 /* ══════════════════════════════════════════════════════════════════════════
    TYPES
 ══════════════════════════════════════════════════════════════════════════ */
 
-type TTTab = 'overview' | 'goals' | 'reports' | 'records';
+type TTTab = 'overview' | 'goals' | 'reports';
 
 /* ══════════════════════════════════════════════════════════════════════════
    CONSTANTS
@@ -77,20 +81,23 @@ const GOALS = [
 ══════════════════════════════════════════════════════════════════════════ */
 
 export default function TimeTrackingPage() {
+  const { user } = useAuth();
   const [tab, setTab] = useState<TTTab>('overview');
-  const [TIME_RECORDS, setTimeRecords] = useState<TimeRecord[]>([]);
-  const [loading,      setLoading]     = useState(true);
+  const [summary, setSummary] = useState<MonthlySummaryDoc | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => subscribeTimeTracking((data) => { setTimeRecords(data); setLoading(false); }), []);
+  useEffect(() => {
+    if (!user?.uid) return;
+    return subscribeMonthlySummary(user.uid, monthId(), s => { setSummary(s); setLoading(false); });
+  }, [user?.uid]);
 
   const TABS: { key: TTTab; label: string; icon: React.ReactNode }[] = [
     { key:'overview', label:'Overview',            icon:<ClockTabIcon />   },
     { key:'goals',    label:'Goals & Achievements', icon:<TrophyTabIcon />  },
     { key:'reports',  label:'Reports',              icon:<ChartTabIcon />   },
-    { key:'records',  label:'Time Records',         icon:<ListTabIcon />    },
   ];
 
-  if (loading) return <SkeletonTimeTracking />;
+  if (loading || !user?.uid) return <SkeletonTimeTracking />;
 
   return (
     <div className="p-4 md:p-5">
@@ -121,6 +128,12 @@ export default function TimeTrackingPage() {
       {/* ── OVERVIEW ── */}
       {tab === 'overview' && (
         <div className="flex flex-col gap-5">
+
+          {/* Clock-in widget + monthly calendar */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <div className="lg:col-span-1"><ClockWidget /></div>
+            <div className="lg:col-span-2"><MonthlyCalendar uid={user.uid} summary={summary} /></div>
+          </div>
 
           {/* Stat cards */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -206,10 +219,10 @@ export default function TimeTrackingPage() {
             <h2 className="mb-3 text-[14px] font-bold text-gray-800 dark:text-white">Monthly Summary</h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               {[
-                { label:'Days Worked',    value:'22' },
-                { label:'Avg Daily Hrs',  value:'8.5h' },
-                { label:'Overtime Days',  value:'4' },
-                { label:'Leave Days',     value:'2' },
+                { label:'Days Worked',   value: String(summary?.totalDaysWorked ?? 0) },
+                { label:'Days Absent',   value: String(summary?.daysAbsent.length ?? 0) },
+                { label:'Total Hours',   value: `${(summary?.totalHoursWorked ?? 0).toFixed(1)}h` },
+                { label:'Avg Clock-In',  value: summary?.averageClockIn || '-' },
               ].map(s => (
                 <div key={s.label} className="rounded-xl bg-gray-50 p-4 dark:bg-[#2a2a2a]">
                   <p className="text-[11px] text-gray-500 dark:text-gray-400">{s.label}</p>
@@ -221,43 +234,6 @@ export default function TimeTrackingPage() {
         </div>
       )}
 
-      {/* ── TIME RECORDS ── */}
-      {tab === 'records' && (
-        <div className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-[#1e1e1e]">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50 dark:border-white/6 dark:bg-[#1a1a1a]">
-                  {['Date','Clock In','Clock Out','Hours','Project','Status'].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {TIME_RECORDS.map((r, i) => (
-                  <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 dark:border-white/4 dark:hover:bg-white/3">
-                    <td className="px-5 py-3.5 text-[12px] text-gray-700 dark:text-gray-200">{r.date}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-gray-600 dark:text-gray-300">{r.clockIn}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-gray-600 dark:text-gray-300">{r.clockOut}</td>
-                    <td className="px-5 py-3.5 text-[12px] font-medium text-gray-700 dark:text-gray-200">{r.hours}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-gray-600 dark:text-gray-300">{r.project}</td>
-                    <td className="px-5 py-3.5">
-                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold
-                        ${r.status === 'Approved'
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'}`}>
-                        {r.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -357,7 +333,4 @@ function TrophyTabIcon() {
 }
 function ChartTabIcon() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
-}
-function ListTabIcon() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor"/><circle cx="3" cy="12" r="1" fill="currentColor"/><circle cx="3" cy="18" r="1" fill="currentColor"/></svg>;
 }

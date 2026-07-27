@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from '@/lib/theme-context';
 import { useAuth } from '@/lib/auth-context';
 import { subscribeUserProfile, type UserProfile } from '@/modules/settings/services';
-import { subscribeNotifications, markNotifRead, markAllNotifsRead, type NotifItem } from '@/modules/notifications/services';
+import { subscribeNotifications, markNotifRead, markAllNotifsRead, routeForNotif, type NotifItem } from '@/modules/notifications/services';
 
 interface Props { onMenuClick: () => void; }
 
@@ -41,10 +41,10 @@ export default function CeoNavbar({ onMenuClick }: Props) {
 
   const navUnread = navNotifs.filter(n => !n.read).length;
 
-  function handleNotifClick(id: string) {
+  function handleNotifClick(n: NotifItem) {
     setShowNotif(false);
-    markNotifRead(id).catch(() => {});
-    router.push('/ceo/notifications');
+    markNotifRead(n.id).catch(() => {});
+    router.push(routeForNotif(n));
   }
 
   async function handleMarkAllRead() {
@@ -86,7 +86,9 @@ export default function CeoNavbar({ onMenuClick }: Props) {
         >
           <BellIcon />
           {navUnread > 0 && (
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1a1a1a]" />
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-[#1a1a1a]">
+              {navUnread > 9 ? '9+' : navUnread}
+            </span>
           )}
         </button>
 
@@ -123,7 +125,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
                 navNotifs.slice(0, 8).map(n => (
                   <button
                     key={n.id}
-                    onClick={() => handleNotifClick(n.id)}
+                    onClick={() => handleNotifClick(n)}
                     className="flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left last:border-0 hover:bg-gray-50 dark:border-white/4 dark:hover:bg-white/3"
                   >
                     <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: n.iconBg }}>
