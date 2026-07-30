@@ -45,6 +45,67 @@ const radarSeriesData = [
 ];
 const radarGridFracs = [0.25,0.5,0.75,1.0];
 
+/* ── Financial tab ── */
+const MONTHLY_FINANCE = [
+  { month:'Jan', revenue:320, expenses:210 },
+  { month:'Feb', revenue:350, expenses:225 },
+  { month:'Mar', revenue:310, expenses:230 },
+  { month:'Apr', revenue:400, expenses:250 },
+  { month:'May', revenue:380, expenses:240 },
+  { month:'Jun', revenue:420, expenses:260 },
+];
+const EXPENSE_BREAKDOWN = [
+  { label:'Payroll',    pct:52, color:'#3b82f6' },
+  { label:'Operations', pct:24, color:'#f5bd02' },
+  { label:'Marketing',  pct:14, color:'#22c55e' },
+  { label:'Other',      pct:10, color:'#ec4899' },
+];
+
+/* ── Task Metrics tab ── */
+const TASK_STATUS_COUNTS = [
+  { label:'Todo',        pct:45, color:'#9ca3af' },
+  { label:'In Progress', pct:25, color:'#3b82f6' },
+  { label:'In Review',   pct:15, color:'#f5bd02' },
+  { label:'Completed',   pct:15, color:'#22c55e' },
+];
+const TASK_PRIORITY_COUNTS = [
+  { label:'High',   pct:40, color:'#ef4444' },
+  { label:'Medium', pct:35, color:'#8b5cf6' },
+  { label:'Low',    pct:25, color:'#84cc16' },
+];
+
+/* ── Staff Development tab ── */
+const TRAINING_COMPLIANCE = [
+  { label:'Cyber Security Fundamentals',   pct:100, mandatory:true  },
+  { label:'Data Privacy & NDPR Compliance',pct:80,  mandatory:true  },
+  { label:'Health & Safety',               pct:100, mandatory:true  },
+  { label:'Leadership Excellence',         pct:45,  mandatory:false },
+  { label:'React & Next.js',               pct:30,  mandatory:false },
+];
+const DEPT_COMPLETION = [
+  { label:'Engineering', pct:88 },
+  { label:'Sales',       pct:76 },
+  { label:'Finance',     pct:92 },
+  { label:'HR',          pct:81 },
+  { label:'Marketing',   pct:69 },
+];
+
+/* ── Time Records tab ── */
+const DEPT_HOURS = [
+  { label:'Engineering', pct:100, sub:'412h' },
+  { label:'Sales',       pct:75,  sub:'310h' },
+  { label:'Finance',     pct:70,  sub:'288h' },
+  { label:'Operations',  pct:64,  sub:'265h' },
+  { label:'HR',          pct:46,  sub:'190h' },
+];
+const PUNCTUALITY = [
+  { label:'Michael Chima', pct:100 },
+  { label:'Lisa R',        pct:98  },
+  { label:'Emily Davis',   pct:96  },
+  { label:'Mike Tutor',    pct:95  },
+  { label:'Robert Amadi',  pct:93  },
+];
+
 /* Area line chart (Jan–Jun) */
 const MONTHS    = ['Jan','Feb','Mar','Apr','May','Jun'];
 const ACTIVE    = [35, 42, 38, 50, 44, 55];
@@ -288,40 +349,136 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* Detailed Performance Metrics */}
-      <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-[13px] font-bold text-gray-800 dark:text-white">Detailed Performance Metrics</h2>
-            <p className="text-[11px] text-gray-400">Comprehensive staff performance breakdown</p>
-          </div>
-          <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-white/8 dark:text-gray-300">
-            <ExportIcon /> Export
-          </button>
-        </div>
-        <div className="flex flex-col gap-4">
-          {PERF_METRICS.map(m => {
-            const pct = m.productivity;
-            const barColor = pct >= 90 ? '#22c55e' : pct >= 80 ? '#f5bd02' : '#f97316';
-            return (
-              <div key={m.name}>
-                <div className="mb-1 flex items-center justify-between">
-                  <div>
-                    <p className="text-[13px] font-semibold text-gray-800 dark:text-white">{m.name}</p>
-                    <p className="text-[10px] text-gray-400">
-                      Tasks {m.tasks} &nbsp;·&nbsp; Attendance: {m.attendance}% &nbsp;·&nbsp; ☆ {m.rating}
-                    </p>
+      {/* Financial tab */}
+      {reportTab === 'financial' && (
+        <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+            <h2 className="text-[13px] font-bold text-gray-800 dark:text-white">Revenue vs Expenses</h2>
+            <p className="mb-4 text-[11px] text-gray-400">Monthly comparison ($ thousands)</p>
+            <div className="flex items-end justify-around gap-2" style={{ height:120 }}>
+              {MONTHLY_FINANCE.map(m => (
+                <div key={m.month} className="flex flex-col items-center gap-1">
+                  <div className="flex items-end gap-0.5" style={{ height:90 }}>
+                    <div className="w-5 rounded-t-sm bg-[#22c55e]" style={{ height:`${(m.revenue/450)*90}px` }} />
+                    <div className="w-5 rounded-t-sm bg-[#f97316]" style={{ height:`${(m.expenses/450)*90}px` }} />
                   </div>
-                  <span className="text-[14px] font-bold" style={{ color: barColor }}>{pct}%</span>
+                  <span className="text-[9px] text-gray-400">{m.month}</span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-[#2a2a2a]">
-                  <div className="h-2 rounded-full transition-all" style={{ width:`${pct}%`, backgroundColor: barColor }} />
-                </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-center gap-4">
+              <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-[#22c55e]" /><span className="text-[10px] text-gray-500">Revenue</span></div>
+              <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-[#f97316]" /><span className="text-[10px] text-gray-500">Expenses</span></div>
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+            <h2 className="mb-4 text-[13px] font-bold text-gray-800 dark:text-white">Expense Breakdown</h2>
+            <BarList rows={EXPENSE_BREAKDOWN} />
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Task Metrics tab */}
+      {reportTab === 'tasks' && (
+        <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+            <h2 className="mb-4 text-[13px] font-bold text-gray-800 dark:text-white">Tasks by Status</h2>
+            <BarList rows={TASK_STATUS_COUNTS} />
+          </div>
+          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+            <h2 className="mb-4 text-[13px] font-bold text-gray-800 dark:text-white">Tasks by Priority</h2>
+            <BarList rows={TASK_PRIORITY_COUNTS} />
+          </div>
+        </div>
+      )}
+
+      {/* Staff Development tab */}
+      {reportTab === 'development' && (
+        <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+            <h2 className="text-[13px] font-bold text-gray-800 dark:text-white">Training Compliance</h2>
+            <p className="mb-4 text-[11px] text-gray-400">Completion rate by program</p>
+            <BarList rows={TRAINING_COMPLIANCE.map(t => ({ label: t.mandatory ? `${t.label} (Mandatory)` : t.label, pct: t.pct, color: t.pct >= 90 ? '#22c55e' : t.pct >= 60 ? '#f5bd02' : '#ef4444' }))} />
+          </div>
+          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+            <h2 className="text-[13px] font-bold text-gray-800 dark:text-white">Completion by Department</h2>
+            <p className="mb-4 text-[11px] text-gray-400">Overall training completion rate</p>
+            <BarList rows={DEPT_COMPLETION.map(d => ({ ...d, color: d.pct >= 85 ? '#22c55e' : d.pct >= 70 ? '#f5bd02' : '#f97316' }))} />
+          </div>
+        </div>
+      )}
+
+      {/* Time Records tab */}
+      {reportTab === 'records' && (
+        <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+            <h2 className="text-[13px] font-bold text-gray-800 dark:text-white">Hours Logged by Department</h2>
+            <p className="mb-4 text-[11px] text-gray-400">This month</p>
+            <BarList rows={DEPT_HOURS.map(d => ({ label: d.label, pct: d.pct, color: '#3b82f6', sub: d.sub }))} />
+          </div>
+          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+            <h2 className="text-[13px] font-bold text-gray-800 dark:text-white">Punctuality</h2>
+            <p className="mb-4 text-[11px] text-gray-400">On-time clock-in rate</p>
+            <BarList rows={PUNCTUALITY.map(p => ({ ...p, color: p.pct >= 97 ? '#22c55e' : p.pct >= 90 ? '#f5bd02' : '#f97316' }))} />
+          </div>
+        </div>
+      )}
+
+      {/* Detailed Performance Metrics */}
+      {reportTab === 'staff' && (
+        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-[13px] font-bold text-gray-800 dark:text-white">Detailed Performance Metrics</h2>
+              <p className="text-[11px] text-gray-400">Comprehensive staff performance breakdown</p>
+            </div>
+            <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-white/8 dark:text-gray-300">
+              <ExportIcon /> Export
+            </button>
+          </div>
+          <div className="flex flex-col gap-4">
+            {PERF_METRICS.map(m => {
+              const pct = m.productivity;
+              const barColor = pct >= 90 ? '#22c55e' : pct >= 80 ? '#f5bd02' : '#f97316';
+              return (
+                <div key={m.name}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <div>
+                      <p className="text-[13px] font-semibold text-gray-800 dark:text-white">{m.name}</p>
+                      <p className="text-[10px] text-gray-400">
+                        Tasks {m.tasks} &nbsp;·&nbsp; Attendance: {m.attendance}% &nbsp;·&nbsp; ☆ {m.rating}
+                      </p>
+                    </div>
+                    <span className="text-[14px] font-bold" style={{ color: barColor }}>{pct}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-[#2a2a2a]">
+                    <div className="h-2 rounded-full transition-all" style={{ width:`${pct}%`, backgroundColor: barColor }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Reusable label + percentage bar row, used across the non-staff report tabs */
+function BarList({ rows }: { rows: { label: string; pct: number; color: string; sub?: string }[] }) {
+  return (
+    <div className="flex flex-col gap-3.5">
+      {rows.map(r => (
+        <div key={r.label}>
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[12px] font-medium text-gray-700 dark:text-gray-200">{r.label}</span>
+            <span className="text-[12px] font-bold" style={{ color: r.color }}>{r.sub ?? `${r.pct}%`}</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-[#2a2a2a]">
+            <div className="h-2 rounded-full transition-all" style={{ width:`${r.pct}%`, backgroundColor: r.color }} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

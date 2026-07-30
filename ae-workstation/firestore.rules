@@ -95,18 +95,25 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
-    // ── /timeTracking/{recordId} ─────────────────────────────────────────────
-    // Staff can read/write their own records. Managers can read all.
+    // ── /timeTracking/{uid}/** ───────────────────────────────────────────────
+    // Clock-in system. Each user reads/writes only their own days and
+    // monthlySummary subcollections. CEO can read (never write) anyone's —
+    // corrections to someone else's time records go through a Cloud Function
+    // (TODO once Cloud Functions are back). Add a manager read scope later by
+    // changing isCEO() to isManager() here, alongside /timeTrackingLive below.
 
-    match /timeTracking/{recordId} {
-      allow read:  if isSignedIn() &&
-                      (isManager() || resource.data.staffId == request.auth.uid);
-      allow create: if isSignedIn() &&
-                       request.resource.data.staffId == request.auth.uid;
-      allow update: if isSignedIn() &&
-                       resource.data.staffId == request.auth.uid &&
-                       resource.data.status == 'pending';
-      allow delete: if false;
+    match /timeTracking/{uid}/{document=**} {
+      allow read:  if isSignedIn() && (isSelf(uid) || isCEO());
+      allow write: if isSignedIn() && isSelf(uid);
+    }
+
+    // ── /timeTrackingLive/{uid} ──────────────────────────────────────────────
+    // Flat live-status doc per user, so the CEO team overview needs one
+    // onSnapshot listener instead of a query across every user's subcollection.
+
+    match /timeTrackingLive/{uid} {
+      allow read:  if isSignedIn() && (isSelf(uid) || isCEO());
+      allow write: if isSignedIn() && isSelf(uid);
     }
 
     // ── /leaveRequests/{reqId} ────────────────────────────────────────────────

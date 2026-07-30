@@ -6,6 +6,7 @@ import { subscribeMonthlySummary, monthId } from '@/modules/time-tracking/servic
 import type { MonthlySummaryDoc } from '@/modules/time-tracking/types';
 import ClockWidget from '@/modules/time-tracking/components/ClockWidget';
 import MonthlyCalendar from '@/modules/time-tracking/components/MonthlyCalendar';
+import TeamOverview from '@/modules/time-tracking/components/TeamOverview';
 import { SkeletonTimeTracking } from '@/components/Skeleton';
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -134,6 +135,8 @@ export default function TimeTrackingPage() {
             <div className="lg:col-span-1"><ClockWidget /></div>
             <div className="lg:col-span-2"><MonthlyCalendar uid={user.uid} summary={summary} /></div>
           </div>
+
+          <TeamOverview />
 
           {/* Stat cards */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
