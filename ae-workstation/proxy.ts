@@ -7,10 +7,10 @@ export function proxy(req: NextRequest) {
   const hasSession = Boolean(req.cookies.get(SESSION_COOKIE)?.value);
 
   if (path.startsWith('/ceo') && !hasSession) {
-    return NextResponse.redirect(new URL('/login', req.nextUrl));
+    return NextResponse.redirect(new URL('/auth/login', req.nextUrl));
   }
 
-  if ((path === '/login' || path.startsWith('/login/')) && hasSession) {
+  if ((path === '/auth/login' || path.startsWith('/auth/login/')) && hasSession) {
     return NextResponse.redirect(new URL('/ceo/dashboard', req.nextUrl));
   }
 

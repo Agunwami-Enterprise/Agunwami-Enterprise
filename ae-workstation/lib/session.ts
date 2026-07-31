@@ -70,11 +70,11 @@ export async function deleteSession() {
 export const verifySession = cache(async (): Promise<SessionPayload> => {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!token) redirect('/login');
+  if (!token) redirect('/auth/login');
   try {
     const { payload } = await jwtVerify(token, getSecret());
     return payload as unknown as SessionPayload;
   } catch {
-    redirect('/login');
+    redirect('/auth/login');
   }
 });

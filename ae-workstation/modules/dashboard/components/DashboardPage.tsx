@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/lib/auth-context';
 import { subscribeDashboard } from '@/modules/dashboard/services';
 import { SkeletonDashboard } from '@/components/Skeleton';
 import ClockWidget from '@/modules/time-tracking/components/ClockWidget';
@@ -44,8 +47,8 @@ export default function DashboardPage() {
 function HeroBanner() {
   return (
     <div
-      className="flex flex-col gap-1 rounded-2xl px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
-      style={{ backgroundColor: '#f5bd02' }}
+      className="flex flex-col justify-between gap-3 rounded-2xl p-5 sm:flex-row sm:items-center"
+      style={{ background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)' }}
     >
       <div>
         <h1 className="text-[18px] font-bold leading-tight text-white">CEO Executive Dashboard</h1>

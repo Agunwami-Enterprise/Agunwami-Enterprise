@@ -10,11 +10,19 @@
     "seed": "ts-node --project tsconfig.seed.json scripts/seedFirestore.ts"
   },
   "dependencies": {
+    "@livekit/components-react": "^2.9.23",
+    "@livekit/components-styles": "^1.2.0",
+    "emoji-picker-react": "^4.19.1",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.1.0",
+    "idb": "^8.0.3",
+    "livekit-client": "^2.21.0",
+    "livekit-server-sdk": "^2.17.0",
+    "lucide-react": "^1.27.0",
     "next": "16.2.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-toastify": "^11.1.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

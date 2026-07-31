@@ -4,6 +4,6 @@ import { verifySession } from '@/lib/session';
 
 export default async function CeoLayout({ children }: { children: React.ReactNode }) {
   const session = await verifySession();
-  if (session.role !== 'ceo') redirect('/login');
+  if (!session) redirect('/auth/login');
   return <CeoShell>{children}</CeoShell>;
 }
