@@ -334,10 +334,16 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAuthorizedStaff());
     }
 
-    // Tasks Collection
+    // Tasks Collection (legacy student tasks)
     match /tasks/{taskId} {
       allow read: if isAuthenticated();
       allow write: if isAuthorizedStaff();
+    }
+
+    // Staff Tasks Collection (dedicated workstation staff tasks)
+    match /staffTasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
 
     // Workstation Collections (ae-workstation)

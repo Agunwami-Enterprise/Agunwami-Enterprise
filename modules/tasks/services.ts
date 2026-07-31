@@ -37,7 +37,7 @@ async function loadNameMap(): Promise<Map<string, string>> {
 export function subscribeTasks(cb: (tasks: Task[]) => void): () => void {
   let realUnsub = () => {};
   loadNameMap().then(names => {
-    const q = query(collection(db, 'tasks'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'staffTasks'), orderBy('createdAt', 'desc'));
     realUnsub = onSnapshot(
       q,
       snap => {

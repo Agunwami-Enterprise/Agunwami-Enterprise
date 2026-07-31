@@ -1,4 +1,4 @@
-﻿import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 
 export interface DashboardStats {
@@ -65,7 +65,7 @@ export function subscribeDashboard(
 
   try {
     unsub2 = onSnapshot(
-      query(collection(db, 'tasks'), orderBy('createdAt', 'desc'), limit(5)),
+      query(collection(db, 'staffTasks'), orderBy('createdAt', 'desc'), limit(5)),
       () => {},
       () => {}
     );
