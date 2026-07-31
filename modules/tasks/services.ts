@@ -57,8 +57,8 @@ export function subscribeTasks(cb: (tasks: Task[]) => void): () => void {
           };
         }));
       },
-      err => {
-        console.warn('Tasks snapshot error:', err);
+      (err) => {
+        if (err.code !== 'permission-denied') console.warn('Tasks snapshot error:', err);
       }
     );
   }).catch(() => {});

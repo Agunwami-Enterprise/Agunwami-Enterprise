@@ -346,6 +346,11 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    // Notifications Collection
+    match /notifications/{notifId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // Workstation Collections (ae-workstation)
     // ── /timeTracking/{uid}/** ───────────────────────────────────────────────
     // Clock-in system. Each user reads/writes only their own days and

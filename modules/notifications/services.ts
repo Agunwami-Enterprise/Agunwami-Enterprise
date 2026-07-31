@@ -72,6 +72,7 @@ export async function markAllNotifsRead(ids: string[]): Promise<void> {
 }
 
 export function subscribeNotifications(uid: string, cb: (items: NotifItem[]) => void): () => void {
+  if (!uid) return () => {};
   const q = query(
     collection(db, 'notifications'),
     where('recipientId', '==', uid),
@@ -100,8 +101,8 @@ export function subscribeNotifications(uid: string, cb: (items: NotifItem[]) => 
         };
       }));
     },
-    err => {
-      console.warn('Notifications snapshot error:', err);
+    (err) => {
+      if (err.code !== 'permission-denied') console.warn('Notifications snapshot error:', err);
     }
   );
 };
