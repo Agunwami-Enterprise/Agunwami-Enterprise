@@ -1,4 +1,4 @@
-﻿import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 
 // Payment initiation must go through a Cloud Function — never a direct client write.
@@ -26,27 +26,35 @@ function mapStatus(s: string): PayStatus {
   return 'Pending';
 }
 
-function fmt(ts: { toDate(): Date } | null | undefined): string {
+function fmt(ts: any): string {
   if (!ts) return '-';
-  return ts.toDate().toLocaleString();
+  if (typeof ts === 'string') return ts;
+  if (ts.toDate) return ts.toDate().toLocaleString();
+  return new Date(ts).toLocaleString();
 }
 
 export function subscribePayments(cb: (payments: Payment[]) => void): () => void {
   const q = query(collection(db, 'payments'), orderBy('date', 'desc'));
-  return onSnapshot(q, snap => {
-    cb(snap.docs.map(d => {
-      const data = d.data();
-      return {
-        id:          d.id,
-        amount:      data.amount as number,
-        type:        mapType(data.type as string),
-        status:      mapStatus(data.status as string),
-        description: (data.description as string) ?? '',
-        requestedBy: (data.staffName as string) ?? '',
-        approvedBy:  data.status === 'paid' ? 'Agunwami' : '-',
-        created:     fmt(data.date as { toDate(): Date }),
-        processed:   data.status === 'paid' ? fmt(data.date as { toDate(): Date }) : '-',
-      };
-    }));
-  });
+  return onSnapshot(
+    q,
+    snap => {
+      cb(snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id:          d.id,
+          amount:      (data.amount || 0) as number,
+          type:        mapType(data.type as string),
+          status:      mapStatus(data.status as string),
+          description: (data.description as string) ?? '',
+          requestedBy: (data.staffName || data.requestedBy || 'Staff Member') as string,
+          approvedBy:  data.status === 'paid' ? 'Agunwami' : '-',
+          created:     fmt(data.date),
+          processed:   data.status === 'paid' ? fmt(data.date) : '-',
+        };
+      }));
+    },
+    err => {
+      console.warn('Payments snapshot error:', err);
+    }
+  );
 }

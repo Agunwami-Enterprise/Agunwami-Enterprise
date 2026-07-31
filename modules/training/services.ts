@@ -1,4 +1,4 @@
-﻿import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 
 export type TrainingStatus = 'not-started' | 'in-progress' | 'completed';
@@ -17,25 +17,34 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 export function subscribeTraining(cb: (items: Training[]) => void): () => void {
-  const q = query(collection(db, 'training'), orderBy('dueDate'));
-  return onSnapshot(q, snap => {
-    cb(snap.docs.map(d => {
-      const data = d.data();
-      const dueDate = (data.dueDate as { toDate(): Date }).toDate();
-      const status = data.status as TrainingStatus;
-      return {
-        id:          d.id,
-        title:       data.title as string,
-        category:    data.category as string,
-        hours:       0,
-        status,
-        progress:    data.completionRate as number,
-        dueDate:     dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        overdue:     status !== 'completed' && dueDate < new Date(),
-        mandatory:   data.isMandatory as boolean,
-        assignedTo:  ((data.assignedTo as string[]) ?? []).slice(0, 2).map(uid => uid.length > 20 ? uid.slice(0, 8) : uid),
-        color:       CAT_COLORS[data.category as string] ?? '#6366f1',
-      };
-    }));
-  });
+  const q = query(collection(db, 'courses'));
+  return onSnapshot(
+    q,
+    snap => {
+      cb(snap.docs.map(d => {
+        const data = d.data();
+        let dueDate = new Date();
+        if (data.dueDate) {
+          dueDate = typeof data.dueDate === 'string' ? new Date(data.dueDate) : (data.dueDate.toDate ? data.dueDate.toDate() : new Date());
+        }
+        const status = (data.status as TrainingStatus) || 'not-started';
+        return {
+          id:          d.id,
+          title:       (data.title || 'Course') as string,
+          category:    (data.category || 'General') as string,
+          hours:       (data.hours || 0) as number,
+          status,
+          progress:    (data.completionRate || 0) as number,
+          dueDate:     dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          overdue:     status !== 'completed' && dueDate < new Date(),
+          mandatory:   !!data.isMandatory,
+          assignedTo:  ((data.assignedTo as string[]) ?? []).slice(0, 2).map(uid => uid.length > 20 ? uid.slice(0, 8) : uid),
+          color:       CAT_COLORS[data.category as string] ?? '#6366f1',
+        };
+      }));
+    },
+    err => {
+      console.warn('Training snapshot error:', err);
+    }
+  );
 }

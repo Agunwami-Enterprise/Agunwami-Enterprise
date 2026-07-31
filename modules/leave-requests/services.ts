@@ -1,4 +1,4 @@
-﻿import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 
 // Leave approvals must go through a Cloud Function for atomicity and audit.
@@ -24,24 +24,33 @@ function mapType(t: string): string {
   return map[t] ?? t;
 }
 
-function fmtDate(ts: { toDate(): Date }): string {
-  return ts.toDate().toISOString().split('T')[0];
+function fmtDate(ts: any): string {
+  if (!ts) return new Date().toISOString().split('T')[0];
+  if (typeof ts === 'string') return ts;
+  if (ts.toDate) return ts.toDate().toISOString().split('T')[0];
+  return new Date(ts).toISOString().split('T')[0];
 }
 
 export function subscribeLeaveRequests(cb: (reqs: LeaveReq[]) => void): () => void {
   const q = query(collection(db, 'leaveRequests'), orderBy('startDate', 'desc'));
-  return onSnapshot(q, snap => {
-    cb(snap.docs.map(d => {
-      const data = d.data();
-      return {
-        id:        d.id,
-        employee:  (data.staffName as string) ?? '',
-        type:      mapType(data.leaveType as string),
-        startDate: fmtDate(data.startDate as { toDate(): Date }),
-        endDate:   fmtDate(data.endDate   as { toDate(): Date }),
-        days:      data.daysRequested as number,
-        status:    mapStatus(data.status as string),
-      };
-    }));
-  });
+  return onSnapshot(
+    q,
+    snap => {
+      cb(snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id:        d.id,
+          employee:  (data.userName || data.staffName || 'Staff Member') as string,
+          type:      mapType(data.leaveType as string),
+          startDate: fmtDate(data.startDate),
+          endDate:   fmtDate(data.endDate || data.startDate),
+          days:      (data.days || data.daysRequested || 1) as number,
+          status:    mapStatus(data.status as string),
+        };
+      }));
+    },
+    err => {
+      console.warn('LeaveRequests snapshot error:', err);
+    }
+  );
 }

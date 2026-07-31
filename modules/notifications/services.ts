@@ -1,4 +1,4 @@
-﻿import { collection, doc, onSnapshot, query, updateDoc, writeBatch, where, orderBy } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, updateDoc, writeBatch, where, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 
 export interface NotifItem {
@@ -77,25 +77,31 @@ export function subscribeNotifications(uid: string, cb: (items: NotifItem[]) => 
     where('recipientId', '==', uid),
     orderBy('createdAt', 'desc'),
   );
-  return onSnapshot(q, snap => {
-    cb(snap.docs.map(d => {
-      const data  = d.data();
-      const type  = data.type as string;
-      const icon  = typeToIcon(type);
-      const read  = data.read as boolean;
-      return {
-        id:         d.id,
-        title:      typeToTitle(type),
-        body:       data.message as string,
-        time:       relativeTime(data.createdAt as { toDate(): Date }),
-        tag:        read ? '' : 'NEW',
-        tagColor:   read ? '' : '#ef4444',
-        read,
-        iconBg:     icon.bg,
-        iconColor:  icon.color,
-        category:   typeToCategory(type),
-        relatedTo:  data.relatedTo as { collection: string; docId: string } | undefined,
-      };
-    }));
-  });
+  return onSnapshot(
+    q,
+    snap => {
+      cb(snap.docs.map(d => {
+        const data  = d.data();
+        const type  = (data.type || 'notification') as string;
+        const icon  = typeToIcon(type);
+        const read  = !!data.read;
+        return {
+          id:         d.id,
+          title:      typeToTitle(type),
+          body:       (data.message || data.body || '') as string,
+          time:       relativeTime(data.createdAt as { toDate(): Date }),
+          tag:        read ? '' : 'NEW',
+          tagColor:   read ? '' : '#ef4444',
+          read,
+          iconBg:     icon.bg,
+          iconColor:  icon.color,
+          category:   typeToCategory(type),
+          relatedTo:  data.relatedTo as { collection: string; docId: string } | undefined,
+        };
+      }));
+    },
+    err => {
+      console.warn('Notifications snapshot error:', err);
+    }
+  );
 };

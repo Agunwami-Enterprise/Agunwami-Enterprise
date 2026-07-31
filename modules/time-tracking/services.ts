@@ -1,4 +1,4 @@
-﻿import {
+import {
   doc, getDoc, setDoc, onSnapshot, collection, runTransaction,
   Timestamp, serverTimestamp,
 } from 'firebase/firestore';
@@ -21,14 +21,23 @@ const dayRef  = (uid: string, dateId: string) => doc(db, 'timeTracking', uid, 'd
 const liveRef = (uid: string) => doc(db, 'timeTrackingLive', uid);
 
 export function subscribeToday(uid: string, cb: (day: TimeTrackingDayDoc | null) => void): () => void {
-  return onSnapshot(dayRef(uid, todayId()), snap => cb(snap.exists() ? (snap.data() as TimeTrackingDayDoc) : null));
+  if (!uid || !db) { cb(null); return () => {}; }
+  return onSnapshot(
+    dayRef(uid, todayId()),
+    snap => cb(snap.exists() ? (snap.data() as TimeTrackingDayDoc) : null),
+    err => console.warn('subscribeToday snapshot error:', err)
+  );
 }
 
 export function subscribeMonthlySummary(
   uid: string, month: string, cb: (summary: MonthlySummaryDoc | null) => void,
 ): () => void {
-  return onSnapshot(doc(db, 'timeTracking', uid, 'monthlySummary', month), snap =>
-    cb(snap.exists() ? (snap.data() as MonthlySummaryDoc) : null));
+  if (!uid || !db) { cb(null); return () => {}; }
+  return onSnapshot(
+    doc(db, 'timeTracking', uid, 'monthlySummary', month),
+    snap => cb(snap.exists() ? (snap.data() as MonthlySummaryDoc) : null),
+    err => console.warn('subscribeMonthlySummary snapshot error:', err)
+  );
 }
 
 export async function getDay(uid: string, dateId: string): Promise<TimeTrackingDayDoc | null> {
@@ -39,9 +48,14 @@ export async function getDay(uid: string, dateId: string): Promise<TimeTrackingD
 export function subscribeLiveTeam(
   cb: (rows: Array<TimeTrackingLiveDoc & { uid: string }>) => void,
 ): () => void {
-  return onSnapshot(collection(db, 'timeTrackingLive'), snap => {
-    cb(snap.docs.map(d => ({ uid: d.id, ...(d.data() as TimeTrackingLiveDoc) })));
-  });
+  if (!db) { cb([]); return () => {}; }
+  return onSnapshot(
+    collection(db, 'timeTrackingLive'),
+    snap => {
+      cb(snap.docs.map(d => ({ uid: d.id, ...(d.data() as TimeTrackingLiveDoc) })));
+    },
+    err => console.warn('subscribeLiveTeam snapshot error:', err)
+  );
 }
 
 async function syncLive(

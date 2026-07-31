@@ -1,4 +1,4 @@
-﻿import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 
 // Staff creation and role changes must go through Cloud Functions.
@@ -27,11 +27,11 @@ function mapRole(role: string): StaffRole {
     ceo: 'CEO', hr: 'Admin', manager: 'Manager', finance: 'Accountant',
     opm: 'Manager', staff: 'General Staff',
   };
-  return map[role.toLowerCase()] ?? 'General Staff';
+  return map[role?.toLowerCase() || ''] ?? 'General Staff';
 }
 
 function toMember(id: string, data: Record<string, unknown>): Member {
-  const name = (data.name as string) ?? 'Unknown';
+  const name = (data.displayName as string) ?? (data.name as string) ?? 'Staff Member';
   const status = (data.status as string) === 'active' ? 'Active' : 'Inactive';
   return {
     id,
@@ -49,8 +49,14 @@ function toMember(id: string, data: Record<string, unknown>): Member {
 }
 
 export function subscribeStaff(cb: (members: Member[]) => void): () => void {
-  const q = query(collection(db, 'staff'), orderBy('name'));
-  return onSnapshot(q, snap => {
-    cb(snap.docs.map(d => toMember(d.id, d.data() as Record<string, unknown>)));
-  });
+  const q = query(collection(db, 'users'));
+  return onSnapshot(
+    q,
+    snap => {
+      cb(snap.docs.map(d => toMember(d.id, d.data() as Record<string, unknown>)));
+    },
+    err => {
+      console.warn('Staff snapshot error:', err);
+    }
+  );
 }
