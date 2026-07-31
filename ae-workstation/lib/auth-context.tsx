@@ -4,8 +4,11 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
-import { toast } from 'react-toastify';
+import { auth as mainAuth, db as mainDb } from './firebase';
+import { auth2, db2, authFirebaseConfigured } from './firebase-auth';
+
+const auth = (authFirebaseConfigured && auth2) ? auth2 : mainAuth;
+const db = (authFirebaseConfigured && db2) ? db2 : mainDb;
 
 interface AuthContextValue {
   user: User | null;
@@ -30,11 +33,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // 1. Firebase Auth listener
   useEffect(() => {
-    return onAuthStateChanged(auth, async (u) => {
+    if (!auth || !db) { setLoading(false); return; }
+    const authInstance = auth;
+    const dbInstance = db;
+    return onAuthStateChanged(authInstance, async (u) => {
       setUser(u);
+      setLoading(false);
       if (!u) {
         setProfile(null);
-        setLoading(false);
+      } else if (u.uid && u.email) {
+        try {
+          await setDoc(doc(dbInstance, 'users', u.uid), { email: u.email }, { merge: true });
+        } catch {
+          // silently ignore — email still shows from Firebase Auth fallback
+        }
       }
     });
   }, []);
@@ -191,7 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.uid, profile]);
 
   async function signOut() {
-    await firebaseSignOut(auth);
+    if (auth) await firebaseSignOut(auth);
     await fetch('/api/session', { method: 'DELETE' });
     window.location.href = '/auth/login';
   }

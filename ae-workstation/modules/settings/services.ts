@@ -1,5 +1,5 @@
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db2 as db, authFirebaseConfigured } from '@/lib/firebase-auth';
 
 export interface UserProfile {
   uid: string; name: string; email: string; role: string;
@@ -9,6 +9,7 @@ export interface UserProfile {
 
 // Write operations go through Cloud Functions and are restricted by Firestore rules.
 export function subscribeUserProfile(uid: string, cb: (profile: UserProfile | null) => void): () => void {
+  if (!authFirebaseConfigured || !db) { cb(null); return () => {}; }
   return onSnapshot(doc(db, 'users', uid), snap => {
     if (!snap.exists()) { cb(null); return; }
     const data = snap.data();

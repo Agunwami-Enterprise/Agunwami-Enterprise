@@ -6,7 +6,8 @@ import { SignJWT, jwtVerify, createRemoteJWKSet } from 'jose';
 
 const SESSION_COOKIE = 'ae_session';
 const SESSION_DURATION_S = 14 * 24 * 60 * 60;
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!;
+// Auth + /users now live in a separate Firebase project — see lib/firebase-auth.ts.
+const PROJECT_ID = process.env.NEXT_PUBLIC_AUTH_FIREBASE_PROJECT_ID!;
 
 const FIREBASE_JWKS = createRemoteJWKSet(
   new URL(

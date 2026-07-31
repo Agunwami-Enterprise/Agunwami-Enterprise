@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth2 as auth, authFirebaseConfigured } from '@/lib/firebase-auth';
 import AuthPageShell from '@/components/AuthPageShell';
 
 export default function ForgotPasswordPage() {
@@ -16,7 +16,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      if (authFirebaseConfigured && auth) await sendPasswordResetEmail(auth, email);
     } catch {
       // Intentionally swallow — always redirect to sent page to avoid email enumeration
     } finally {

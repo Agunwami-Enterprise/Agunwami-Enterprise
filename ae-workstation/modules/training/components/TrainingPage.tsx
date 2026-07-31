@@ -16,8 +16,6 @@ interface Training {
 const CATEGORIES = ['All Categories','Leadership','Safety','Customer Service','Compliance','Communication','Professional Development','HR & Culture'];
 
 
-const BG_COLORS = ['#1e3a5f','#2d4a2d','#3d2020','#1a1a4e','#2d1a3d','#1a3d3d'];
-
 export default function TrainingPage() {
   const [search,     setSearch]     = useState('');
   const [catFilter,  setCatFilter]  = useState('All Categories');
@@ -108,7 +106,7 @@ export default function TrainingPage() {
 
         {/* Training grid */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((t, i) => <TrainingCard key={t.id} training={t} bgColor={BG_COLORS[i % BG_COLORS.length]} />)}
+          {filtered.map(t => <TrainingCard key={t.id} training={t} />)}
         </div>
       </div>
 
@@ -186,17 +184,19 @@ export default function TrainingPage() {
 }
 
 /* ── Training Card ── */
-function TrainingCard({ training: t, bgColor }: { training: Training; bgColor: string }) {
+function TrainingCard({ training: t }: { training: Training }) {
   const isCompleted  = t.status === 'completed';
   const isInProgress = t.status === 'in-progress';
 
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-[#1e1e1e]">
-      {/* Image placeholder */}
-      <div className="relative flex h-36 items-center justify-center" style={{ backgroundColor: bgColor }}>
+      {/* Photo header */}
+      <div
+        className="relative flex h-36 items-end bg-cover bg-center"
+        style={{ backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.35), rgba(0,0,0,0)), url(https://picsum.photos/seed/${encodeURIComponent(t.id)}/400/300)` }}
+      >
         {t.overdue   && <span className="absolute right-2 top-2 rounded-sm bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">OVERDUE</span>}
         {t.mandatory && <span className="absolute left-2 top-2 rounded-sm bg-red-600 px-1.5 py-0.5 text-[9px] font-bold text-white">MANDATORY</span>}
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1" strokeOpacity="0.3"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       </div>
 
       <div className="p-4">

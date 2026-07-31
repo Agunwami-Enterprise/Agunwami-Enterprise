@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth2 as auth, authFirebaseConfigured } from '@/lib/firebase-auth';
 import AuthPageShell from '@/components/AuthPageShell';
 
 export default function LoginPage() {
@@ -21,6 +21,9 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      if (!authFirebaseConfigured || !auth) {
+        throw new Error('Authentication is not configured yet — the auth project\'s env vars are still placeholders.');
+      }
       const credential = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await credential.user.getIdToken();
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -23,6 +24,18 @@ interface Props { open: boolean; onClose: () => void; onNavigate?: () => void; }
 
 export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
   const path = usePathname();
+  const navRef = useRef<HTMLElement>(null);
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
+
+  const activeHref = NAV.find(item => path === item.href || path.startsWith(item.href + '/'))?.href;
+
+  useEffect(() => {
+    if (!activeHref || !navRef.current) return;
+    const el = itemRefs.current.get(activeHref);
+    if (!el) return;
+    setIndicator({ top: el.offsetTop, height: el.offsetHeight });
+  }, [activeHref]);
 
   return (
     <>
@@ -52,29 +65,39 @@ export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3">
+        <nav ref={navRef} className="relative flex-1 overflow-y-auto px-3 py-3">
+          {indicator && (
+            <span
+              className="pointer-events-none absolute left-0 w-[3px] rounded-r-full bg-[#f5bd02] transition-[top,height] duration-200 ease-out"
+              style={{ top: indicator.top, height: indicator.height }}
+            />
+          )}
           {NAV.map((item) => {
-            const active = path === item.href || path.startsWith(item.href + '/');
+            const active = item.href === activeHref;
             return (
-              <Link
+              <div
                 key={item.href}
-                href={item.href}
-                onClick={() => { onNavigate?.(); onClose(); }}
-                className={`
-                  mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-[9px] transition-colors
-                  ${active
-                    ? 'bg-[#f5bd02] text-[#1a1a1a]'
-                    : 'text-[#4a5568] hover:bg-black/6 hover:text-[#1a1a1a] dark:text-[#9ca3af] dark:hover:bg-white/5 dark:hover:text-white'}
-                `}
+                ref={(el) => { if (el) itemRefs.current.set(item.href, el); }}
               >
-                <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
-                  {item.icon}
-                </span>
-                <span className="flex-1 truncate text-[12px] font-medium">{item.label}</span>
-                {item.badge && (
-                  <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500" />
-                )}
-              </Link>
+                <Link
+                  href={item.href}
+                  onClick={() => { onNavigate?.(); onClose(); }}
+                  className={`
+                    mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-[9px] transition-colors
+                    ${active
+                      ? 'bg-[#f5bd02] text-[#1a1a1a]'
+                      : 'text-[#4a5568] hover:bg-black/6 hover:text-[#1a1a1a] dark:text-[#9ca3af] dark:hover:bg-white/5 dark:hover:text-white'}
+                  `}
+                >
+                  <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
+                    {item.icon}
+                  </span>
+                  <span className="flex-1 truncate text-[12px] font-medium">{item.label}</span>
+                  {item.badge && (
+                    <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500" />
+                  )}
+                </Link>
+              </div>
             );
           })}
         </nav>

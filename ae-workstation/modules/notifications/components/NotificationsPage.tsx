@@ -102,9 +102,10 @@ export default function NotificationsPage() {
         <div className="mb-4 flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-[#1a1a1a]">
           {(['notifications','announcements'] as NotifTab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`flex-1 rounded-lg py-2 text-[12px] font-semibold capitalize transition-colors
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-semibold capitalize transition-colors
                 ${tab === t ? 'bg-[#f5bd02] text-[#1a1a1a] shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
-              {t === 'notifications' ? '🔔 Notifications' : '📢 Announcements'}
+              {t === 'notifications' ? <BellIcon /> : <MegaIcon />}
+              {t === 'notifications' ? 'Notifications' : 'Announcements'}
             </button>
           ))}
         </div>

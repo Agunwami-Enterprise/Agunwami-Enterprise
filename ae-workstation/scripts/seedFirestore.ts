@@ -24,7 +24,7 @@ import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 
 // ← REPLACE THIS with the actual uid from Firebase Console → Authentication → Users
-const CEO_UID = 'REPLACE_WITH_REAL_CEO_UID';
+const CEO_UID = 'dFlf0fvAtMa2xEpFjnn9PhACi2q1';
 
 const PROJECT_ID = 'agunwami-enterprise';
 
