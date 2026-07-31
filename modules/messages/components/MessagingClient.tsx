@@ -16,7 +16,7 @@ import {
   uploadBytes,
   getDownloadURL,
 } from "firebase/storage";
-import { rtdb, db, storage } from "@/lib/workstation/firebase";
+import { rtdb, db, storage, auth } from "@/lib/workstation/firebase";
 import { useAuth } from "@/lib/workstation/auth-context";
 import {
   storeLocalSticker,
@@ -3882,7 +3882,7 @@ export default function MessagingClient() {
         update(ref(rtdb, `messages/${activeConvId}`), updates).catch(() => {});
       }
 
-      const activeConvoData = convos.find(c => c.id === activeConvId);
+      const activeConvoData = conversations.find(c => c.id === activeConvId);
       if (activeConvoData?.unreadCount?.[myUid] && activeConvoData.unreadCount[myUid] > 0) {
         update(ref(rtdb, `conversations/${activeConvId}/unreadCount`), { [myUid]: 0 }).catch(() => {});
       }
