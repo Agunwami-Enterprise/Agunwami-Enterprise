@@ -86,3 +86,59 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CEO WORKSTATION — Design Tokens & Utilities
+   These only apply within the /ceo/** routes (inside CeoShell).
+═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Workstation brand */
+  --ws-background: #faf8ec;
+  --ws-foreground: #1a1a1a;
+  --ws-surface-muted: #f2f0e4;
+  --ws-brand-accent: #f5bd02;
+  --ws-brand-primary: #1a1a1a;
+  --ws-brand-danger: #ef4444;
+  --ws-brand-success: #22c55e;
+  --ws-brand-warning: #f59e0b;
+
+  /* Preloader */
+  --preloader-circle: #f5bd02;
+  --preloader-dot: #1a1a1a;
+  --preloader-text: #656565;
+}
+
+.dark {
+  --ws-background: #111111;
+  --ws-foreground: #f9fafb;
+}
+
+/* Route-change progress bar — gold sweep across the top */
+@keyframes ae-route-bar {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+.route-bar {
+  background: linear-gradient(90deg, #f5bd02 0%, #fde68a 40%, #f5bd02 70%, #d97706 100%);
+  background-size: 600px 100%;
+  animation: ae-route-bar 1s infinite linear;
+}
+
+/* Skeleton shimmer — moving highlight sweep */
+@keyframes ae-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #dde1ef 25%, #edf0f8 50%, #dde1ef 75%);
+  background-size: 600px 100%;
+  animation: ae-shimmer 1.5s infinite linear;
+}
+
+.dark .shimmer {
+  background: linear-gradient(90deg, #232323 25%, #2e2e2e 50%, #232323 75%);
+  background-size: 600px 100%;
+}

@@ -1,0 +1,21 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "presence": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null"
+      }
+    },
+    "conversations": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["createdById", "type", "lastMessageAt", "memberIds"]
+    },
+    "messages": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
