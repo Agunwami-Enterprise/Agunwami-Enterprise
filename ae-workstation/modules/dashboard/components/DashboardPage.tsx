@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/lib/auth-context';
 import { subscribeDashboard } from '@/modules/dashboard/services';
 import { SkeletonDashboard } from '@/components/Skeleton';
 
@@ -43,8 +46,8 @@ export default function DashboardPage() {
 function HeroBanner() {
   return (
     <div
-      className="flex flex-col gap-1 rounded-2xl px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
-      style={{ backgroundColor: '#f5bd02' }}
+      className="flex flex-col justify-between gap-3 rounded-2xl p-5 sm:flex-row sm:items-center"
+      style={{ background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)' }}
     >
       <div>
         <h1 className="text-[18px] font-bold leading-tight text-white">CEO Executive Dashboard</h1>
@@ -118,24 +121,320 @@ function MiddleRow() {
 }
 
 function TimeTrackingWidget() {
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<any>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [isClocking, setIsClocking] = useState(false);
+  const [isBreaking, setIsBreaking] = useState(false);
+  const [workedTime, setWorkedTime] = useState("00:00:00");
+  const [feedback, setFeedback] = useState<{ msg: string; type: "success" | "info" | "error" } | null>(null);
+
+  // Subscribe to real-time user profile in Firestore
+  useEffect(() => {
+    if (!user?.uid) {
+      setLoadingProfile(false);
+      return;
+    }
+    const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setProfile(docSnap.data());
+      } else {
+        setProfile({ status: "Clocked Out", dailyMs: 0, weeklyMs: 0 });
+      }
+      setLoadingProfile(false);
+    }, (err) => {
+      console.error("Firestore user profile subscription error:", err);
+      setLoadingProfile(false);
+    });
+
+    return () => unsub();
+  }, [user?.uid]);
+
+  const isClockedIn = profile?.status === "Clocked In";
+  const isOnBreak = profile?.status === "On Break";
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isNewDay = profile?.lastClockOutDate && profile.lastClockOutDate !== todayStr;
+  const currentDailyMs = isNewDay ? 0 : (profile?.dailyMs || 0);
+
+  // Auto-close overnight shifts from previous days so today starts fresh
+  useEffect(() => {
+    if (!user?.uid || !profile) return;
+    const todayDateStr = new Date().toDateString();
+    const clockInDateStr = profile.clockInTime ? new Date(profile.clockInTime).toDateString() : null;
+
+    if ((profile.status === "Clocked In" || profile.status === "On Break") && clockInDateStr && clockInDateStr !== todayDateStr) {
+      const userRef = doc(db, "users", user.uid);
+      updateDoc(userRef, {
+        status: "Clocked Out",
+        clockOutTime: Date.now(),
+        dailyMs: 0,
+        lastClockOutDate: todayStr,
+      }).catch(() => {});
+    }
+  }, [user?.uid, profile, todayStr]);
+
+  // Live Timer for Clock In
+  useEffect(() => {
+    if (isClockedIn && profile?.clockInTime) {
+      const clockInDateStr = new Date(profile.clockInTime).toDateString();
+      const isOvernight = clockInDateStr !== new Date().toDateString();
+
+      const interval = setInterval(() => {
+        const elapsed = isOvernight ? 0 : Math.max(0, Date.now() - profile.clockInTime);
+        const totalMs = elapsed + currentDailyMs;
+
+        const secs = Math.floor((totalMs / 1000) % 60);
+        const mins = Math.floor((totalMs / (1000 * 60)) % 60);
+        const hours = Math.floor(totalMs / (1000 * 60 * 60));
+
+        setWorkedTime(
+          `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+        );
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      const totalMs = currentDailyMs;
+      const secs = Math.floor((totalMs / 1000) % 60);
+      const mins = Math.floor((totalMs / (1000 * 60)) % 60);
+      const hours = Math.floor(totalMs / (1000 * 60 * 60));
+      setWorkedTime(
+        `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+      );
+    }
+  }, [isClockedIn, profile?.clockInTime, currentDailyMs]);
+
+  const showFeedback = (msg: string, type: "success" | "info" | "error") => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  // Handle Clock In / Clock Out
+  const handleClockToggle = async () => {
+    if (!user?.uid) return;
+    setIsClocking(true);
+    try {
+      const newStatus = isClockedIn || isOnBreak ? "Clocked Out" : "Clocked In";
+      const userRef = doc(db, "users", user.uid);
+      const now = Date.now();
+      const todayStr = new Date().toISOString().split("T")[0];
+
+      if (newStatus === "Clocked In") {
+        let dailyMs = profile?.dailyMs || 0;
+        if (profile?.lastClockOutDate !== todayStr) {
+          dailyMs = 0;
+        }
+
+        const clockInData = {
+          status: "Clocked In",
+          clockInTime: now,
+          clockOutTime: null,
+          breakStartTime: null,
+          dailyMs,
+          lastClockOutDate: todayStr,
+          lastActiveTime: now,
+        };
+
+        await updateDoc(userRef, clockInData).catch(async () => {
+          await setDoc(userRef, clockInData, { merge: true });
+        });
+        showFeedback("You have clocked in successfully.", "success");
+      } else {
+        // Clocking Out
+        const sessionStart = profile?.clockInTime || now;
+        const duration = Math.max(0, now - sessionStart);
+        let newDailyMs = profile?.dailyMs || 0;
+
+        if (profile?.lastClockOutDate !== todayStr) {
+          newDailyMs = 0; // reset daily if new day
+        }
+
+        const updatedDailyMs = newDailyMs + duration;
+        const updatedWeeklyMs = (profile?.weeklyMs || 0) + duration;
+
+        const updateData = {
+          status: "Clocked Out",
+          clockOutTime: now,
+          breakStartTime: null,
+          dailyMs: updatedDailyMs,
+          weeklyMs: updatedWeeklyMs,
+          lastClockOutDate: todayStr,
+          lastActiveTime: now,
+        };
+
+        await updateDoc(userRef, updateData).catch(async () => {
+          await setDoc(userRef, updateData, { merge: true });
+        });
+
+        showFeedback("You have clocked out successfully.", "success");
+      }
+    } catch (err) {
+      console.error("Clock update error:", err);
+      showFeedback("Failed to update clock status.", "error");
+    } finally {
+      setIsClocking(false);
+    }
+  };
+
+  // Handle Break
+  const handleBreak = async () => {
+    if (!user?.uid) return;
+
+    if (isOnBreak) {
+      // Resume from break
+      setIsBreaking(true);
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const now = Date.now();
+        await updateDoc(userRef, {
+          status: "Clocked In",
+          clockInTime: now,
+          breakStartTime: null,
+          lastActiveTime: now,
+        });
+        showFeedback("Break ended. Welcome back!", "success");
+      } catch (err) {
+        showFeedback("Failed to end break.", "error");
+      } finally {
+        setIsBreaking(false);
+      }
+      return;
+    }
+
+    if (!isClockedIn) {
+      showFeedback("You need to clock in first.", "info");
+      return;
+    }
+
+    // Start Break
+    setIsBreaking(true);
+    try {
+      const userRef = doc(db, "users", user.uid);
+      const now = Date.now();
+      const sessionDuration = Math.max(0, now - (profile?.clockInTime || now));
+      const todayStr = new Date().toISOString().split("T")[0];
+      let newDailyMs = profile?.dailyMs || 0;
+      if (profile?.lastClockOutDate !== todayStr) newDailyMs = 0;
+
+      await updateDoc(userRef, {
+        status: "On Break",
+        breakStartTime: now,
+        dailyMs: newDailyMs + sessionDuration,
+        weeklyMs: (profile?.weeklyMs || 0) + sessionDuration,
+        lastClockOutDate: todayStr,
+        lastActiveTime: now,
+      });
+
+      showFeedback("Break started. Progress saved.", "info");
+    } catch (err) {
+      showFeedback("Failed to start break.", "error");
+    } finally {
+      setIsBreaking(false);
+    }
+  };
+
+  const formatMs = (ms: number) => {
+    const totalMins = Math.floor(ms / (1000 * 60));
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    return `${h}h ${m}m`;
+  };
+
+  const todayMs = isClockedIn && profile?.clockInTime
+    ? (Date.now() - profile.clockInTime) + (profile?.dailyMs || 0)
+    : (profile?.dailyMs || 0);
+
+  const weeklyMs = isClockedIn && profile?.clockInTime
+    ? (Date.now() - profile.clockInTime) + (profile?.weeklyMs || 0)
+    : (profile?.weeklyMs || 0);
+
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e]">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-[#f5bd02]"><ClockSvg /></span>
-        <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200">Time Tracking</span>
-      </div>
-      <div className="rounded-xl bg-gray-50 p-4 text-center dark:bg-[#2a2a2a]">
-        <p className="text-[12px] font-medium text-gray-400">Not Clocked In</p>
-        <button
-          className="mt-3 w-full rounded-lg py-2 text-[13px] font-semibold text-white transition hover:opacity-90"
-          style={{ backgroundColor: '#22c55e' }}
+      {/* Widget Header */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[#f5bd02]"><ClockSvg /></span>
+          <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200">Time Tracking</span>
+        </div>
+        <span
+          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+            isClockedIn
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+              : isOnBreak
+              ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+              : "bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400"
+          }`}
         >
-          Clock-In
-        </button>
+          {isClockedIn ? "ON SHIFT" : isOnBreak ? "ON BREAK" : "OFF SHIFT"}
+        </span>
       </div>
+
+      {/* Main Clock Status Card */}
+      <div className="rounded-xl bg-gray-50 p-4 text-center dark:bg-[#2a2a2a]">
+        <h2 className="text-3xl font-black tabular-nums tracking-tight text-gray-900 dark:text-white font-mono">
+          {workedTime}
+        </h2>
+        <p className="text-[11px] font-medium text-gray-400 mt-0.5">
+          {isClockedIn ? "Worked Today (Active)" : isOnBreak ? "Paused on Break" : "Not Clocked In"}
+        </p>
+
+        {/* Action Buttons */}
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={handleClockToggle}
+            disabled={isClocking || isBreaking || loadingProfile}
+            className={`flex-1 rounded-lg py-2 text-[12px] font-semibold text-white transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5 ${
+              isClockedIn || isOnBreak
+                ? "bg-red-500 hover:bg-red-600"
+                : "bg-emerald-600 hover:bg-emerald-700"
+            }`}
+          >
+            {isClocking ? (
+              <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : null}
+            {isClockedIn || isOnBreak ? "Clock Out" : "Clock In"}
+          </button>
+
+          <button
+            onClick={handleBreak}
+            disabled={isBreaking || isClocking || (!isClockedIn && !isOnBreak) || loadingProfile}
+            className={`flex-1 rounded-lg py-2 text-[12px] font-semibold transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5 ${
+              isOnBreak
+                ? "bg-amber-500 text-white hover:bg-amber-600"
+                : "bg-gray-200 text-gray-700 dark:bg-zinc-700 dark:text-gray-200 hover:bg-gray-300"
+            }`}
+          >
+            {isBreaking ? (
+              <span className="h-3.5 w-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+            ) : null}
+            {isOnBreak ? "Resume" : "Break"}
+          </button>
+        </div>
+
+        {/* Feedback Alert */}
+        {feedback && (
+          <p
+            className={`mt-2 text-[11px] font-medium px-2 py-1 rounded ${
+              feedback.type === "success"
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                : feedback.type === "info"
+                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                : "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300"
+            }`}
+          >
+            {feedback.msg}
+          </p>
+        )}
+      </div>
+
+      {/* Summary Footer */}
       <div className="mt-3 space-y-1">
-        <p className="text-[12px] text-gray-600 dark:text-gray-400"><span className="font-medium">Today:</span> 7h 32m</p>
-        <p className="text-[12px] text-gray-600 dark:text-gray-400"><span className="font-medium">Weekly:</span> 32h 15m</p>
+        <p className="text-[12px] text-gray-600 dark:text-gray-400">
+          <span className="font-medium">Today:</span> {formatMs(todayMs)}
+        </p>
+        <p className="text-[12px] text-gray-600 dark:text-gray-400">
+          <span className="font-medium">Weekly:</span> {formatMs(weeklyMs)}
+        </p>
       </div>
     </div>
   );

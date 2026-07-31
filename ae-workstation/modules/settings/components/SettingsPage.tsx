@@ -515,7 +515,7 @@ export default function SettingsPage() {
       {/* OTHER TABS — placeholders */}
       {tab !== 'profile' && tab !== 'preferences' && tab !== 'notifications' && tab !== 'security' && tab !== 'system' && (
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white py-20 shadow-sm dark:bg-[#1e1e1e]">
-          <p className="text-[14px] font-semibold text-gray-600 dark:text-gray-300 capitalize">{tab.replace('-',' ')} settings</p>
+          <p className="text-[14px] font-semibold text-gray-600 dark:text-gray-300 capitalize">{String(tab).replace('-',' ')} settings</p>
           <p className="mt-1 text-[12px] text-gray-400">Coming soon</p>
         </div>
       )}

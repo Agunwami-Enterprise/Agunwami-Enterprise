@@ -2,174 +2,350 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ── helpers ──────────────────────────────────────────────────────────────
-
-    function isSignedIn() {
+    
+    // Helper Functions
+    function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isSelf(uid) {
-      return request.auth.uid == uid;
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Role from the users document (avoids custom claims requirement)
-    function role() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function hasUserDoc() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isCEO()     { return role() == 'ceo'; }
-    function isManager() { return role() in ['ceo', 'manager', 'opm']; }
-    function isHR()      { return role() in ['ceo', 'hr']; }
-    function isFinance() { return role() in ['ceo', 'finance']; }
-
-    // ── /users/{uid} ─────────────────────────────────────────────────────────
-    // Users can read their own profile (needed for role lookup on login).
-    // Only CEO / Cloud Functions can write — except the client may sync
-    // the Firebase Auth email back into the document (email field only,
-    // and it must match the verified token email).
-
-    match /users/{uid} {
-      allow read: if isSignedIn() && isSelf(uid);
-      allow update: if isSignedIn() && isSelf(uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email'])
-        && request.resource.data.email == request.auth.token.email;
-      allow delete: if false;
+    function getUserData() {
+      return hasUserDoc() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data : {};
     }
 
-    // ── /staff/{uid} ─────────────────────────────────────────────────────────
-    // Any authenticated user can read the staff directory.
-    // Writes go through Cloud Functions.
-
-    match /staff/{uid} {
-      allow read:  if isSignedIn();
-      allow write: if false;
+    function isAuthorizedStaff() {
+      return isAuthenticated() && getUserData().role == "staff";
     }
 
-    // ── /tasks/{taskId} ──────────────────────────────────────────────────────
-    // Staff can read tasks assigned to them or created by them.
-    // Managers/CEO can read all. CEO can write.
 
-    match /tasks/{taskId} {
-      allow read:  if isSignedIn() &&
-                      (isCEO() || isManager() ||
-                       resource.data.assignedTo  == request.auth.uid ||
-                       resource.data.assignedBy  == request.auth.uid);
-      allow create: if isCEO() || isManager();
-      allow update: if isCEO() || isManager() ||
-                       resource.data.assignedTo == request.auth.uid;
-      allow delete: if isCEO();
-    }
-
-    // ── /messages/{convoId} ──────────────────────────────────────────────────
-    // Users can read convos they are a participant of.
-
-    match /messages/{convoId} {
-      allow read:   if isSignedIn() &&
-                       request.auth.uid in resource.data.participants;
-      allow create: if isSignedIn() &&
-                       request.auth.uid in request.resource.data.participants;
-      allow update: if isSignedIn() &&
-                       request.auth.uid in resource.data.participants;
-      allow delete: if false;
-
-      // Individual messages within a conversation thread
-      match /thread/{msgId} {
-        allow read: if isSignedIn() &&
-          request.auth.uid in
-            get(/databases/$(database)/documents/messages/$(convoId)).data.participants;
-        allow create: if isSignedIn() &&
-          request.auth.uid in
-            get(/databases/$(database)/documents/messages/$(convoId)).data.participants &&
-          request.resource.data.senderId == request.auth.uid;
-        allow update, delete: if false;
+    // Users Collection
+    match /users/{userId} {
+      // Allow authenticated users to read profiles
+      allow read: if isAuthenticated();
+      // Only the owner can create their profile.
+      allow create: if isOwner(userId);
+      // Only the owner can update their profile (excluding privileged fields), or an admin/ceo/content-admin.
+      allow update: if (isOwner(userId) && 
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'department', 'aehubId', 'staffNumber', 'aenumber', 'xp', 'medals', 'learningStreak', 'learningHours'])) || 
+                     (isAuthenticated() && (getUserData().role == 'admin' || getUserData().department == 'content-admin' || getUserData().department == 'ceo'));
+      // Delete allowed for authorized staff/CEO
+      allow delete: if isAuthenticated() && (getUserData().department in ['ceo', 'hr', 'operation', 'operations', 'opm'] || getUserData().role == 'staff');
+      
+      // Sub-collections
+      match /xp_history/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /goals/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /enrollments/{courseId} {
+        allow read: if isOwner(userId);
+        allow write: if false; // Only Cloud Functions (verifyPaystackPayment) enroll users
+      }
+      match /completedTasks/{taskId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /career_plan_steps/{stepId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /reminders/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /notifications/{docId} {
+        allow read, update, delete: if isOwner(userId);
+      }
+      match /completions/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /settings/{docId} {
+        allow read, write: if isOwner(userId);
       }
     }
 
-    // ── /documents/{docId} ───────────────────────────────────────────────────
-    // Any signed-in user can read documents.
-    // Managers and above can write.
+    // Courses Collection
+    match /courses/{courseId} {
+      // 1. Read access: 
+      // - Explicitly Published courses
+      // - Authenticated users who are ENROLLED
+      // - Admin/Staff roles, or the Author themselves.
+      allow read: if resource.data.status == 'published' || 
+                    resource.data.visibility == 'Published' ||
+                    isAuthenticated() && (
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)/enrollments/$(courseId)) ||
+                      resource.data.publisherEmail == request.auth.token.email ||
+                      getUserData().role == 'admin' ||
+                      getUserData().role == 'staff'
+                    );
+      
+      // Anyone authenticated can increment learners count
+      allow update: if isAuthenticated() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['learners']);
+      
+      // Split Create and Update/Delete to handle resource vs request.resource
+      allow create: if isAuthorizedStaff() && (
+        getUserData().role == 'admin' || 
+        request.resource.data.publisherEmail == request.auth.token.email
+      );
 
-    match /documents/{docId} {
-      allow read:  if isSignedIn();
-      allow write: if isManager();
+      allow update, delete: if isAuthorizedStaff() && (
+        getUserData().role == 'admin' || 
+        resource.data.publisherEmail == request.auth.token.email
+      );
+
+      // --- SUB-COLLECTIONS ---
+      // Apply ownership-based permissions for curriculum content
+      match /modules/{moduleId} {
+        // SEC-006: Require authentication to read module structure
+        allow read: if isAuthenticated();
+        allow write: if isAuthorizedStaff() && (
+          getUserData().role == 'admin' || 
+          get(/databases/$(database)/documents/courses/$(courseId)).data.publisherEmail == request.auth.token.email
+        );
+        
+        match /topics/{topicId} {
+          // SEC-006: Require authentication to read topic content
+          allow read: if isAuthenticated();
+          allow write: if isAuthorizedStaff() && (
+            getUserData().role == 'admin' || 
+            get(/databases/$(database)/documents/courses/$(courseId)).data.publisherEmail == request.auth.token.email
+          );
+        }
+      }
     }
 
-    // ── /timeTracking/{recordId} ─────────────────────────────────────────────
-    // Staff can read/write their own records. Managers can read all.
+    // Enrollment sub-collection (legacy or direct check)
+    match /enrollments/{enrollmentId} {
+      allow read, write: if isAuthenticated() && enrollmentId.matches('^' + request.auth.uid + '_.*');
+    }
 
+    // Metadata Collection
+    match /metadata/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Block client-side write to prevent counter manipulation
+    }
+
+    // OTP Verification Collection
+    match /otps/{email} {
+      // Completely block client-side access. Verify OTPs only via secure callable function.
+      allow read, write: if false;
+    }
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthorizedStaff();
+      allow delete: if isAuthenticated() && getUserData().role == "admin";
+    }
+
+    // Collection Group for Tracking Task Completions
+    match /{path=**}/completedTasks/{taskId} {
+      allow read: if isAuthorizedStaff();
+    }
+
+    // Activity Log Collection (read-only for clients)
+    match /activity_log/{logId} {
+      allow read: if isAuthorizedStaff();
+      allow write: if false;
+    }
+
+    // Careers Collection
+    match /careers/{careerId} {
+      allow read: if true;
+      // Allow any user to increment views count, but otherwise require staff authorization
+      allow update: if (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])) || isAuthorizedStaff();
+      allow create, delete: if isAuthorizedStaff();
+
+      match /questions/{questionId} {
+        allow read: if resource.data.status == 'answered' || (isAuthenticated() && (resource.data.askedBy == request.auth.uid || isAuthorizedStaff()));
+        allow create: if isAuthenticated() && request.resource.data.askedBy == request.auth.uid;
+        allow update, delete: if isAuthorizedStaff();
+      }
+
+      match /ratings/{ratingId} {
+        allow read: if true;
+        allow write: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAuthorizedStaff());
+      }
+    }
+
+    // Certificates Collection
+    match /certificates/{certId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    // Opportunities Collection
+    match /opportunities/{opportunityId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedStaff();
+    }
+
+    // Domain Settings Collections
+    match /career_settings/{docId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    match /course_settings/{docId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    match /home_settings/{docId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    match /community_settings/{docId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    // Domain Standalone Sliders
+    match /career_sliders/{slideId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    match /course_sliders/{slideId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    match /home_sliders/{slideId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    match /community_sliders/{slideId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+    // Home Sections Collection
+    match /home_sections/{sectionId} {
+      allow read: if true;
+      allow write: if isAuthorizedStaff();
+    }
+
+
+    // Transactions Collection
+    match /transactions/{transactionId} {
+      // Staff/Admins can read all transactions
+      allow read: if isAuthorizedStaff();
+      // Users can read their own transactions
+      allow read: if isOwner(resource.data.userId);
+      // Only backend (Cloud Functions) writes transactions
+      allow write: if false;
+    }
+
+    // Applications Collection
+    match /applications/{applicationId} {
+      // Users can create their own applications
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Users can read their own applications, staff can read all
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAuthorizedStaff());
+      // Only staff can update status or next steps
+      allow update: if isAuthorizedStaff();
+      // Only staff or system can delete
+      allow delete: if isAuthorizedStaff();
+    }
+
+    // Resumes Collection
+    match /resumes/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Documents Collection
+    match /documents/{documentId} {
+      allow read: if isAuthorizedStaff();
+      allow create, update, delete: if isAuthorizedStaff();
+    }
+
+    // Staff Requests Collection
+    match /staffRequests/{requestId} {
+      allow create, read: if isAuthorizedStaff();
+      allow update, delete: if isAuthenticated() && getUserData().role == "admin";
+    }
+
+    // Career Questions (Assessment Builder)
+    // Admins/content-admin/ceo can create, update, delete questions.
+    // All authenticated staff can read them to take the quiz.
+    match /career_questions/{questionId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() &&
+        (
+         getUserData().department == 'content-admin' ||
+         getUserData().department == 'ceo');
+    }
+
+    // Assessment Results sub-collection (each user's quiz result)
+    match /users/{userId}/assessmentResults/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Community Projects Collection (Staff-managed, public-readable)
+    match /community_projects/{projectId} {
+      // Anyone can read — powers the public /community-impact page
+      allow read: if true;
+      // Staff and admins can create or update projects
+      allow create, update: if isAuthorizedStaff();
+      // Only admins can delete projects
+      allow delete: if isAuthenticated() && getUserData().role == "admin";
+    }
+
+    // Leave Requests Collection (camelCase variant)
+    match /leaveRequests/{leaveId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAuthorizedStaff());
+      allow update, delete: if isAuthenticated() && (getUserData().role == "admin" || isAuthorizedStaff());
+    }
+
+    // Activities Collection (Calendar & Activity tab)
+    match /activities/{activityId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || 
+        isAuthorizedStaff() || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvps']) ||
+        (resource.data.invitedUsers != null && request.auth.uid in resource.data.invitedUsers)
+      );
+      allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAuthorizedStaff());
+    }
+
+    // Tasks Collection
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthorizedStaff();
+    }
+
+    // Workstation Collections (ae-workstation)
     match /timeTracking/{recordId} {
-      allow read:  if isSignedIn() &&
-                      (isManager() || resource.data.staffId == request.auth.uid);
-      allow create: if isSignedIn() &&
-                       request.resource.data.staffId == request.auth.uid;
-      allow update: if isSignedIn() &&
-                       resource.data.staffId == request.auth.uid &&
-                       resource.data.status == 'pending';
-      allow delete: if false;
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
-
-    // ── /leaveRequests/{reqId} ────────────────────────────────────────────────
-    // Staff can create and read their own requests. HR/CEO can read and update all.
-
-    match /leaveRequests/{reqId} {
-      allow read:   if isSignedIn() &&
-                       (isHR() || resource.data.staffId == request.auth.uid);
-      allow create: if isSignedIn() &&
-                       request.resource.data.staffId == request.auth.uid;
-      allow update: if isHR();  // approve / reject
-      allow delete: if false;
-    }
-
-    // ── /payments/{payId} ────────────────────────────────────────────────────
-    // Finance/CEO can read all. Staff can read their own.
-    // Writes go through Cloud Functions.
 
     match /payments/{payId} {
-      allow read:  if isSignedIn() &&
-                      (isFinance() || resource.data.staffId == request.auth.uid);
-      allow write: if false;
+      allow read: if isAuthorizedStaff();
+      allow write: if isAuthorizedStaff();
     }
-
-    // ── /notifications/{notifId} ─────────────────────────────────────────────
-    // Users can read and update (mark read) their own notifications.
-
-    match /notifications/{notifId} {
-      allow read:   if isSignedIn() &&
-                       resource.data.recipientId == request.auth.uid;
-      allow update: if isSignedIn() &&
-                       resource.data.recipientId == request.auth.uid &&
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['read']); // only allow toggling 'read'
-      allow create: if false;
-      allow delete: if false;
-    }
-
-    // ── /training/{courseId} ─────────────────────────────────────────────────
-    // Any signed-in user can read. HR/CEO can write.
-
-    match /training/{courseId} {
-      allow read:  if isSignedIn();
-      allow write: if isHR();
-    }
-
-    // ── /announcements/{annId} ───────────────────────────────────────────────
-    // Any signed-in user can read. CEO/managers can write.
 
     match /announcements/{annId} {
-      allow read:  if isSignedIn();
-      allow write: if isManager();
+      allow read: if isAuthenticated();
+      allow write: if isAuthorizedStaff();
     }
-
-    // ── /analytics/{docId} ───────────────────────────────────────────────────
-    // Read-only for signed-in users (written by Cloud Functions / seed script).
 
     match /analytics/{docId} {
-      allow read:  if isSignedIn();
-      allow write: if false;
+      allow read: if isAuthenticated();
+      allow write: if isAuthorizedStaff();
     }
 
-    // ── Deny everything else ─────────────────────────────────────────────────
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
