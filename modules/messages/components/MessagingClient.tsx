@@ -711,7 +711,7 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName }: {
     setSaving(true);
     try {
       const assignee = members.find(m => m.id === assigneeId);
-      await addDoc(collection(db, "tasks"), {
+      await addDoc(collection(db, "staffTasks"), {
         task: title.trim(),
         title: title.trim(),
         description: description.trim(),
@@ -3727,7 +3727,7 @@ export default function MessagingClient() {
       // 2. Fetch assigned tasks
       let tasksList: Activity[] = [];
       try {
-        const tasksSnap = await getDocs(collection(db, "tasks"));
+        const tasksSnap = await getDocs(collection(db, "staffTasks"));
         tasksSnap.docs.forEach(d => {
           const t = d.data();
           const isAssignedToMe =
