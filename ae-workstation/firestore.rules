@@ -1,0 +1,184 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // Role from the users document (avoids custom claims requirement)
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isCEO()     { return role() == 'ceo'; }
+    function isManager() { return role() in ['ceo', 'manager', 'opm']; }
+    function isHR()      { return role() in ['ceo', 'hr']; }
+    function isFinance() { return role() in ['ceo', 'finance']; }
+
+    // ── /users/{uid} ─────────────────────────────────────────────────────────
+    // Users can read their own profile (needed for role lookup on login).
+    // Only CEO / Cloud Functions can write — except the client may sync
+    // the Firebase Auth email back into the document (email field only,
+    // and it must match the verified token email).
+
+    match /users/{uid} {
+      allow read: if isSignedIn() && isSelf(uid);
+      allow update: if isSignedIn() && isSelf(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email'])
+        && request.resource.data.email == request.auth.token.email;
+      allow delete: if false;
+    }
+
+    // ── /staff/{uid} ─────────────────────────────────────────────────────────
+    // Any authenticated user can read the staff directory.
+    // Writes go through Cloud Functions.
+
+    match /staff/{uid} {
+      allow read:  if isSignedIn();
+      allow write: if false;
+    }
+
+    // ── /tasks/{taskId} ──────────────────────────────────────────────────────
+    // Staff can read tasks assigned to them or created by them.
+    // Managers/CEO can read all. CEO can write.
+
+    match /tasks/{taskId} {
+      allow read:  if isSignedIn() &&
+                      (isCEO() || isManager() ||
+                       resource.data.assignedTo  == request.auth.uid ||
+                       resource.data.assignedBy  == request.auth.uid);
+      allow create: if isCEO() || isManager();
+      allow update: if isCEO() || isManager() ||
+                       resource.data.assignedTo == request.auth.uid;
+      allow delete: if isCEO();
+    }
+
+    // ── /messages/{convoId} ──────────────────────────────────────────────────
+    // Users can read convos they are a participant of.
+
+    match /messages/{convoId} {
+      allow read:   if isSignedIn() &&
+                       request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() &&
+                       request.auth.uid in request.resource.data.participants;
+      allow update: if isSignedIn() &&
+                       request.auth.uid in resource.data.participants;
+      allow delete: if false;
+
+      // Individual messages within a conversation thread
+      match /thread/{msgId} {
+        allow read: if isSignedIn() &&
+          request.auth.uid in
+            get(/databases/$(database)/documents/messages/$(convoId)).data.participants;
+        allow create: if isSignedIn() &&
+          request.auth.uid in
+            get(/databases/$(database)/documents/messages/$(convoId)).data.participants &&
+          request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // ── /documents/{docId} ───────────────────────────────────────────────────
+    // Any signed-in user can read documents.
+    // Managers and above can write.
+
+    match /documents/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isManager();
+    }
+
+    // ── /timeTracking/{uid}/** ───────────────────────────────────────────────
+    // Clock-in system. Each user reads/writes only their own days and
+    // monthlySummary subcollections. CEO can read (never write) anyone's —
+    // corrections to someone else's time records go through a Cloud Function
+    // (TODO once Cloud Functions are back). Add a manager read scope later by
+    // changing isCEO() to isManager() here, alongside /timeTrackingLive below.
+
+    match /timeTracking/{uid}/{document=**} {
+      allow read:  if isSignedIn() && (isSelf(uid) || isCEO());
+      allow write: if isSignedIn() && isSelf(uid);
+    }
+
+    // ── /timeTrackingLive/{uid} ──────────────────────────────────────────────
+    // Flat live-status doc per user, so the CEO team overview needs one
+    // onSnapshot listener instead of a query across every user's subcollection.
+
+    match /timeTrackingLive/{uid} {
+      allow read:  if isSignedIn() && (isSelf(uid) || isCEO());
+      allow write: if isSignedIn() && isSelf(uid);
+    }
+
+    // ── /leaveRequests/{reqId} ────────────────────────────────────────────────
+    // Staff can create and read their own requests. HR/CEO can read and update all.
+
+    match /leaveRequests/{reqId} {
+      allow read:   if isSignedIn() &&
+                       (isHR() || resource.data.staffId == request.auth.uid);
+      allow create: if isSignedIn() &&
+                       request.resource.data.staffId == request.auth.uid;
+      allow update: if isHR();  // approve / reject
+      allow delete: if false;
+    }
+
+    // ── /payments/{payId} ────────────────────────────────────────────────────
+    // Finance/CEO can read all. Staff can read their own.
+    // Writes go through Cloud Functions.
+
+    match /payments/{payId} {
+      allow read:  if isSignedIn() &&
+                      (isFinance() || resource.data.staffId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── /notifications/{notifId} ─────────────────────────────────────────────
+    // Users can read and update (mark read) their own notifications.
+
+    match /notifications/{notifId} {
+      allow read:   if isSignedIn() &&
+                       resource.data.recipientId == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       resource.data.recipientId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['read']); // only allow toggling 'read'
+      allow create: if false;
+      allow delete: if false;
+    }
+
+    // ── /training/{courseId} ─────────────────────────────────────────────────
+    // Any signed-in user can read. HR/CEO can write.
+
+    match /training/{courseId} {
+      allow read:  if isSignedIn();
+      allow write: if isHR();
+    }
+
+    // ── /announcements/{annId} ───────────────────────────────────────────────
+    // Any signed-in user can read. CEO/managers can write.
+
+    match /announcements/{annId} {
+      allow read:  if isSignedIn();
+      allow write: if isManager();
+    }
+
+    // ── /analytics/{docId} ───────────────────────────────────────────────────
+    // Read-only for signed-in users (written by Cloud Functions / seed script).
+
+    match /analytics/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if false;
+    }
+
+    // ── Deny everything else ─────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
