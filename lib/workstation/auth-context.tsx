@@ -3,13 +3,17 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { clockIn as clockInService, clockOut as clockOutService, subscribeToday, todayId } from '@/modules/time-tracking/services';
+import type { AccountStatus, ShiftStatus, UserProfile } from '@/modules/settings/services';
 
 interface AuthContextValue {
   user: User | null;
   profile: any;
   loading: boolean;
+  accountStatus: AccountStatus;
+  shiftStatus: ShiftStatus;
   signOut: () => Promise<void>;
 }
 
@@ -17,6 +21,8 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   profile: null,
   loading: true,
+  accountStatus: 'active',
+  shiftStatus: 'offshift',
   signOut: async () => {},
 });
 
@@ -26,6 +32,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const hasRunRulesRef = useRef<string | null>(null);
   const nineAmTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Derived account & shift status from profile (safe defaults)
+  const accountStatus: AccountStatus = (profile?.accountStatus as AccountStatus) ?? 'active';
+  const shiftStatus: ShiftStatus     = (profile?.shiftStatus  as ShiftStatus)   ?? 'offshift';
 
   // 1. Firebase Auth listener
   useEffect(() => {
@@ -68,135 +78,130 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, [user?.uid]);
 
-  // 3. Automated Staff Clocking & 9:00 AM Start Time Scheduler
+  // 3. Account-status enforcement: fired → immediate sign-out
   useEffect(() => {
-    if (!user?.uid || !profile) return;
+    if (!profile) return;
+    if (accountStatus === 'fired') {
+      // Sign out and redirect with reason
+      (async () => {
+        try {
+          if (auth) await firebaseSignOut(auth);
+          await fetch('/api/session', { method: 'DELETE' }).catch(() => {});
+        } finally {
+          window.location.href = '/auth/login?reason=fired';
+        }
+      })();
+    }
+  }, [accountStatus, profile]);
 
-    const runClockingRules = async (p: any) => {
-      const now = Date.now();
-      const nowDate = new Date(now);
-      const todayStr = nowDate.toISOString().split('T')[0];
+  // 4. Suspended enforcement: force clock-out if currently active
+  useEffect(() => {
+    if (!user?.uid || !profile?.name || accountStatus !== 'suspended') return;
+    const uid = user.uid;
+    const unsub = subscribeToday(uid, async (dayDoc) => {
+      unsub(); // one-shot
+      if (dayDoc && (dayDoc.status === 'onshift' || dayDoc.status === 'onbreak')) {
+        try {
+          await clockOutService(uid, {
+            name:       profile.name       ?? '',
+            role:       profile.role       ?? '',
+            department: profile.department ?? '',
+          });
+        } catch (err) {
+          console.error('AuthContext: Force clock-out for suspended user failed', err);
+        }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, accountStatus]);
 
-      const hour = nowDate.getHours();
-      const minute = nowDate.getMinutes();
+  // 5. Automated clock-in & 9 AM scheduler — only for onshift, active users
+  useEffect(() => {
+    // Wait for a fully-loaded profile
+    if (!user?.uid || !profile?.name) return;
+    // Fired users are handled by effect #3 above; never proceed
+    if (accountStatus === 'fired') return;
+    // Suspended users: no auto clock-in
+    if (accountStatus === 'suspended') return;
+    // Only auto clock-in if the admin has assigned onshift
+    if (shiftStatus !== 'onshift') return;
+
+    const uid   = user.uid;
+    const today = todayId();
+
+    const runClockingRules = async () => {
+      const now          = Date.now();
+      const nowDate      = new Date(now);
+      const hour         = nowDate.getHours();
+      const minute       = nowDate.getMinutes();
       const totalMinutes = hour * 60 + minute;
 
-      const windowStart = 8 * 60 + 58; // 8:58 AM
-      const windowEnd = 17 * 60;        // 5:00 PM
+      const windowStart    = 8 * 60 + 58; // 8:58 AM
+      const windowEnd      = 17 * 60;      // 5:00 PM
       const isWithinWindow = totalMinutes >= windowStart && totalMinutes <= windowEnd;
 
-      const updates: any = {};
-      let needsUpdate = false;
+      if (!isWithinWindow) return;
 
-      // Rule A: Auto clock-in on first login of the day within shift window
-      const clockInDate = p.clockInTime ? new Date(p.clockInTime).toISOString().split('T')[0] : null;
-      const hasClockedInToday = p.status === 'Clocked In' || clockInDate === todayStr || p.lastClockOutDate === todayStr;
-
-      if (!hasClockedInToday && isWithinWindow) {
-        updates.status = 'Clocked In';
-        updates.clockInTime = now;
-        updates.clockOutTime = null;
-        updates.dailyMs = 0;
-        updates.breakStartTime = null;
-
-        const currentAttended = p.attendedDates || [];
-        if (!currentAttended.includes(todayStr)) {
-          updates.attendedDates = [...currentAttended, todayStr];
-        }
-        needsUpdate = true;
-      }
-
-      // Rule B: Overnight & inactivity check for active Clocked In staff
-      const lastActive = p.lastActiveTime || p.clockInTime || null;
-      if (p.status === 'Clocked In' && lastActive) {
-        const inactiveDuration = now - lastActive;
-
-        if (inactiveDuration >= 4 * 60 * 60 * 1000) {
-          const sessionDuration = lastActive - (p.clockInTime || lastActive);
-          let targetDailyMs = p.dailyMs || 0;
-          const lastActiveDateStr = new Date(lastActive).toISOString().split('T')[0];
-
-          if (p.lastClockOutDate !== lastActiveDateStr) {
-            targetDailyMs = 0;
+      // One-shot check: only clock in if not already clocked in today
+      const unsubCheck = subscribeToday(uid, async (dayDoc) => {
+        unsubCheck();
+        if (!dayDoc) {
+          try {
+            await clockInService(uid, {
+              name:       profile.name       ?? '',
+              role:       profile.role       ?? '',
+              department: profile.department ?? '',
+            });
+          } catch (err) {
+            console.error('AuthContext: Auto clock-in failed', err);
           }
-
-          if (sessionDuration > 0) {
-            targetDailyMs += sessionDuration;
-            updates.weeklyMs = (p.weeklyMs || 0) + sessionDuration;
-          }
-
-          updates.clockOutTime = lastActive;
-          updates.dailyMs = targetDailyMs;
-          updates.lastClockOutDate = lastActiveDateStr;
-          updates.status = 'Clocked In';
-          updates.clockInTime = now;
-          updates.clockOutTime = null;
-          updates.breakStartTime = null;
-
-          if (lastActiveDateStr !== todayStr) {
-            updates.dailyMs = 0;
-          }
-
-          needsUpdate = true;
         }
-      }
-
-      if (needsUpdate) {
-        try {
-          await updateDoc(doc(db, 'users', user.uid), updates);
-        } catch (err) {
-          console.error('AuthContext: Failed to apply automated clocking updates', err);
-        }
-      }
+      });
     };
 
-    if (hasRunRulesRef.current !== user.uid) {
-      hasRunRulesRef.current = user.uid;
-      runClockingRules(profile);
+    // Only fire once per (uid + calendar day) — resets each new day
+    const runKey = `${uid}:${today}`;
+    if (hasRunRulesRef.current !== runKey) {
+      hasRunRulesRef.current = runKey;
+      runClockingRules();
     }
 
-    // Schedule 9:00 AM Shift Start Timer Reset
-    const now = Date.now();
-    const nowDate = new Date(now);
+    // Schedule 9:00 AM auto clock-in for onshift users already logged in before 9 AM
+    const now          = Date.now();
+    const nowDate      = new Date(now);
     const totalMinutes = nowDate.getHours() * 60 + nowDate.getMinutes();
-    const nineAmBoundary = 9 * 60;
 
-    if (totalMinutes < nineAmBoundary) {
+    if (totalMinutes < 9 * 60) {
       const nineAmToday = new Date(nowDate);
       nineAmToday.setHours(9, 0, 0, 0);
       const msUntilNineAm = nineAmToday.getTime() - now;
 
-      if (nineAmTimerRef.current) {
-        clearTimeout(nineAmTimerRef.current);
-      }
+      if (nineAmTimerRef.current) clearTimeout(nineAmTimerRef.current);
 
       nineAmTimerRef.current = setTimeout(async () => {
-        const nineAmMs = new Date().setHours(9, 0, 0, 0);
-        const todayStr = new Date().toISOString().split('T')[0];
-
-        const clockInUpdates: any = {
-          status: 'Clocked In',
-          clockInTime: nineAmMs, // exactly 9:00:00 AM
-          clockOutTime: null,
-          dailyMs: 0,            // shift officially starts at 9:00 AM
-          breakStartTime: null,
-          lastClockOutDate: todayStr,
-        };
-
+        // Re-check suspended/fired at the time the timer fires
+        if (accountStatus !== 'active' || shiftStatus !== 'onshift') return;
         try {
-          await updateDoc(doc(db, 'users', user.uid), clockInUpdates);
+          const unsubNine = subscribeToday(uid, async (dayDoc) => {
+            unsubNine();
+            if (!dayDoc) {
+              await clockInService(uid, {
+                name:       profile.name       ?? '',
+                role:       profile.role       ?? '',
+                department: profile.department ?? '',
+              });
+            }
+          });
         } catch (err) {
-          console.error('AuthContext: 9 AM clock reset error:', err);
+          console.error('AuthContext: 9 AM auto clock-in error:', err);
         }
       }, msUntilNineAm);
     }
 
     return () => {
-      if (nineAmTimerRef.current) {
-        clearTimeout(nineAmTimerRef.current);
-      }
+      if (nineAmTimerRef.current) clearTimeout(nineAmTimerRef.current);
     };
-  }, [user?.uid, profile]);
+  }, [user?.uid, profile, accountStatus, shiftStatus]);
 
   async function signOut() {
     if (auth) await firebaseSignOut(auth);
@@ -205,7 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, accountStatus, shiftStatus, signOut }}>
       {children}
     </AuthContext.Provider>
   );

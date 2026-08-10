@@ -1,20 +1,33 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/workstation/firebase';
 import AuthPageShell from '@/app/components/ceo/AuthPageShell';
 
-export default function LoginPage() {
+/* ─── Inner component that reads search params (must be in Suspense) ─── */
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Show reason-based messages from redirect (e.g. ?reason=fired from auth-context)
+  useEffect(() => {
+    const reason = searchParams.get('reason');
+    if (reason === 'fired') {
+      setError(
+        'Your employment has been terminated. You cannot access the workstation. ' +
+        'Please contact the CEO for more information.'
+      );
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,13 +38,23 @@ export default function LoginPage() {
       const credential = await signInWithEmailAndPassword(auth, email, password);
       const user = credential.user;
 
-      // Verify Firestore user record if present
+      // Verify Firestore user record
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
+          const accountStatus = userData.accountStatus ?? 'active';
           const role = userData.role || 'staff';
           const dept = userData.department || '';
+
+          // Block fired users immediately at login
+          if (accountStatus === 'fired') {
+            await signOut(auth);
+            throw new Error(
+              'Your employment has been terminated. You cannot access the workstation. ' +
+              'Please contact the CEO for more information.'
+            );
+          }
 
           if (role !== 'staff') {
             await signOut(auth);
@@ -43,9 +66,12 @@ export default function LoginPage() {
             await signOut(auth);
             throw new Error('Unauthorized: Department not recognized.');
           }
+
+          // Suspended users: allowed to log in — the app will show the banner
+          // No block here, just proceed
         }
       } catch (err: any) {
-        if (err.message?.includes('Unauthorized')) {
+        if (err.message?.includes('Unauthorized') || err.message?.includes('terminated') || err.message?.includes('suspended')) {
           throw err;
         }
       }
@@ -70,13 +96,13 @@ export default function LoginPage() {
       if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) {
         setError('Invalid email or password.');
       } else if (code === 'auth/user-disabled') {
-        setError('This account has been disabled.');
+        setError('This account has been disabled. Please contact the CEO.');
       } else if (code === 'auth/too-many-requests') {
         setError('Too many failed attempts. Please try again later.');
       } else if (code === 'auth/invalid-email') {
         setError('Please enter a valid email address.');
       } else if (code === 'auth/operation-not-allowed') {
-        setError('Email/Password sign-in is not enabled in Firebase Console.');
+        setError('Email/Password sign-in is not enabled.');
       } else if (msg) {
         setError(msg);
       } else {
@@ -86,6 +112,9 @@ export default function LoginPage() {
       setLoading(false);
     }
   }
+
+  // Classify error: terminated errors get a distinct style
+  const isTerminatedError = error.toLowerCase().includes('terminated') || error.toLowerCase().includes('disabled');
 
   return (
     <AuthPageShell>
@@ -138,9 +167,18 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-600 dark:bg-red-900/20 dark:text-red-400">
+              <div
+                className={`rounded-lg px-3 py-2.5 text-[12px] leading-snug ${
+                  isTerminatedError
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800'
+                    : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
+                }`}
+              >
+                {isTerminatedError && (
+                  <p className="mb-1 font-semibold text-[11px] uppercase tracking-wide">Account Disabled</p>
+                )}
                 {error}
-              </p>
+              </div>
             )}
 
             <button
@@ -155,6 +193,15 @@ export default function LoginPage() {
         </div>
       </div>
     </AuthPageShell>
+  );
+}
+
+/* ─── Page wrapper with Suspense (required for useSearchParams) ─── */
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
 

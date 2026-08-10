@@ -1,7 +1,7 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export type SessionType = 'work' | 'break';
-export type DayStatus = 'active' | 'break' | 'clocked-out';
+export type DayStatus = 'onshift' | 'onbreak' | 'offshift' | 'onleave' | 'suspended';
 
 export interface TimeSession {
   type: SessionType;

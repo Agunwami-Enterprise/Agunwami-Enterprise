@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import CeoSidebar from './CeoSidebar';
 import CeoNavbar from './CeoNavbar';
+import SuspendedBanner from './SuspendedBanner';
 
 export default function CeoShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -30,6 +31,7 @@ export default function CeoShell({ children }: { children: React.ReactNode }) {
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <CeoNavbar onMenuClick={() => setSidebarOpen(v => !v)} />
+        <SuspendedBanner />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

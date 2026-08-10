@@ -91,12 +91,12 @@ function closeLastSession(sessions: TimeSession[], end: Timestamp): TimeSession[
 export async function clockIn(uid: string, info: StaffLiveInfo): Promise<void> {
   const now = Timestamp.now();
   const dayDoc: TimeTrackingDayDoc = {
-    date: todayId(), clockIn: now, clockOut: null, status: 'active',
+    date: todayId(), clockIn: now, clockOut: null, status: 'onshift',
     totalWorkedMinutes: 0, totalBreakMinutes: 0,
     sessions: [{ type: 'work', start: now, end: null }],
   };
   await setDoc(dayRef(uid, todayId()), dayDoc);
-  await syncLive(uid, info, 'active', now);
+  await syncLive(uid, info, 'onshift', now);
 }
 
 export async function startBreak(uid: string, info: StaffLiveInfo): Promise<void> {
@@ -108,9 +108,9 @@ export async function startBreak(uid: string, info: StaffLiveInfo): Promise<void
     const data = snap.data() as TimeTrackingDayDoc;
     const sessions = closeLastSession(data.sessions, now);
     sessions.push({ type: 'break', start: now, end: null });
-    tx.update(ref, { sessions, status: 'break' });
+    tx.update(ref, { sessions, status: 'onbreak' });
   });
-  await syncLive(uid, info, 'break');
+  await syncLive(uid, info, 'onbreak');
 }
 
 export async function resumeWork(uid: string, info: StaffLiveInfo): Promise<void> {
@@ -122,9 +122,9 @@ export async function resumeWork(uid: string, info: StaffLiveInfo): Promise<void
     const data = snap.data() as TimeTrackingDayDoc;
     const sessions = closeLastSession(data.sessions, now);
     sessions.push({ type: 'work', start: now, end: null });
-    tx.update(ref, { sessions, status: 'active' });
+    tx.update(ref, { sessions, status: 'onshift' });
   });
-  await syncLive(uid, info, 'active');
+  await syncLive(uid, info, 'onshift');
 }
 
 export async function clockOut(uid: string, info: StaffLiveInfo): Promise<void> {
@@ -142,10 +142,10 @@ export async function clockOut(uid: string, info: StaffLiveInfo): Promise<void> 
       if (s.type === 'work') workedMs += ms; else breakMs += ms;
     }
     tx.update(ref, {
-      sessions, clockOut: now, status: 'clocked-out',
+      sessions, clockOut: now, status: 'offshift',
       totalWorkedMinutes: Math.round(workedMs / 60000),
       totalBreakMinutes: Math.round(breakMs / 60000),
     });
   });
-  await syncLive(uid, info, 'clocked-out');
+  await syncLive(uid, info, 'offshift');
 }

@@ -9,16 +9,21 @@ type Row = TimeTrackingLiveDoc & { uid: string };
 type DisplayStatus = DayStatus | 'not-clocked-in';
 
 const STATUS_META: Record<DisplayStatus, { label: string; bg: string; color: string }> = {
-  active:           { label: 'Active',         bg: '#dcfce7', color: '#16a34a' },
-  break:            { label: 'On Break',       bg: '#fef3c7', color: '#d97706' },
-  'clocked-out':    { label: 'Clocked Out',    bg: '#f3f4f6', color: '#6b7280' },
+  onshift:          { label: 'On Shift',      bg: '#dcfce7', color: '#16a34a' },
+  onbreak:          { label: 'On Break',      bg: '#fef3c7', color: '#d97706' },
+  offshift:         { label: 'Off Shift',     bg: '#f3f4f6', color: '#6b7280' },
+  onleave:          { label: 'On Leave',      bg: '#dbeafe', color: '#2563eb' },
+  suspended:        { label: 'Suspended',     bg: '#fee2e2', color: '#dc2626' },
   'not-clocked-in': { label: 'Not Clocked In', bg: '#f3f4f6', color: '#9ca3af' },
 };
 
 function displayStatus(row: Row, today: string): DisplayStatus {
-  if (row.status !== 'clocked-out') return row.status;
+  // Guard against stale/corrupt Firestore status values
+  const knownStatuses: DayStatus[] = ['onshift', 'onbreak', 'offshift', 'onleave', 'suspended'];
+  const safeStatus = knownStatuses.includes(row.status) ? row.status : 'offshift';
+  if (safeStatus !== 'offshift') return safeStatus;
   const clockedInToday = row.todayClockIn ? todayId(row.todayClockIn.toDate()) === today : false;
-  return clockedInToday ? 'clocked-out' : 'not-clocked-in';
+  return clockedInToday ? 'offshift' : 'not-clocked-in';
 }
 
 export default function TeamOverview() {

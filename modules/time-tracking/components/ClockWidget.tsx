@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/workstation/auth-context';
@@ -16,13 +16,16 @@ function fmtDuration(mins: number): string {
 }
 
 const STATUS_META: Record<DayStatus, { label: string; bg: string; color: string }> = {
-  active:       { label: 'Active',      bg: '#dcfce7', color: '#16a34a' },
-  break:        { label: 'On Break',    bg: '#fef3c7', color: '#d97706' },
-  'clocked-out':{ label: 'Clocked Out', bg: '#f3f4f6', color: '#6b7280' },
+  onshift:  { label: 'On Shift',  bg: '#dcfce7', color: '#16a34a' },
+  onbreak:  { label: 'On Break',  bg: '#fef3c7', color: '#d97706' },
+  offshift: { label: 'Off Shift', bg: '#f3f4f6', color: '#6b7280' },
+  onleave:  { label: 'On Leave',  bg: '#dbeafe', color: '#2563eb' },
+  suspended:{ label: 'Suspended', bg: '#fee2e2', color: '#dc2626' },
 };
 
 export default function ClockWidget() {
-  const { user } = useAuth();
+  const { user, accountStatus } = useAuth();
+  const isSuspended = accountStatus === 'suspended';
   const [profile, setProfile] = useState<StaffLiveInfo | null>(null);
   const [day, setDay] = useState<TimeTrackingDayDoc | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -41,12 +44,15 @@ export default function ClockWidget() {
   }, [user?.uid]);
 
   useEffect(() => {
-    if (!day || day.status === 'clocked-out') return;
+    if (!day || day.status === 'offshift' || day.status === 'onleave' || day.status === 'suspended' || isSuspended) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [day]);
+  }, [day, isSuspended]);
 
-  const status = day?.status ?? 'clocked-out';
+  const rawStatus = day?.status ?? 'offshift';
+  // Guard against stale/corrupt Firestore values
+  const knownStatuses: DayStatus[] = ['onshift', 'onbreak', 'offshift', 'onleave', 'suspended'];
+  const status: DayStatus = knownStatuses.includes(rawStatus as DayStatus) ? (rawStatus as DayStatus) : 'offshift';
   const meta = STATUS_META[status];
   const { workedMinutes, breakMinutes } = computeLiveTotals(day?.sessions, now);
   const elapsedMinutes = day ? Math.max(0, Math.floor((now - day.clockIn.toMillis()) / 60000)) : 0;
@@ -76,19 +82,35 @@ export default function ClockWidget() {
       </div>
 
       <div className="flex gap-2">
-        {status === 'clocked-out' && (
-          <ActionButton label="Clock In" busy={busy} color="#22c55e" onClick={() => run(clockIn)} />
-        )}
-        {status === 'active' && (
+        {/* Suspended: all clock-in actions are disabled */}
+        {isSuspended ? (
+          <div className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-50 py-2.5 text-[12px] font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+            </svg>
+            Account suspended — clock-in disabled
+          </div>
+        ) : (
           <>
-            <ActionButton label="Break" busy={busy} color="#f5bd02" dark onClick={() => run(startBreak)} />
-            <ActionButton label="Clock Out" busy={busy} color="#ef4444" onClick={() => run(clockOut)} />
-          </>
-        )}
-        {status === 'break' && (
-          <>
-            <ActionButton label="Active" busy={busy} color="#22c55e" onClick={() => run(resumeWork)} />
-            <ActionButton label="Clock Out" busy={busy} color="#ef4444" onClick={() => run(clockOut)} />
+            {status === 'offshift' && (
+              <ActionButton label="Clock In" busy={busy} color="#22c55e" onClick={() => run(clockIn)} />
+            )}
+            {status === 'onshift' && (
+              <>
+                <ActionButton label="Break" busy={busy} color="#f5bd02" dark onClick={() => run(startBreak)} />
+                <ActionButton label="Clock Out" busy={busy} color="#ef4444" onClick={() => run(clockOut)} />
+              </>
+            )}
+            {status === 'onbreak' && (
+              <>
+                <ActionButton label="Resume" busy={busy} color="#22c55e" onClick={() => run(resumeWork)} />
+                <ActionButton label="Clock Out" busy={busy} color="#ef4444" onClick={() => run(clockOut)} />
+              </>
+            )}
+            {(status === 'onleave') && (
+              <p className="w-full text-center text-[11px] text-gray-400">No actions available — on leave</p>
+            )}
           </>
         )}
       </div>
