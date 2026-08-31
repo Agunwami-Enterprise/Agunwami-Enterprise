@@ -129,6 +129,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const uid   = user.uid;
     const today = todayId();
 
+    const parseTimeToMinutes = (timeStr: string | undefined, defaultMins: number): number => {
+      if (!timeStr) return defaultMins;
+      const parts = timeStr.split(':');
+      if (parts.length < 2) return defaultMins;
+      const h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      return isNaN(h) || isNaN(m) ? defaultMins : h * 60 + m;
+    };
+
+    const startMins = parseTimeToMinutes(profile?.shiftStartTime, 9 * 60);  // Default 09:00 AM (540 mins)
+    const endMins   = parseTimeToMinutes(profile?.shiftEndTime,   17 * 60); // Default 17:00 PM (1020 mins)
+
     const runClockingRules = async () => {
       const now          = Date.now();
       const nowDate      = new Date(now);
@@ -136,8 +148,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const minute       = nowDate.getMinutes();
       const totalMinutes = hour * 60 + minute;
 
-      const windowStart    = 8 * 60 + 58; // 8:58 AM
-      const windowEnd      = 17 * 60;      // 5:00 PM
+      const windowStart    = Math.max(0, startMins - 2); // 2 minutes grace before shift start time
+      const windowEnd      = endMins;
       const isWithinWindow = totalMinutes >= windowStart && totalMinutes <= windowEnd;
 
       if (!isWithinWindow) return;
@@ -166,15 +178,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       runClockingRules();
     }
 
-    // Schedule 9:00 AM auto clock-in for onshift users already logged in before 9 AM
+    // Schedule shift start auto clock-in for onshift users already logged in before shift start time
     const now          = Date.now();
     const nowDate      = new Date(now);
     const totalMinutes = nowDate.getHours() * 60 + nowDate.getMinutes();
 
-    if (totalMinutes < 9 * 60) {
-      const nineAmToday = new Date(nowDate);
-      nineAmToday.setHours(9, 0, 0, 0);
-      const msUntilNineAm = nineAmToday.getTime() - now;
+    if (totalMinutes < startMins) {
+      const shiftStartToday = new Date(nowDate);
+      shiftStartToday.setHours(Math.floor(startMins / 60), startMins % 60, 0, 0);
+      const msUntilShiftStart = shiftStartToday.getTime() - now;
 
       if (nineAmTimerRef.current) clearTimeout(nineAmTimerRef.current);
 
@@ -193,9 +205,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           });
         } catch (err) {
-          console.error('AuthContext: 9 AM auto clock-in error:', err);
+          console.error('AuthContext: Shift start auto clock-in error:', err);
         }
-      }, msUntilNineAm);
+      }, msUntilShiftStart);
     }
 
     return () => {

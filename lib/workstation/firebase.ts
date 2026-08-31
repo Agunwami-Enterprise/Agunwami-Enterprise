@@ -4,6 +4,7 @@ import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { initBackend } from 'agunwami-backend';
 
 const WORKSTATION_APP_NAME = 'ae-workstation';
 
@@ -30,6 +31,9 @@ try {
     experimentalForceLongPolling: true,
   });
 }
+
+// Register the Firestore instance with agunwami-backend shared services
+initBackend(db);
 
 const storage = getStorage(app);
 const rtdb = getDatabase(app);

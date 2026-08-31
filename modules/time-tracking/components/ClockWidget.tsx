@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/workstation/auth-context';
-import { subscribeUserProfile } from '@/modules/settings/services';
+import { subscribeUserProfile, type UserProfile } from '@/modules/settings/services';
 import {
   subscribeToday, clockIn, startBreak, resumeWork, clockOut, computeLiveTotals,
   type StaffLiveInfo,
@@ -26,7 +26,7 @@ const STATUS_META: Record<DayStatus, { label: string; bg: string; color: string 
 export default function ClockWidget() {
   const { user, accountStatus } = useAuth();
   const isSuspended = accountStatus === 'suspended';
-  const [profile, setProfile] = useState<StaffLiveInfo | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [day, setDay] = useState<TimeTrackingDayDoc | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
@@ -34,7 +34,7 @@ export default function ClockWidget() {
   useEffect(() => {
     if (!user?.uid) return;
     return subscribeUserProfile(user.uid, p => {
-      if (p) setProfile({ name: p.name, role: p.role, department: p.department });
+      if (p) setProfile(p);
     });
   }, [user?.uid]);
 
@@ -56,17 +56,26 @@ export default function ClockWidget() {
   const meta = STATUS_META[status];
   const { workedMinutes, breakMinutes } = computeLiveTotals(day?.sessions, now);
   const elapsedMinutes = day ? Math.max(0, Math.floor((now - day.clockIn.toMillis()) / 60000)) : 0;
+  const shiftText = profile?.shiftPeriod || `${profile?.shiftStartTime || '09:00'} – ${profile?.shiftEndTime || '17:00'}`;
 
   async function run(action: (uid: string, info: StaffLiveInfo) => Promise<void>) {
     if (!user?.uid || !profile || busy) return;
     setBusy(true);
-    try { await action(user.uid, profile); } finally { setBusy(false); }
+    const liveInfo: StaffLiveInfo = {
+      name: profile.name || profile.displayName || 'Staff Member',
+      role: profile.role,
+      department: profile.department || '',
+    };
+    try { await action(user.uid, liveInfo); } finally { setBusy(false); }
   }
 
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e]">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200">Time Clock</span>
+        <div>
+          <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200">Time Clock</span>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500">Shift: {shiftText}</p>
+        </div>
         <span
           className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
           style={{ backgroundColor: meta.bg, color: meta.color }}

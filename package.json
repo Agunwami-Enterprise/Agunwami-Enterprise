@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "seed": "ts-node --project tsconfig.seed.json scripts/seedFirestore.ts"
   },
   "dependencies": {
+    "agunwami-backend": "file:../agunwami-backend",
     "@livekit/components-react": "^2.9.23",
     "@livekit/components-styles": "^1.2.0",
     "clsx": "^2.1.1",

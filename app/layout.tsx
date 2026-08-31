@@ -58,6 +58,24 @@ export default function RootLayout({
             __html: `(function(){try{var s=localStorage.getItem('theme')||localStorage.getItem('ae-theme');var d=document.documentElement;if(s==='dark'){d.classList.add('dark');d.classList.remove('light')}else if(s==='light'){d.classList.remove('dark');d.classList.add('light')}else{d.classList.remove('light');if(window.matchMedia('(prefers-color-scheme: dark)').matches){d.classList.add('dark')}else{d.classList.remove('dark')}}}catch(e){}})();`,
           }}
         />
+        {/* Google tag (gtag.js) */}
+        <Script
+          id="gtag-js"
+          strategy="afterInteractive"
+          src="https://www.googletagmanager.com/gtag/js?id=G-Q39DQ9CSR8"
+        />
+        <Script
+          id="gtag-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-Q39DQ9CSR8');
+            `,
+          }}
+        />
         <ThemeProvider>
           <AuthProvider>
             {children}
