@@ -1,0 +1,26 @@
+{
+  "name": "agunwami-backend",
+  "version": "1.0.0",
+  "description": "Shared backend types and services for Agunwami Enterprise apps (aehub-onboarding + agunwami-enterprise)",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "firebase": ">=11.0.0"
+  },
+  "devDependencies": {
+    "firebase": "^11.4.0",
+    "typescript": "^5.0.0"
+  }
+}
