@@ -1,7 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { subscribeStaff } from '@/modules/staff/services';
+import { subscribeStaff, type Member, type StaffStatus, type ClockStatus } from '@/modules/staff/services';
 import { SkeletonStaff } from '@/app/components/ceo/Skeleton';
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -9,15 +9,7 @@ import { SkeletonStaff } from '@/app/components/ceo/Skeleton';
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 type StaffRole   = 'CEO' | 'Admin' | 'Manager' | 'Accountant' | 'Live Tutor' | 'Customer Care' | 'General Staff';
-type StaffStatus = 'Active' | 'Inactive' | 'On Leave';
-type ClockStatus = 'Clocked In' | 'Clocked Out';
 type ActiveTab   = 'directory' | 'requests' | 'external';
-
-interface Member {
-  id: string; name: string; title: string; email: string;
-  role: StaffRole; status: StaffStatus; clockStatus: ClockStatus;
-  lastSeen: string; initials: string; color: string; department: string;
-}
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    CONSTANTS
@@ -67,7 +59,7 @@ export default function StaffPage() {
 
   const filtered = MOCK.filter(m => {
     if (search && !m.name.toLowerCase().includes(search.toLowerCase()) && !m.email.toLowerCase().includes(search.toLowerCase())) return false;
-    if (roleF !== 'All Roles' && m.role !== roleF as StaffRole) return false;
+    if (roleF !== 'All Roles' && m.departmentPosition !== roleF) return false;
     if (statF !== 'All Status' && m.status !== statF && m.clockStatus !== statF) return false;
     return true;
   });
@@ -265,7 +257,7 @@ function MemberCard({ member: m, onEdit, onRemove, onPermissions }: {
     return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  const rs = ROLE_STYLE[m.role];
+  const rs = ROLE_STYLE[m.departmentPosition as StaffRole] ?? { bg: '#f3f4f6', text: '#374151' };
   const clk = m.status !== 'Active'
     ? { label: m.status,     bg: '#f3f4f6', text: '#6b7280' }
     : m.clockStatus === 'Clocked In'
@@ -285,7 +277,7 @@ function MemberCard({ member: m, onEdit, onRemove, onPermissions }: {
           </div>
           <div>
             <p className="text-[13px] font-bold leading-tight text-gray-800 dark:text-white">{m.name}</p>
-            <p className="text-[11px] text-gray-400">{m.title}</p>
+            <p className="text-[11px] text-gray-400">{m.departmentPosition}</p>
           </div>
         </div>
         {/* Kebab menu */}
@@ -320,7 +312,7 @@ function MemberCard({ member: m, onEdit, onRemove, onPermissions }: {
           className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
           style={{ backgroundColor: rs.bg, color: rs.text }}
         >
-          {m.role}
+          {m.departmentPosition}
         </span>
         <span
           className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
@@ -462,8 +454,8 @@ function EditModal({ member, onClose }: { member: Member; onClose: () => void })
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 function PermModal({ member: m, onClose }: { member: Member; onClose: () => void }) {
-  const perms = PERMISSIONS[m.role];
-  const rs    = ROLE_STYLE[m.role];
+  const perms = PERMISSIONS[m.departmentPosition as StaffRole] ?? [];
+  const rs    = ROLE_STYLE[m.departmentPosition as StaffRole] ?? { bg: '#f3f4f6', text: '#374151' };
   return (
     <Overlay onClose={onClose}>
       <div className="w-full max-w-[340px] rounded-2xl bg-white shadow-2xl dark:bg-[#1e1e1e]">

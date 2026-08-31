@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -52,7 +52,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
     await markAllNotifsRead(unreadIds);
   }
 
-  const displayName  = profile?.name  || user?.displayName || 'Agunwami';
+  const displayName  = profile?.displayName  || user?.displayName || 'Agunwami';
   const displayEmail = profile?.email || user?.email       || 'ceo@agunwami.com';
   const initials     = displayName.charAt(0).toUpperCase();
 

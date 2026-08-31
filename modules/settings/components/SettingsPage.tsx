@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -72,14 +72,14 @@ export default function SettingsPage() {
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-[#f5bd02] text-[26px] font-bold text-[#1a1a1a]">
-              {profile?.name?.[0]?.toUpperCase() ?? 'A'}
+              {profile?.displayName?.[0]?.toUpperCase() ?? 'A'}
             </div>
             <button className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full text-white shadow" style={{ backgroundColor: '#f5bd02' }}>
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12V10l3-3 2 2 5-5 3 3v5H1z"/><path d="M11 2h3v3"/></svg>
             </button>
           </div>
           <div>
-            <p className="text-[18px] font-bold text-gray-800 dark:text-white">{profile?.name ?? 'Agunwami'}</p>
+            <p className="text-[18px] font-bold text-gray-800 dark:text-white">{profile?.displayName ?? 'Agunwami'}</p>
             <p className="text-[12px] text-gray-500 dark:text-gray-400">{profile?.role ?? 'CEO'}</p>
             <p className="text-[12px] text-gray-400 dark:text-gray-500">{profile?.department ?? 'Executive'}</p>
             <span className="mt-1 inline-block rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/8 dark:text-gray-300">Employee ID: AE-001</span>
@@ -121,7 +121,7 @@ export default function SettingsPage() {
             <h2 className="text-[14px] font-bold text-gray-800 dark:text-white">Profile Information</h2>
             <p className="mb-4 text-[12px] text-gray-500 dark:text-gray-400">Your contact and basic details</p>
             <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-              <InfoField label="Full Name"     value={profile?.name     ?? 'Agunwami'} />
+              <InfoField label="Full Name"     value={profile?.displayName ?? 'Agunwami'} />
               <InfoField label="Email Address" value={profile?.email    ?? 'ceo@agunwami.com'} />
               <InfoField label="Phone Number"  value={profile?.phone    ?? '—'} />
               <InfoField label="Location"      value={profile?.location ?? '—'} />
@@ -136,7 +136,7 @@ export default function SettingsPage() {
             <p className="mb-4 text-[12px] text-gray-500 dark:text-gray-400">Your work-related information</p>
             <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
               <InfoField label="Department"      value={profile?.department ?? 'Executive'}            bold />
-              <InfoField label="Position"        value={profile?.position   ?? profile?.role ?? 'CEO'} bold />
+              <InfoField label="Position"        value={profile?.departmentPosition ?? profile?.role ?? 'CEO'} bold />
               <InfoField label="Join Date"       value={profile?.joinDate   ?? '—'}                    bold />
               <InfoField label="Employment Type" value="Full-time"                                     bold />
               <InfoField label="Work Schedule"   value="Monday to Friday, 9:00 AM – 5:00 PM"          bold />
@@ -171,7 +171,7 @@ export default function SettingsPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {([
-              { label: 'Full Name',     key: 'name',     type: 'text',  span: false },
+              { label: 'Full Name',     key: 'displayName', type: 'text',  span: false },
               { label: 'Email Address', key: 'email',    type: 'email', span: false },
               { label: 'Phone Number',  key: 'phone',    type: 'tel',   span: false },
               { label: 'Location',      key: 'location', type: 'text',  span: false },

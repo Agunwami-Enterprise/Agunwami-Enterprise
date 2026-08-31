@@ -56,13 +56,13 @@ export default function ClockWidget() {
   const meta = STATUS_META[status];
   const { workedMinutes, breakMinutes } = computeLiveTotals(day?.sessions, now);
   const elapsedMinutes = day ? Math.max(0, Math.floor((now - day.clockIn.toMillis()) / 60000)) : 0;
-  const shiftText = profile?.shiftPeriod || `${profile?.shiftStartTime || '09:00'} – ${profile?.shiftEndTime || '17:00'}`;
+  const shiftText = `${profile?.shiftStartTime || '09:00'} – ${profile?.shiftEndTime || '17:00'}`;
 
   async function run(action: (uid: string, info: StaffLiveInfo) => Promise<void>) {
     if (!user?.uid || !profile || busy) return;
     setBusy(true);
     const liveInfo: StaffLiveInfo = {
-      name: profile.name || profile.displayName || 'Staff Member',
+      name: profile.displayName || 'Staff Member',
       role: profile.role,
       department: profile.department || '',
     };

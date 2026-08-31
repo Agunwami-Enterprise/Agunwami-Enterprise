@@ -96,14 +96,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // 4. Suspended enforcement: force clock-out if currently active
   useEffect(() => {
-    if (!user?.uid || !profile?.name || accountStatus !== 'suspended') return;
+    if (!user?.uid || !profile?.displayName || accountStatus !== 'suspended') return;
     const uid = user.uid;
     const unsub = subscribeToday(uid, async (dayDoc) => {
       unsub(); // one-shot
       if (dayDoc && (dayDoc.status === 'onshift' || dayDoc.status === 'onbreak')) {
         try {
           await clockOutService(uid, {
-            name:       profile.name       ?? '',
+            name:       profile.displayName ?? '',
             role:       profile.role       ?? '',
             department: profile.department ?? '',
           });
@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // 5. Automated clock-in & 9 AM scheduler — only for onshift, active users
   useEffect(() => {
     // Wait for a fully-loaded profile
-    if (!user?.uid || !profile?.name) return;
+    if (!user?.uid || !profile?.displayName) return;
     // Fired users are handled by effect #3 above; never proceed
     if (accountStatus === 'fired') return;
     // Suspended users: no auto clock-in
@@ -160,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!dayDoc) {
           try {
             await clockInService(uid, {
-              name:       profile.name       ?? '',
+              name:       profile.displayName ?? '',
               role:       profile.role       ?? '',
               department: profile.department ?? '',
             });
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             unsubNine();
             if (!dayDoc) {
               await clockInService(uid, {
-                name:       profile.name       ?? '',
+                name:       profile.displayName ?? '',
                 role:       profile.role       ?? '',
                 department: profile.department ?? '',
               });
