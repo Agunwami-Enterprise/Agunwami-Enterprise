@@ -104,13 +104,36 @@ async function syncLive(
   status:       DayStatus,
   todayClockIn?: Timestamp,
 ): Promise<void> {
+  const db = getDb();
   const payload: Record<string, unknown> = {
     name: info.name, role: info.role, department: info.department,
     status, lastUpdated: serverTimestamp(),
   };
   if (todayClockIn !== undefined) payload.todayClockIn = todayClockIn;
   await setDoc(liveRef(uid), payload, { merge: true });
+
+  // Keep users/{uid} in sync for aehub and workstation compatibility
+  try {
+    const userStatusMap: Record<DayStatus, string> = {
+      onshift: 'Clocked In',
+      onbreak: 'On Break',
+      offshift: 'Clocked Out',
+      onleave: 'On Leave',
+      suspended: 'Suspended',
+    };
+    const userPayload: Record<string, unknown> = {
+      status: userStatusMap[status] || 'Clocked Out',
+      lastActiveTime: Date.now(),
+    };
+    if (todayClockIn !== undefined) {
+      userPayload.clockInTime = todayClockIn.toMillis();
+    }
+    await setDoc(doc(db, 'users', uid), userPayload, { merge: true });
+  } catch (e) {
+    console.warn('[agunwami-backend] syncLive users error:', e);
+  }
 }
+
 
 function closeLastSession(sessions: TimeSession[], end: Timestamp): TimeSession[] {
   if (sessions.length === 0) return sessions;

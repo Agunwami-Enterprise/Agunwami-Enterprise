@@ -73,6 +73,7 @@ function computeLiveTotals(sessions, now) {
 }
 // ── Internal helpers ─────────────────────────────────────────────────────────
 async function syncLive(uid, info, status, todayClockIn) {
+    const db = (0, firebase_instance_1.getDb)();
     const payload = {
         name: info.name, role: info.role, department: info.department,
         status, lastUpdated: (0, firestore_1.serverTimestamp)(),
@@ -80,6 +81,27 @@ async function syncLive(uid, info, status, todayClockIn) {
     if (todayClockIn !== undefined)
         payload.todayClockIn = todayClockIn;
     await (0, firestore_1.setDoc)(liveRef(uid), payload, { merge: true });
+    // Keep users/{uid} in sync for aehub and workstation compatibility
+    try {
+        const userStatusMap = {
+            onshift: 'Clocked In',
+            onbreak: 'On Break',
+            offshift: 'Clocked Out',
+            onleave: 'On Leave',
+            suspended: 'Suspended',
+        };
+        const userPayload = {
+            status: userStatusMap[status] || 'Clocked Out',
+            lastActiveTime: Date.now(),
+        };
+        if (todayClockIn !== undefined) {
+            userPayload.clockInTime = todayClockIn.toMillis();
+        }
+        await (0, firestore_1.setDoc)((0, firestore_1.doc)(db, 'users', uid), userPayload, { merge: true });
+    }
+    catch (e) {
+        console.warn('[agunwami-backend] syncLive users error:', e);
+    }
 }
 function closeLastSession(sessions, end) {
     if (sessions.length === 0)
