@@ -2,6 +2,7 @@ export type TaskStatus = 'In Progress' | 'Pending' | 'Completed' | 'Overdue';
 export type TaskPriority = 'High' | 'Medium' | 'Low';
 export type Priority = 'Low' | 'Medium' | 'High' | 'Critical';
 export type TaskStage = 'Created' | 'Assigned' | 'In Progress' | 'Submitted' | 'Approved' | 'Completed';
+export type SprintStatus = 'Draft' | 'Pending Approval' | 'Unassigned' | 'Pending' | 'In Review' | 'Completed';
 /** Simple task shape used by dashboards */
 export interface Task {
     id: string;

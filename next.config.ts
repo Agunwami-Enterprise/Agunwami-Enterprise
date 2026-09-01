@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ['agunwami-backend'],
@@ -7,6 +8,12 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   webpack(config) {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      firebase: path.resolve(__dirname, 'node_modules/firebase'),
+      '@firebase': path.resolve(__dirname, 'node_modules/@firebase'),
+    };
+
     // Next.js 16's css-loader misinterprets the `&` selector in Tailwind v4
     // @variant rules as a url() import (resolves as './&').
     // Disabling url resolution in css-loader fixes this.

@@ -1,6 +1,4 @@
-// ─── Leave Request Service ────────────────────────────────────────────────────
-
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getDb } from './firebase-instance';
 import { fmtDate } from '../utils/time';
 import type { LeaveRequest, LeaveStatus } from '../types/leave';
@@ -50,3 +48,15 @@ export function subscribeLeaveRequests(
     (err: any) => console.warn('[agunwami-backend] LeaveRequests snapshot error:', err),
   );
 }
+
+/** Approve or reject a leave request */
+export async function updateLeaveRequestStatus(
+  id: string,
+  status: 'approved' | 'rejected',
+): Promise<void> {
+  await updateDoc(doc(getDb(), 'leaveRequests', id), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
+}
+

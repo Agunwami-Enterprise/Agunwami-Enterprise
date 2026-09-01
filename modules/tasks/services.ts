@@ -1,3 +1,15 @@
 // ─── Tasks — Thin Re-export ───────────────────────────────────────────────────
-export type { Task, TaskStatus, TaskPriority } from 'agunwami-backend';
-export { subscribeTasks }                      from 'agunwami-backend';
+export type {
+  Task, TaskStatus, TaskPriority,
+  TaskItem, TaskStage, Priority, SprintStatus, SubTaskItem,
+} from 'agunwami-backend';
+
+export {
+  subscribeTasks,
+  subscribeStaffTasks,
+  createStaffTask,
+  updateStaffTask,
+  deleteStaffTask,
+  fetchStaffUserNames,
+} from 'agunwami-backend';
+

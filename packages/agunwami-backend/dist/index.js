@@ -25,7 +25,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.subscribeStaff = exports.subscribePayments = exports.routeForNotif = exports.markAllNotifsRead = exports.markNotifRead = exports.subscribeNotifications = exports.fetchStaffUserNames = exports.deleteStaffTask = exports.updateStaffTask = exports.createStaffTask = exports.subscribeStaffTasks = exports.subscribeTasks = exports.subscribeLeaveRequests = exports.monthId = exports.todayId = exports.computeLiveTotals = exports.getDay = exports.subscribeLiveTeam = exports.subscribeMonthlySummary = exports.subscribeToday = exports.resumeWork = exports.startBreak = exports.clockOut = exports.clockIn = exports.subscribeUserProfile = exports.getDb = exports.initBackend = void 0;
+exports.subscribeStaff = exports.updatePaymentStatus = exports.subscribePayments = exports.routeForNotif = exports.markAllNotifsRead = exports.markNotifRead = exports.subscribeNotifications = exports.fetchStaffUserNames = exports.deleteStaffTask = exports.updateStaffTask = exports.createStaffTask = exports.subscribeStaffTasks = exports.subscribeTasks = exports.updateLeaveRequestStatus = exports.subscribeLeaveRequests = exports.monthId = exports.todayId = exports.computeLiveTotals = exports.getDay = exports.subscribeLiveTeam = exports.subscribeMonthlySummary = exports.subscribeToday = exports.resumeWork = exports.startBreak = exports.clockOut = exports.clockIn = exports.subscribeUserProfile = exports.getDb = exports.initBackend = void 0;
 // ── Constants ─────────────────────────────────────────────────────────────────
 __exportStar(require("./constants/shift"), exports);
 // ── Types & Helpers ───────────────────────────────────────────────────────────
@@ -53,6 +53,7 @@ Object.defineProperty(exports, "todayId", { enumerable: true, get: function () {
 Object.defineProperty(exports, "monthId", { enumerable: true, get: function () { return time_tracking_1.monthId; } });
 var leave_1 = require("./services/leave");
 Object.defineProperty(exports, "subscribeLeaveRequests", { enumerable: true, get: function () { return leave_1.subscribeLeaveRequests; } });
+Object.defineProperty(exports, "updateLeaveRequestStatus", { enumerable: true, get: function () { return leave_1.updateLeaveRequestStatus; } });
 var tasks_1 = require("./services/tasks");
 Object.defineProperty(exports, "subscribeTasks", { enumerable: true, get: function () { return tasks_1.subscribeTasks; } });
 Object.defineProperty(exports, "subscribeStaffTasks", { enumerable: true, get: function () { return tasks_1.subscribeStaffTasks; } });
@@ -67,5 +68,6 @@ Object.defineProperty(exports, "markAllNotifsRead", { enumerable: true, get: fun
 Object.defineProperty(exports, "routeForNotif", { enumerable: true, get: function () { return notifications_1.routeForNotif; } });
 var payments_1 = require("./services/payments");
 Object.defineProperty(exports, "subscribePayments", { enumerable: true, get: function () { return payments_1.subscribePayments; } });
+Object.defineProperty(exports, "updatePaymentStatus", { enumerable: true, get: function () { return payments_1.updatePaymentStatus; } });
 var staff_1 = require("./services/staff");
 Object.defineProperty(exports, "subscribeStaff", { enumerable: true, get: function () { return staff_1.subscribeStaff; } });

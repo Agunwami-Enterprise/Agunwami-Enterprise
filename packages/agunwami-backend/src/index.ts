@@ -37,6 +37,7 @@ export {
 }                                      from './services/time-tracking';
 export {
   subscribeLeaveRequests,
+  updateLeaveRequestStatus,
 }                                      from './services/leave';
 export {
   subscribeTasks,
@@ -52,5 +53,9 @@ export {
   markAllNotifsRead,
   routeForNotif,
 }                                      from './services/notifications';
-export { subscribePayments }           from './services/payments';
+export {
+  subscribePayments,
+  updatePaymentStatus,
+}                                      from './services/payments';
 export { subscribeStaff }              from './services/staff';
+

@@ -1,7 +1,7 @@
 "use strict";
-// ─── Payments Service ─────────────────────────────────────────────────────────
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.subscribePayments = subscribePayments;
+exports.updatePaymentStatus = updatePaymentStatus;
 const firestore_1 = require("firebase/firestore");
 const firebase_instance_1 = require("./firebase-instance");
 function mapType(t) {
@@ -50,4 +50,11 @@ function subscribePayments(cb) {
             };
         }));
     }, (err) => console.warn('[agunwami-backend] Payments snapshot error:', err));
+}
+/** Update payment status (e.g. approve / mark paid) */
+async function updatePaymentStatus(id, status) {
+    await (0, firestore_1.updateDoc)((0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'payments', id), {
+        status,
+        updatedAt: (0, firestore_1.serverTimestamp)(),
+    });
 }

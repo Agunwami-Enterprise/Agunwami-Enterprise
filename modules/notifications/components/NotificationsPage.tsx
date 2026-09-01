@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { subscribeNotifications } from '@/modules/notifications/services';
@@ -26,7 +26,7 @@ const FILTER_LABELS: { key: NotifFilter; label: string; count: number }[] = [
 ];
 
 export default function NotificationsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [tab,    setTab]    = useState<NotifTab>('notifications');
   const [filter, setFilter] = useState<NotifFilter>('all');
   const [search, setSearch] = useState('');
@@ -34,9 +34,12 @@ export default function NotificationsPage() {
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      if (!authLoading) setLoading(false);
+      return;
+    }
     return subscribeNotifications(user.uid, (data) => { setNotifs(data as Notif[]); setLoading(false); });
-  }, [user?.uid]);
+  }, [user?.uid, authLoading]);
 
   /* Create Announcement modal */
   const [showAnn,    setShowAnn]    = useState(false);

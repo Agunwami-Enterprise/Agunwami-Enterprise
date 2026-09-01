@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -18,19 +18,21 @@ const firebaseConfig = {
   databaseURL: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_DATABASE_URL || `https://${process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'agunwami'}-default-rtdb.firebaseio.com`,
 };
 
-const app = getApps().find(a => a.name === WORKSTATION_APP_NAME)
-  ?? initializeApp(firebaseConfig, WORKSTATION_APP_NAME);
+const isNewApp = !getApps().some(a => a.name === WORKSTATION_APP_NAME);
+const app = isNewApp
+  ? initializeApp(firebaseConfig, WORKSTATION_APP_NAME)
+  : getApp(WORKSTATION_APP_NAME);
 
 const auth = getAuth(app);
 
-let db: ReturnType<typeof getFirestore>;
-try {
-  db = getFirestore(app);
-} catch {
-  db = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-  });
+if (isNewApp) {
+  try {
+    initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  } catch {
+    // ignore if already initialized
+  }
 }
+const db = getFirestore(app);
 
 // Register the Firestore instance with agunwami-backend shared services
 initBackend(db);

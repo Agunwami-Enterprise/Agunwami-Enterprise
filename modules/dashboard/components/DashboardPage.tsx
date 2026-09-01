@@ -1,10 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/workstation/firebase';
-import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeDashboard } from '@/modules/dashboard/services';
 import { SkeletonDashboard } from '@/app/components/ceo/Skeleton';
 import ClockWidget from '@/modules/time-tracking/components/ClockWidget';

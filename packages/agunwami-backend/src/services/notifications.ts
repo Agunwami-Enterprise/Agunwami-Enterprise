@@ -69,39 +69,45 @@ export function subscribeNotifications(
   uid: string,
   cb: (items: NotifItem[]) => void,
 ): () => void {
-  if (!uid) return () => {};
-  const q = query(
-    collection(getDb(), 'notifications'),
-    where('recipientId', '==', uid),
-    orderBy('createdAt', 'desc'),
-  );
-  return onSnapshot(
-    q,
-    (snap: any) => {
-      cb(snap.docs.map((d: any) => {
-        const data = d.data();
-        const type = (data.type || 'notification') as string;
-        const icon = typeToIcon(type);
-        const read = !!data.read;
-        return {
-          id:        d.id,
-          title:     typeToTitle(type),
-          body:      (data.message || data.body || '') as string,
-          time:      relativeTime(data.createdAt as { toDate(): Date }),
-          tag:       read ? '' : 'NEW',
-          tagColor:  read ? '' : '#ef4444',
-          read,
-          iconBg:    icon.bg,
-          iconColor: icon.color,
-          category:  typeToCategory(type),
-          relatedTo: data.relatedTo as { collection: string; docId: string } | undefined,
-        } satisfies NotifItem;
-      }));
-    },
-    (err: any) => {
-      if ((err as any).code !== 'permission-denied') {
-        console.warn('[agunwami-backend] Notifications snapshot error:', err);
-      }
-    },
-  );
+  if (!uid) { cb([]); return () => {}; }
+  try {
+    const q = query(
+      collection(getDb(), 'notifications'),
+      where('recipientId', '==', uid),
+      orderBy('createdAt', 'desc'),
+    );
+    return onSnapshot(
+      q,
+      (snap: any) => {
+        cb(snap.docs.map((d: any) => {
+          const data = d.data();
+          const type = (data.type || 'notification') as string;
+          const icon = typeToIcon(type);
+          const read = !!data.read;
+          return {
+            id:        d.id,
+            title:     typeToTitle(type),
+            body:      (data.message || data.body || '') as string,
+            time:      relativeTime(data.createdAt as { toDate(): Date }),
+            tag:       read ? '' : 'NEW',
+            tagColor:  read ? '' : '#ef4444',
+            read,
+            iconBg:    icon.bg,
+            iconColor: icon.color,
+            category:  typeToCategory(type),
+            relatedTo: data.relatedTo as { collection: string; docId: string } | undefined,
+          } satisfies NotifItem;
+        }));
+      },
+      (err: any) => {
+        if ((err as any).code !== 'permission-denied') {
+          console.warn('[agunwami-backend] Notifications snapshot error:', err);
+        }
+      },
+    );
+  } catch (err) {
+    console.warn('[agunwami-backend] subscribeNotifications error:', err);
+    cb([]);
+    return () => {};
+  }
 }

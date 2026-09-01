@@ -13,6 +13,9 @@ export type TaskStage    =
   | 'Approved'
   | 'Completed';
 
+export type SprintStatus = 'Draft' | 'Pending Approval' | 'Unassigned' | 'Pending' | 'In Review' | 'Completed';
+
+
 /** Simple task shape used by dashboards */
 export interface Task {
   id:       string;

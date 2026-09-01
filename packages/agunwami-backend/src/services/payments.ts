@@ -1,6 +1,4 @@
-// ─── Payments Service ─────────────────────────────────────────────────────────
-
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getDb } from './firebase-instance';
 import type { Payment, PayType, PayStatus } from '../types/payment';
 
@@ -51,3 +49,15 @@ export function subscribePayments(cb: (payments: Payment[]) => void): () => void
     (err: any) => console.warn('[agunwami-backend] Payments snapshot error:', err),
   );
 }
+
+/** Update payment status (e.g. approve / mark paid) */
+export async function updatePaymentStatus(
+  id: string,
+  status: 'paid' | 'pending' | 'failed',
+): Promise<void> {
+  await updateDoc(doc(getDb(), 'payments', id), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
+}
+

@@ -66,32 +66,41 @@ async function markAllNotifsRead(ids) {
 }
 /** Subscribe to all notifications for a given user (newest first). */
 function subscribeNotifications(uid, cb) {
-    if (!uid)
+    if (!uid) {
+        cb([]);
         return () => { };
-    const q = (0, firestore_1.query)((0, firestore_1.collection)((0, firebase_instance_1.getDb)(), 'notifications'), (0, firestore_1.where)('recipientId', '==', uid), (0, firestore_1.orderBy)('createdAt', 'desc'));
-    return (0, firestore_1.onSnapshot)(q, (snap) => {
-        cb(snap.docs.map((d) => {
-            const data = d.data();
-            const type = (data.type || 'notification');
-            const icon = typeToIcon(type);
-            const read = !!data.read;
-            return {
-                id: d.id,
-                title: typeToTitle(type),
-                body: (data.message || data.body || ''),
-                time: (0, time_1.relativeTime)(data.createdAt),
-                tag: read ? '' : 'NEW',
-                tagColor: read ? '' : '#ef4444',
-                read,
-                iconBg: icon.bg,
-                iconColor: icon.color,
-                category: typeToCategory(type),
-                relatedTo: data.relatedTo,
-            };
-        }));
-    }, (err) => {
-        if (err.code !== 'permission-denied') {
-            console.warn('[agunwami-backend] Notifications snapshot error:', err);
-        }
-    });
+    }
+    try {
+        const q = (0, firestore_1.query)((0, firestore_1.collection)((0, firebase_instance_1.getDb)(), 'notifications'), (0, firestore_1.where)('recipientId', '==', uid), (0, firestore_1.orderBy)('createdAt', 'desc'));
+        return (0, firestore_1.onSnapshot)(q, (snap) => {
+            cb(snap.docs.map((d) => {
+                const data = d.data();
+                const type = (data.type || 'notification');
+                const icon = typeToIcon(type);
+                const read = !!data.read;
+                return {
+                    id: d.id,
+                    title: typeToTitle(type),
+                    body: (data.message || data.body || ''),
+                    time: (0, time_1.relativeTime)(data.createdAt),
+                    tag: read ? '' : 'NEW',
+                    tagColor: read ? '' : '#ef4444',
+                    read,
+                    iconBg: icon.bg,
+                    iconColor: icon.color,
+                    category: typeToCategory(type),
+                    relatedTo: data.relatedTo,
+                };
+            }));
+        }, (err) => {
+            if (err.code !== 'permission-denied') {
+                console.warn('[agunwami-backend] Notifications snapshot error:', err);
+            }
+        });
+    }
+    catch (err) {
+        console.warn('[agunwami-backend] subscribeNotifications error:', err);
+        cb([]);
+        return () => { };
+    }
 }

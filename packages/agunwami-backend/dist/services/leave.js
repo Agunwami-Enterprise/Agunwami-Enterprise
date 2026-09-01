@@ -1,7 +1,7 @@
 "use strict";
-// ─── Leave Request Service ────────────────────────────────────────────────────
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.subscribeLeaveRequests = subscribeLeaveRequests;
+exports.updateLeaveRequestStatus = updateLeaveRequestStatus;
 const firestore_1 = require("firebase/firestore");
 const firebase_instance_1 = require("./firebase-instance");
 const time_1 = require("../utils/time");
@@ -41,4 +41,11 @@ function subscribeLeaveRequests(cb) {
             };
         }));
     }, (err) => console.warn('[agunwami-backend] LeaveRequests snapshot error:', err));
+}
+/** Approve or reject a leave request */
+async function updateLeaveRequestStatus(id, status) {
+    await (0, firestore_1.updateDoc)((0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'leaveRequests', id), {
+        status,
+        updatedAt: (0, firestore_1.serverTimestamp)(),
+    });
 }
