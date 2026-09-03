@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { subscribeDashboard } from '@/modules/dashboard/services';
 import { SkeletonDashboard } from '@/app/components/ceo/Skeleton';
 import ClockWidget from '@/modules/time-tracking/components/ClockWidget';
+import { useAuth } from '@/lib/workstation/auth-context';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CEO DASHBOARD PAGE
@@ -21,8 +22,8 @@ export default function DashboardPage() {
   ), []);
 
   const stats = STATS.map(s => {
-    if (s.label === 'Total Workforce' && liveStats) return { ...s, value: String(liveStats.totalStaff) };
-    if (s.label === 'CEO Approvals'   && liveStats) return { ...s, value: String(liveStats.pendingApprovals) };
+    if (s.label === 'Total Employees'   && liveStats) return { ...s, value: String(liveStats.totalStaff) };
+    if (s.label === 'Pending Approvals' && liveStats) return { ...s, value: String(liveStats.pendingApprovals) };
     return s;
   });
 
@@ -32,6 +33,7 @@ export default function DashboardPage() {
     <div className="space-y-4 p-4 md:p-5">
       <HeroBanner />
       <StatsRow stats={stats} />
+      <ProjectsOverview />
       <MiddleRow />
       <BottomRow />
       <RecentActivity />
@@ -42,17 +44,38 @@ export default function DashboardPage() {
 /* ── 1. Hero Banner ────────────────────────────────────────────────────── */
 
 function HeroBanner() {
+  const { user } = useAuth();
+  const firstName = (user?.displayName || 'Agunwami').split(' ')[0];
+
   return (
-    <div
-      className="flex flex-col justify-between gap-3 rounded-2xl p-5 sm:flex-row sm:items-center"
-      style={{ background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)' }}
-    >
+    <div className="flex flex-col justify-between gap-3 rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e] sm:flex-row sm:items-center">
       <div>
-        <h1 className="text-[18px] font-bold leading-tight text-white">CEO Executive Dashboard</h1>
-        <p className="mt-0.5 text-[12px] text-white/80">Strategic Leadership &amp; Company Performance Overview</p>
+        <h1 className="text-[19px] font-bold leading-tight text-gray-800 dark:text-white">Good morning, {firstName}.</h1>
+        <LiveDateLine />
       </div>
-      <LiveClock />
+      <div className="flex flex-shrink-0 items-center gap-3">
+        <LiveClock />
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-medium text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:bg-[#1e1e1e] dark:text-gray-200 dark:hover:bg-white/5">
+            <ChartBarIcon /> Executive Report
+          </button>
+          <button className="flex items-center gap-1.5 rounded-lg bg-[#f5bd02] px-3 py-2 text-[12px] font-semibold text-[#1a1a1a] hover:opacity-90">
+            <BellOutlineIcon /> Broadcast Announcement
+          </button>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function LiveDateLine() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => setNow(new Date()), []);
+  if (!now) return null;
+  return (
+    <p className="mt-0.5 text-[12px] text-gray-500 dark:text-gray-400">
+      {now.toLocaleDateString('en-US', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })} · AE Command Centre
+    </p>
   );
 }
 
@@ -65,12 +88,9 @@ function LiveClock() {
   }, []);
   if (!now) return null;
   return (
-    <div className="text-left sm:text-right">
-      <p className="text-[20px] font-bold tabular-nums text-white">
+    <div className="text-right">
+      <p className="text-[20px] font-bold tabular-nums text-gray-800 dark:text-white">
         {now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-      </p>
-      <p className="text-[12px] text-white/80">
-        {now.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' })}
       </p>
     </div>
   );
@@ -79,29 +99,109 @@ function LiveClock() {
 /* ── 2. Stats row ──────────────────────────────────────────────────────── */
 
 const STATS = [
-  { label: 'Company Revenue', value: '$2.4M',  iconBg: '#dcfce7', iconColor: '#16a34a', icon: <DollarIcon /> },
-  { label: 'Total Workforce', value: '47',      iconBg: '#dbeafe', iconColor: '#2563eb', icon: <PeopleIcon /> },
-  { label: 'Growth Rate',     value: '+12.5%',  iconBg: '#ccfbf1', iconColor: '#0d9488', icon: <TrendIcon />  },
-  { label: 'CEO Approvals',   value: '8',       iconBg: '#fee2e2', iconColor: '#dc2626', icon: <ApprovalIcon /> },
+  { label: 'Active Projects',    value: '4',     trend: 'All operational',       up: null,  iconBg: '#fef3c7', iconColor: '#d97706', icon: <PulseIcon /> },
+  { label: 'Total Employees',    value: '248',   trend: '+3 this month',         up: true,  iconBg: '#dbeafe', iconColor: '#2563eb', icon: <PeopleIcon /> },
+  { label: 'Staff Clocked In',   value: '134',   trend: '54% of workforce',      up: null,  iconBg: '#dcfce7', iconColor: '#16a34a', icon: <ClockOutlineIcon /> },
+  { label: 'Tasks Done Today',   value: '87',    trend: 'of 124 assigned',       up: true,  iconBg: '#fef3c7', iconColor: '#d97706', icon: <PulseIcon /> },
+  { label: 'Pending Approvals',  value: '12',    trend: '2 high priority',       up: false, iconBg: '#fee2e2', iconColor: '#dc2626', icon: <ApprovalIcon /> },
+  { label: 'Combined Revenue',   value: '$9.6M', trend: 'July 2026 (MTD)',       up: true,  iconBg: '#dcfce7', iconColor: '#16a34a', icon: <DollarIcon /> },
+  { label: 'Active Clients',     value: '38',    trend: 'Across all projects',   up: true,  iconBg: '#ede9fe', iconColor: '#7c3aed', icon: <PersonIcon /> },
+  { label: 'System Health',      value: '98%',   trend: 'All services nominal',  up: true,  iconBg: '#ccfbf1', iconColor: '#0d9488', icon: <WifiIcon /> },
 ];
 
 function StatsRow({ stats }: { stats: typeof STATS }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {stats.map(s => (
-        <div key={s.label} className="flex items-start justify-between rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e]">
-          <div>
+        <div key={s.label} className="rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e]">
+          <div className="flex items-start justify-between">
             <p className="text-[11px] text-gray-500 dark:text-gray-400">{s.label}</p>
-            <p className="mt-1 text-[22px] font-bold text-gray-800 dark:text-white">{s.value}</p>
+            <div
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl"
+              style={{ backgroundColor: s.iconBg, color: s.iconColor }}
+            >
+              {s.icon}
+            </div>
           </div>
-          <div
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl"
-            style={{ backgroundColor: s.iconBg, color: s.iconColor }}
-          >
-            {s.icon}
-          </div>
+          <p className="mt-1.5 text-[22px] font-bold text-gray-800 dark:text-white">{s.value}</p>
+          <p className={`mt-1 flex items-center gap-1 text-[11px] ${s.up === true ? 'text-green-600' : s.up === false ? 'text-red-500' : 'text-gray-400'}`}>
+            {s.up === true && <ArrowUpIcon />}
+            {s.up === false && <ArrowDownIcon />}
+            {s.trend}
+          </p>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ── 2b. Projects Overview ─────────────────────────────────────────────── */
+
+const PROJECTS_OVERVIEW = [
+  {
+    slug: 'ae-hub', name: 'AE Hub', tagline: 'E-learning & EdTech Platform',
+    accent: '#f5bd02', tint: '#fffbeb', iconBg: '#fef3c7', iconColor: '#d97706', icon: <BookIcon />,
+    metrics: [{ v: '4,218', l: 'Students' }, { v: '62', l: 'Active Courses' }, { v: '$2.89M', l: 'Revenue (Jul)' }],
+    health: 94,
+  },
+  {
+    slug: 'mcs', name: 'MCS', tagline: 'Meridian Crest Solutions — Jobs & HR',
+    accent: '#2563eb', tint: '#eff6ff', iconBg: '#dbeafe', iconColor: '#2563eb', icon: <BuildingIcon />,
+    metrics: [{ v: '318', l: 'Companies' }, { v: '1,042', l: 'Job Listings' }, { v: '$1.31M', l: 'Revenue (Jul)' }],
+    health: 91,
+  },
+  {
+    slug: 'awa', name: 'AWA', tagline: 'African Women Association',
+    accent: '#f97316', tint: '#fff7ed', iconBg: '#fce7f3', iconColor: '#db2777', icon: <HeartIcon />,
+    metrics: [{ v: '2,140', l: 'Members' }, { v: '62', l: 'Events' }, { v: '$820K', l: 'Donations (Jul)' }],
+    health: 88,
+  },
+  {
+    slug: 'trendora', name: 'Trendora', tagline: 'E-Commerce & Retail Platform',
+    accent: '#16a34a', tint: '#f0fdf4', iconBg: '#dcfce7', iconColor: '#16a34a', icon: <BagIcon />,
+    metrics: [{ v: '3,841', l: 'Orders (Jul)' }, { v: '12,450', l: 'Products' }, { v: '$4.58M', l: 'Revenue (Jul)' }],
+    health: 97,
+  },
+];
+
+function ProjectsOverview() {
+  return (
+    <div>
+      <p className="mb-2 text-[14px] font-semibold text-gray-800 dark:text-white">Projects Overview</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {PROJECTS_OVERVIEW.map(p => (
+          <div key={p.slug} className="rounded-2xl border p-4 shadow-sm" style={{ backgroundColor: p.tint, borderColor: p.accent + '33' }}>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: p.iconBg, color: p.iconColor }}>{p.icon}</div>
+              <p className="text-[14px] font-bold text-gray-800 dark:text-white">{p.name}</p>
+            </div>
+            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{p.tagline}</p>
+
+            <div className="mt-3 grid grid-cols-3 gap-1 text-center">
+              {p.metrics.map(m => (
+                <div key={m.l}>
+                  <p className="truncate text-[13px] font-bold text-gray-800 dark:text-white">{m.v}</p>
+                  <p className="truncate text-[9px] text-gray-500 dark:text-gray-400">{m.l}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
+                <span>Health</span>
+                <span className="font-semibold" style={{ color: p.accent }}>{p.health}%</span>
+              </div>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                <div className="h-full rounded-full" style={{ width: `${p.health}%`, backgroundColor: p.accent }} />
+              </div>
+            </div>
+
+            <Link href={`/ceo/projects/${p.slug}`} className="mt-3 flex items-center justify-between text-[11px] font-medium text-gray-700 hover:opacity-70 dark:text-gray-200">
+              View Dashboard <ChevronRightIcon />
+            </Link>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -464,4 +564,43 @@ function GradIcon() {
 }
 function CalIcon() {
   return <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="1.5" y="2.5" width="13" height="12" rx="1.5"/><line x1="5" y1="1" x2="5" y2="4"/><line x1="11" y1="1" x2="11" y2="4"/><line x1="1.5" y1="6.5" x2="14.5" y2="6.5"/></svg>;
+}
+function PulseIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12" /></svg>;
+}
+function ClockOutlineIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12,6 12,12 16,14" /></svg>;
+}
+function PersonIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 0 0-16 0" /></svg>;
+}
+function WifiIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5a11 11 0 0 1 14 0" /><path d="M8.5 16a6 6 0 0 1 7 0" /><line x1="12" y1="19.5" x2="12" y2="19.51" /></svg>;
+}
+function ArrowUpIcon() {
+  return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5,12 12,5 19,12" /></svg>;
+}
+function ArrowDownIcon() {
+  return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="5,12 12,19 19,12" /></svg>;
+}
+function ChartBarIcon() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>;
+}
+function BellOutlineIcon() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
+}
+function BookIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>;
+}
+function BuildingIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 22V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v18" /><path d="M6 12h12" /><path d="M2 22h20" /></svg>;
+}
+function HeartIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>;
+}
+function BagIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>;
+}
+function ChevronRightIcon() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9,18 15,12 9,6" /></svg>;
 }

@@ -389,7 +389,7 @@ function AddModal({ onClose }: { onClose: () => void }) {
           <FInput label=""           placeholder="Email Address"                value={form.email}         onChange={set('email')} />
           <FSelect label=""          placeholder="Select Role"                  value={form.role}          onChange={set('role')}      options={ALL_ROLES} />
           <FInput label=""           placeholder="Department"                   value={form.department}    onChange={set('department')} />
-          <FInput label="Project ID *" placeholder="e.g. EST-AE-01, EST-AE10-00" value={form.projectId}    onChange={set('projectId')} />
+          <FInput label="Project ID *" placeholder="e.g., EXT-AE-01, EXT-MCS-05" value={form.projectId}    onChange={set('projectId')} />
           <FInput label=""           placeholder="Official Email"               value={form.officialEmail} onChange={set('officialEmail')} />
           <FInput label=""           placeholder="ID/No (optional)"             value={form.idNo}          onChange={set('idNo')} />
           {genPwd && (

@@ -20,7 +20,7 @@ interface Notif {
 const FILTER_LABELS: { key: NotifFilter; label: string; count: number }[] = [
   { key:'all',      label:'All',      count:10 },
   { key:'tasks',    label:'Tasks',    count:2  },
-  { key:'updates',  label:'Updates',  count:3  },
+  { key:'updates',  label:'Updates',  count:2  },
   { key:'payments', label:'Payments', count:2  },
   { key:'messages', label:'Messages', count:1  },
 ];
@@ -85,8 +85,8 @@ export default function NotificationsPage() {
         {/* Stat cards */}
         <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label:'Total Notifications', value:notifs.length, sub:`${unread} pinned`,   iconBg:'#dbeafe', iconColor:'#2563eb', icon:<BellIcon /> },
-            { label:'Tasks',               value:2,             sub:'New notifications',   iconBg:'#dcfce7', iconColor:'#16a34a', icon:<TaskIcon /> },
+            { label:'Total Notifications', value:notifs.length, sub:`${unread} unread`,    iconBg:'#dbeafe', iconColor:'#2563eb', icon:<BellIcon /> },
+            { label:'Tasks',               value:2,             sub:'Task notifications',  iconBg:'#dcfce7', iconColor:'#16a34a', icon:<TaskIcon /> },
             { label:'Announcements',        value:2,             sub:'CEO/Admin updates',  iconBg:'#fef9c3', iconColor:'#d97706', icon:<MegaIcon /> },
             { label:'Payments',             value:2,             sub:'Payment updates',    iconBg:'#ede9fe', iconColor:'#7c3aed', icon:<PayIcon />  },
           ].map(s => (

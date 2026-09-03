@@ -122,6 +122,8 @@ export default function AnalyticsPage() {
   const [reportType,  setReportType]  = useState('Overview');
   const [showExport,  setShowExport]  = useState(false);
   const [loading,     setLoading]     = useState(true);
+  const [projectQuery, setProjectQuery] = useState('');
+  const [projectFilter, setProjectFilter] = useState('All Projects');
 
   useEffect(() => { setLoading(false); }, []);
 
@@ -230,6 +232,32 @@ export default function AnalyticsPage() {
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor:s.iconBg, color:s.iconColor }}>{s.icon}</div>
           </div>
         ))}
+      </div>
+
+      {/* Filter by Project */}
+      <div className="mb-5 flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e] sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[13px] font-bold text-gray-800 dark:text-white">Filter by Project</p>
+          <p className="text-[11px] text-gray-400">View records for specific projects</p>
+        </div>
+        <div className="flex flex-1 items-center gap-2 sm:max-w-md">
+          <div className="flex flex-1 items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 dark:border-white/8">
+            <SearchIcon />
+            <input
+              value={projectQuery}
+              onChange={e => setProjectQuery(e.target.value)}
+              placeholder="Search project..."
+              className="w-full bg-transparent text-[12px] text-gray-700 placeholder-gray-400 outline-none dark:text-gray-200"
+            />
+          </div>
+          <select
+            value={projectFilter}
+            onChange={e => setProjectFilter(e.target.value)}
+            className="flex-shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-700 outline-none dark:border-white/8 dark:bg-[#2a2a2a] dark:text-gray-200"
+          >
+            {['All Projects', 'AE Hub', 'MCS', 'AWA', 'Trendora'].map(o => <option key={o}>{o}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Report tabs */}
@@ -491,3 +519,4 @@ function DollarIcon()   { return <svg width="16" height="16" viewBox="0 0 24 24"
 function UsersIcon()    { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>; }
 function TaskIcon()     { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9,11 12,14 22,4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>; }
 function StarIcon()     { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>; }
+function SearchIcon()   { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 text-gray-400"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>; }

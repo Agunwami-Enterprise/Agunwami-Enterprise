@@ -13,11 +13,20 @@ const NAV = [
   { label: 'Documents',        href: '/ceo/documents',         icon: <IconDoc />,     badge: false },
   { label: 'Analytics',        href: '/ceo/analytics',         icon: <IconChart />,   badge: false },
   { label: 'Leave Request',    href: '/ceo/leave-requests',    icon: <IconLeave />,   badge: false },
+  { label: 'Global Search',    href: '/ceo/search',            icon: <IconSearch />,  badge: false },
   { label: 'Staff Management', href: '/ceo/staff',             icon: <IconPeople />,  badge: false },
   { label: 'Payment',          href: '/ceo/payments',          icon: <IconCard />,    badge: false },
   { label: 'Notifications',    href: '/ceo/notifications',     icon: <IconBell />,    badge: true  },
   { label: 'Training',         href: '/ceo/training',          icon: <IconBook />,    badge: false },
+  { label: 'IT Support',       href: '/ceo/it-support',        icon: <IconLifeBuoy />,badge: false },
   { label: 'Settings',         href: '/ceo/settings',          icon: <IconGear />,    badge: false },
+];
+
+const PROJECTS = [
+  { label: 'AE Hub',   href: '/ceo/projects/ae-hub',   icon: <IconOpenBook /> },
+  { label: 'MCS',      href: '/ceo/projects/mcs',      icon: <IconBuilding /> },
+  { label: 'AWA',      href: '/ceo/projects/awa',      icon: <IconHeart /> },
+  { label: 'Trendora', href: '/ceo/projects/trendora', icon: <IconBag /> },
 ];
 
 interface Props { open: boolean; onClose: () => void; onNavigate?: () => void; }
@@ -27,15 +36,23 @@ export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
   const navRef = useRef<HTMLElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
+  const [projectsOpen, setProjectsOpen] = useState(true);
 
-  const activeHref = NAV.find(item => path === item.href || path.startsWith(item.href + '/'))?.href;
+  const allItems = [...NAV, ...PROJECTS];
+  const activeHref = allItems.find(item => path === item.href || path.startsWith(item.href + '/'))?.href;
+
+  useEffect(() => {
+    if (activeHref && PROJECTS.some(p => p.href === activeHref)) {
+      setProjectsOpen(true);
+    }
+  }, [activeHref]);
 
   useEffect(() => {
     if (!activeHref || !navRef.current) return;
     const el = itemRefs.current.get(activeHref);
     if (!el) return;
     setIndicator({ top: el.offsetTop, height: el.offsetHeight });
-  }, [activeHref]);
+  }, [activeHref, projectsOpen]);
 
   return (
     <>
@@ -96,6 +113,46 @@ export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
                   {item.badge && (
                     <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500" />
                   )}
+                </Link>
+              </div>
+            );
+          })}
+
+          {/* Projects (collapsible) */}
+          <button
+            type="button"
+            onClick={() => setProjectsOpen(v => !v)}
+            className="mt-4 mb-1 flex w-full items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#6b7280] hover:text-[#1a1a1a] dark:hover:text-white"
+          >
+            <span>Projects</span>
+            <svg
+              viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="10" height="10"
+              className={`transition-transform duration-200 ${projectsOpen ? 'rotate-180' : ''}`}
+            >
+              <polyline points="4,6 8,10 12,6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {projectsOpen && PROJECTS.map((item) => {
+            const active = item.href === activeHref;
+            return (
+              <div
+                key={item.href}
+                ref={(el) => { if (el) itemRefs.current.set(item.href, el); }}
+              >
+                <Link
+                  href={item.href}
+                  onClick={() => { onNavigate?.(); onClose(); }}
+                  className={`
+                    mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-[9px] transition-colors
+                    ${active
+                      ? 'bg-[#f5bd02] text-[#1a1a1a]'
+                      : 'text-[#4a5568] hover:bg-black/6 hover:text-[#1a1a1a] dark:text-[#9ca3af] dark:hover:bg-white/5 dark:hover:text-white'}
+                  `}
+                >
+                  <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
+                    {item.icon}
+                  </span>
+                  <span className="flex-1 truncate text-[12px] font-medium">{item.label}</span>
                 </Link>
               </div>
             );
@@ -220,6 +277,63 @@ function IconGear() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
       <circle cx="8" cy="8" r="2.5" />
       <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M2.7 2.7l1 1M12.3 12.3l1 1M13.3 2.7l-1 1M3.7 12.3l-1 1" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconLifeBuoy() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
+      <circle cx="8" cy="8" r="6.5" />
+      <circle cx="8" cy="8" r="2.5" />
+      <line x1="3.2" y1="3.2" x2="5.7" y2="5.7" /><line x1="10.3" y1="10.3" x2="12.8" y2="12.8" />
+      <line x1="12.8" y1="3.2" x2="10.3" y2="5.7" /><line x1="5.7" y1="10.3" x2="3.2" y2="12.8" />
+    </svg>
+  );
+}
+function IconSearch() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
+      <circle cx="7" cy="7" r="5" />
+      <line x1="10.8" y1="10.8" x2="15" y2="15" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconOpenBook() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
+      <path d="M8 3.5C6.8 2.6 5 2 1.5 2v10.5c3.5 0 5.3.6 6.5 1.5 1.2-.9 3-1.5 6.5-1.5V2c-3.5 0-5.3.6-6.5 1.5z" />
+      <line x1="8" y1="3.5" x2="8" y2="14" />
+    </svg>
+  );
+}
+function IconBuilding() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
+      <rect x="2.5" y="1.5" width="8" height="13" rx="0.5" />
+      <line x1="10.5" y1="6.5" x2="13.5" y2="6.5" />
+      <line x1="13.5" y1="6.5" x2="13.5" y2="14.5" />
+      <line x1="10.5" y1="14.5" x2="13.5" y2="14.5" />
+      <line x1="4.75" y1="4" x2="4.75" y2="4.01" strokeLinecap="round" />
+      <line x1="7.75" y1="4" x2="7.75" y2="4.01" strokeLinecap="round" />
+      <line x1="4.75" y1="7" x2="4.75" y2="7.01" strokeLinecap="round" />
+      <line x1="7.75" y1="7" x2="7.75" y2="7.01" strokeLinecap="round" />
+      <line x1="4.75" y1="10" x2="4.75" y2="10.01" strokeLinecap="round" />
+      <line x1="7.75" y1="10" x2="7.75" y2="10.01" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconHeart() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
+      <path d="M8 14S1.5 10 1.5 5.8A3.3 3.3 0 0 1 8 4.3a3.3 3.3 0 0 1 6.5 1.5C14.5 10 8 14 8 14z" />
+    </svg>
+  );
+}
+function IconBag() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
+      <path d="M2 5.5h12l-.8 8.5a1 1 0 0 1-1 .9H3.8a1 1 0 0 1-1-.9L2 5.5z" />
+      <path d="M5 5.5V4a3 3 0 0 1 6 0v1.5" />
     </svg>
   );
 }
