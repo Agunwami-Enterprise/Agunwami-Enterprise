@@ -111,9 +111,9 @@ export default function Footer() {
           </p>
           <Link
             href="/contact"
-            className="inline-flex items-center gap-3 bg-primary text-white text-[15px] font-semibold px-5 py-3 rounded-md hover:bg-white hover:text-black transition-all"
+            className="inline-flex items-center gap-3 bg-[#242424] hover:bg-white hover:text-black text-white text-[15px] font-semibold px-5 py-3 rounded-lg border border-white/10 transition-all"
           >
-            Partner With Us <BsArrowRight />
+            Get in Touch <BsArrowRight />
           </Link>
         </div>
       </div>

@@ -326,7 +326,7 @@ export default function PartnershipsPage() {
         description="Whether you are a nonprofit seeking digital infrastructure, a startup building
 your MVP, or a tech company needing specialized support -
 let us explore how we can work together."
-        buttonHref="/contact"
+        buttonHref="/partnerships/apply"
         buttonText="Apply for a Partnership"
       />
     </main>

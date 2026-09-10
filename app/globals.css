@@ -43,10 +43,14 @@
   --background-image-project-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/projecthero.png');
   --background-image-partnerships-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/partnerhero.png');
   --background-image-partnerships-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/partnerhero.png');
+  --background-image-apply-hero: linear-gradient(to right, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.75) 50%, rgba(255,255,255,0.30) 100%), url('/applyhero.jpg');
+  --background-image-apply-hero-dark: linear-gradient(to right, rgba(10,10,10,0.93) 0%, rgba(10,10,10,0.78) 50%, rgba(10,10,10,0.40) 100%), url('/applyhero.jpg');
   --background-image-eco-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/ecohero.png');
   --background-image-eco-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/ecohero.png');
   --background-image-contact-hero: linear-gradient(to right, #FFFFFFF7, #00000000), url('/contacthero.png');
   --background-image-contact-hero-dark: linear-gradient(to right, #0a0a0aFF 0%, #0a0a0aE6 50%, #0a0a0a80 100%), url('/contacthero.png');
+  --background-image-insights-hero: linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.70) 50%, rgba(10,10,10,0.30) 100%), url('/insightshero.jpg');
+  --background-image-insights-hero-dark: linear-gradient(to right, rgba(10,10,10,0.95) 0%, rgba(10,10,10,0.75) 50%, rgba(10,10,10,0.40) 100%), url('/insightshero.jpg');
 
   @keyframes float {
     0%, 100% { transform: translateY(0); }

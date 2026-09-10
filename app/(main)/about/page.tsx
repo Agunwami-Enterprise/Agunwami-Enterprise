@@ -7,6 +7,7 @@ import {
   RiHeartLine,
   RiUserLine,
   RiFocus3Line,
+  RiLinkedinBoxFill,
 } from "react-icons/ri";
 import { type IconType } from "react-icons";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
@@ -16,6 +17,45 @@ interface CoreValue {
   title: string;
   description: string;
 }
+
+interface LeadershipMember {
+  name: string;
+  role: string;
+  bio: string;
+  image: string;
+  linkedin: string;
+}
+
+const leadershipTeam: LeadershipMember[] = [
+  {
+    name: "Agunwami Ang.",
+    role: "Chief Executive Officer",
+    bio: "Visionary leader with over 12 years of experience in digital strategy, business development, and platform innovation.",
+    image: "/whoweare.jpg",
+    linkedin: "https://linkedin.com",
+  },
+  {
+    name: "Japhet Marshall",
+    role: "Chief Operation Officer",
+    bio: "A strategist with expertise in systems architecture, process optimization, and organizational excellence.",
+    image: "/whoweare.jpg",
+    linkedin: "https://linkedin.com",
+  },
+  {
+    name: "Jesse A.",
+    role: "Head of Technology",
+    bio: "Full-stack technologist with deep expertise in cloud infrastructure, platform engineering, and scalability.",
+    image: "/whoweare.jpg",
+    linkedin: "https://linkedin.com",
+  },
+  {
+    name: "Rita Nwosu",
+    role: "Head of Partnership",
+    bio: "Partnerships and stakeholder relations expert with a track record of building impactful collaborations.",
+    image: "/whoweare.jpg",
+    linkedin: "https://linkedin.com",
+  },
+];
 
 const coreValues: CoreValue[] = [
   {
@@ -197,6 +237,60 @@ export default function AboutPage() {
               </div>
             );
           })}
+        </div>
+      </Section>
+
+      {/* ── Our Leadership ── */}
+      <Section className="bg-white dark:bg-[#0D0D0D]">
+        <ScrollReveal direction="up">
+          <SectionWithHeading heading="Our Leadership" className="mb-4" />
+        </ScrollReveal>
+        <ScrollReveal direction="none" delay={100}>
+          <p className="text-[18px] leading-[32px] text-[#7C7C7C] dark:text-gray-400 mb-12 max-w-2xl">
+            The minds behind Agunwami Enterprise, experienced leaders passionate
+            about building systems that create opportunity and drive impact.
+          </p>
+        </ScrollReveal>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {leadershipTeam.map((member, index) => (
+            <ScrollReveal key={index} direction="up" delay={index * 100}>
+              <div className="bg-[#FAFAFA] dark:bg-white/5 rounded-2xl overflow-hidden flex flex-col h-full border border-gray-100 dark:border-white/10 hover:shadow-lg transition-shadow duration-300">
+                {/* Photo */}
+                <div className="w-full aspect-[4/3] overflow-hidden">
+                  <img
+                    src={member.image}
+                    alt={member.name}
+                    className="w-full h-full object-cover object-top transition-transform duration-500 hover:scale-105"
+                  />
+                </div>
+
+                {/* Card body */}
+                <div className="flex flex-col gap-3 p-6 flex-1">
+                  <h3 className="text-[22px] font-primary font-semibold text-gray-900 dark:text-white leading-snug">
+                    {member.name}
+                  </h3>
+                  <p className="text-[15px] font-semibold text-primary">
+                    {member.role}
+                  </p>
+                  <p className="text-[15px] leading-[26px] text-[#7C7C7C] dark:text-gray-400 flex-1">
+                    {member.bio}
+                  </p>
+
+                  {/* LinkedIn */}
+                  <a
+                    href={member.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-[14px] font-medium text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors duration-200 mt-2 w-fit"
+                  >
+                    <RiLinkedinBoxFill className="text-[28px] text-[#0A66C2]" />
+                    <span>LinkedIn ↗</span>
+                  </a>
+                </div>
+              </div>
+            </ScrollReveal>
+          ))}
         </div>
       </Section>
 

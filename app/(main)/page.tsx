@@ -161,7 +161,7 @@ export default function MainPage() {
                   Explore Our Work <BsArrowRight />
                 </Buttons>
               </Link>
-              <Link href={"/contact"} className="w-full sm:w-auto">
+              <Link href={"/partnerships/apply"} className="w-full sm:w-auto">
                 <Buttons lg secondaryButton className="w-full">
                   Partner With Us
                 </Buttons>
