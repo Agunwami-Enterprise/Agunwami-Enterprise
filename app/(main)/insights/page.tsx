@@ -17,7 +17,12 @@ import {
 interface Article {
   id: number;
   title: string;
-  category: "Infrastructure" | "Design" | "Technology" | "Partnerships" | "Insights";
+  category:
+    | "Infrastructure"
+    | "Design"
+    | "Technology"
+    | "Partnerships"
+    | "Insights";
   excerpt: string;
   date: string;
   image: string;
@@ -114,7 +119,10 @@ export default function InsightsPage() {
     });
   }, [selectedCategory, searchQuery]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredArticles.length / itemsPerPage));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredArticles.length / itemsPerPage),
+  );
   const currentArticles = filteredArticles.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
@@ -129,7 +137,7 @@ export default function InsightsPage() {
           <img
             src="/ecobg.png"
             alt=""
-            className="w-full h-fit scale-[0.6] mt-[-280px]"
+            className="w-full h-fit scale-[1] mt-[-280px] ml-[-200px] opacity-[0.4]"
           />
         </div>
 
@@ -149,8 +157,8 @@ export default function InsightsPage() {
 
           <ScrollReveal direction="up" delay={220}>
             <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[26px] leading-relaxed text-gray-300">
-              Ideas, strategies, and perspectives on building digital infrastructure
-              that drives real impact.
+              Ideas, strategies, and perspectives on building digital
+              infrastructure that drives real impact.
             </p>
           </ScrollReveal>
         </div>
@@ -292,20 +300,22 @@ export default function InsightsPage() {
           {/* ── Pagination ── */}
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 pt-8">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={cn(
-                    "w-10 h-10 rounded-lg text-sm font-semibold transition-all cursor-pointer",
-                    currentPage === page
-                      ? "bg-primary text-white shadow-md"
-                      : "bg-white dark:bg-[#161616] text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10 hover:border-primary",
-                  )}
-                >
-                  {page}
-                </button>
-              ))}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={cn(
+                      "w-10 h-10 rounded-lg text-sm font-semibold transition-all cursor-pointer",
+                      currentPage === page
+                        ? "bg-primary text-white shadow-md"
+                        : "bg-white dark:bg-[#161616] text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10 hover:border-primary",
+                    )}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
               {currentPage < totalPages && (
                 <button
                   onClick={() => setCurrentPage((p) => p + 1)}

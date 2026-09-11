@@ -8,6 +8,7 @@ import Section, {
 import { projects } from "@/lib/dummy";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Projects() {
   return (
@@ -93,7 +94,12 @@ export default function Projects() {
 
                             <div className="space-y-2">
                               <h1 className="text-[34px] leading-[32px] font-primary font-[400] tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-                                {project.name}
+                                <Link
+                                  href={project.link}
+                                  className="hover:text-primary transition-colors"
+                                >
+                                  {project.name}
+                                </Link>
                                 {project.status === "DISABLED" && (
                                   <span className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-md tracking-wider uppercase">
                                     Coming Soon
