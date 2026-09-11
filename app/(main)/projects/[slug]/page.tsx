@@ -1,142 +1,42 @@
 import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
 import Section from "@/app/components/common/ui/Section";
 import { cn } from "@/lib/utils";
+import { getProjectBySlug, projects } from "@/lib/dummy";
 import {
   RiStarFill,
   RiArrowRightLine,
   RiArrowLeftLine,
-  RiCheckboxCircleLine,
-  RiDoubleQuotesL,
+  RiStore2Line,
 } from "react-icons/ri";
-
-interface ProjectDetail {
-  slug: string;
-  name: string;
-  category: string;
-  subtitle: string;
-  heroBgClass: string;
-  stats: { value: string; label: string }[];
-  overview: string;
-  challenge: string;
-  solution: string;
-  technologies: string[];
-  deliverables: string[];
-  testimonials: {
-    quote: string;
-    author: string;
-    role: string;
-    avatar: string;
-    featured?: boolean;
-    rating: number;
-  }[];
-}
-
-const PROJECTS_DATA: Record<string, ProjectDetail> = {
-  "delight-tees": {
-    slug: "delight-tees",
-    name: "Delight Tees",
-    category: "E-Commerce",
-    subtitle: "A custom apparel platform built to scale.",
-    heroBgClass: "bg-delight-hero dark:bg-delight-hero-dark",
-    stats: [
-      { value: "3×", label: "CONVERSION RATE INCREASE" },
-      { value: "40%", label: "REDUCTION IN ABANDONED CARTS" },
-      { value: "2 weeks", label: "LAUNCH TURNAROUND" },
-    ],
-    overview:
-      "Premium apparel brand specializing in custom-designed t-shirts and merchandise. Delight Tees needed a digital storefront that matched the quality and personality of their products.",
-    challenge:
-      "Needed a modern e-commerce platform with inventory management, secure payments, and a seamless shopping experience that could handle high-volume seasonal demand.",
-    solution:
-      "Built a custom e-commerce platform with Stripe integration, real-time inventory tracking, order management dashboard, and responsive product catalog. Included automated order confirmation emails and an admin panel for the founding team.",
-    technologies: ["Next.js", "Tailwind CSS", "Supabase", "Vercel"],
-    deliverables: [
-      "Custom storefront with product catalog",
-      "Stripe payment integration",
-      "Real-time inventory dashboard",
-      "Order tracking & confirmation system",
-      "Mobile-responsive design",
-      "Admin management panel",
-    ],
-    testimonials: [
-      {
-        quote:
-          "“Agunwami Enterprise understood exactly what we needed — a store that felt as premium as our products. The build was fast, the quality was exceptional, and our customers constantly compliment the experience. We saw a significant jump in completed purchases almost immediately after launch.”",
-        author: "Chidi Okafor",
-        role: "Founder, Delight Tees",
-        avatar: "/whoweare.jpg",
-        featured: true,
-        rating: 5,
-      },
-      {
-        quote:
-          "“Managing inventory used to be a nightmare. Now everything is tracked in one place and we get alerts before we run out of stock. The admin panel alone has saved us hours every week.”",
-        author: "Amaka Eze",
-        role: "Operations Lead, Delight Tees",
-        avatar: "/whoweare.jpg",
-        rating: 5,
-      },
-    ],
-  },
-  trendora: {
-    slug: "trendora",
-    name: "Trendora Store",
-    category: "Retail",
-    subtitle:
-      "Modern retail platform offering curated fashion and lifestyle products.",
-    heroBgClass: "bg-delight-hero dark:bg-delight-hero-dark",
-    stats: [
-      { value: "4×", label: "ONLINE SALES GROWTH" },
-      { value: "35%", label: "INCREASE IN CHECKOUT RATE" },
-      { value: "3 weeks", label: "LAUNCH TURNAROUND" },
-    ],
-    overview:
-      "Trendora is a fast-growing modern lifestyle brand offering curated apparel and retail goods to thousands of active customers across emerging markets.",
-    challenge:
-      "Needed a scalable retail platform with multi-vendor support, inventory management, fast checkout, and responsive analytics to support expanding sales volume.",
-    solution:
-      "Created a feature-rich retail platform with high-speed product catalogs, automated vendor onboarding, order tracking, and custom conversion funnels.",
-    technologies: ["Next.js", "Tailwind CSS", "Stripe", "Supabase", "Vercel"],
-    deliverables: [
-      "Dynamic catalog with multi-vendor support",
-      "One-click checkout and payment processing",
-      "Vendor analytics and sales dashboard",
-      "Automated logistics & order fulfillment pipeline",
-      "Cross-device responsive storefront",
-      "Role-based administrative controls",
-    ],
-    testimonials: [
-      {
-        quote:
-          "“Agunwami Enterprise delivered an experience far beyond standard e-commerce templates. Our customer engagement and retention skyrocketed after launch.”",
-        author: "Trendora Leadership",
-        role: "Managing Director, Trendora Store",
-        avatar: "/whoweare.jpg",
-        featured: true,
-        rating: 5,
-      },
-    ],
-  },
-};
+import { TbQuote } from "react-icons/tb";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+export function generateStaticParams() {
+  return projects.map((p) => ({
+    slug: p.link.replace(/^\/projects\//, ""),
+  }));
+}
+
 export default async function ProjectSinglePage({ params }: PageProps) {
   const { slug } = await params;
-  // Normalized lookup or fallback to Delight Tees
-  const project =
-    PROJECTS_DATA[slug.toLowerCase()] ||
-    (slug.toLowerCase().includes("delight")
-      ? PROJECTS_DATA["delight-tees"]
-      : null) ||
-    (slug.toLowerCase().includes("trendora")
-      ? PROJECTS_DATA["trendora"]
-      : null) ||
-    PROJECTS_DATA["delight-tees"];
+  const project = getProjectBySlug(slug);
+
+  if (!project) {
+    notFound();
+  }
+
+  const subtitle = project.subtitle || project.homeDescription;
+  const heroBgClass = project.heroBgClass || "bg-project-hero dark:bg-project-hero-dark";
+  const stats = project.stats || [];
+  const technologies = project.technologyStack || [];
+  const deliverables = project.deliverables || project.key || [];
+  const testimonials = project.testimonials || [];
 
   return (
     <main className="flex flex-col items-center w-full bg-[#FAFAFA] dark:bg-[#0a0a0a]">
@@ -144,7 +44,7 @@ export default async function ProjectSinglePage({ params }: PageProps) {
       <Section
         className={cn(
           "relative flex flex-col justify-between min-h-[100dvh] bg-cover bg-center bg-no-repeat pt-28 md:pt-36 pb-16",
-          project.heroBgClass,
+          heroBgClass,
         )}
       >
         {/* Subtle circuit pattern overlay */}
@@ -173,8 +73,13 @@ export default async function ProjectSinglePage({ params }: PageProps) {
 
           {/* Category Badge */}
           <ScrollReveal direction="down" delay={60}>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase bg-primary/20 text-primary border border-primary/40 w-fit backdrop-blur-md">
-              <span>{project.category}</span>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-bold tracking-wider uppercase bg-[#C28E2C] text-white w-fit shadow-sm">
+              {project.icon ? (
+                <project.icon className="text-[13px]" />
+              ) : (
+                <RiStore2Line className="text-[13px]" />
+              )}
+              <span>{project.projectCategory}</span>
             </div>
           </ScrollReveal>
 
@@ -188,7 +93,7 @@ export default async function ProjectSinglePage({ params }: PageProps) {
           {/* Subtitle */}
           <ScrollReveal direction="up" delay={200}>
             <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] leading-relaxed text-gray-300 font-light">
-              {project.subtitle}
+              {subtitle}
             </p>
           </ScrollReveal>
         </div>
@@ -205,31 +110,31 @@ export default async function ProjectSinglePage({ params }: PageProps) {
       </Section>
 
       {/* ── Gold Stats Bar ── */}
-      <section className="w-full bg-primary py-8 md:py-10 px-6 md:px-20 text-white shadow-md">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-8 text-center divide-y sm:divide-y-0 sm:divide-x divide-white/20">
-          {project.stats.map((stat, idx) => (
-            <div
-              key={idx}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1.5",
-                idx > 0 ? "pt-6 sm:pt-0" : "",
-              )}
-            >
-              <span className="text-[40px] md:text-[52px] font-primary font-bold leading-none tracking-tight">
-                {stat.value}
-              </span>
-              <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-white/90">
-                {stat.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {stats.length > 0 && (
+        <section className="w-full bg-primary py-8 md:py-10 px-6 md:px-20 text-white shadow-md">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-8 text-center divide-y sm:divide-y-0 sm:divide-x divide-white/20">
+            {stats.map((stat, idx) => (
+              <div
+                key={idx}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1.5",
+                  idx > 0 ? "pt-6 sm:pt-0" : "",
+                )}
+              >
+                <span className="text-[40px] md:text-[52px] font-primary font-bold leading-none tracking-tight">
+                  {stat.value}
+                </span>
+                <span className="text-[11px] tracking-[0.2em] uppercase font-semibold text-white/90">
+                  {stat.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Project Overview & Deliverables ── */}
       <section className="relative w-full px-4 md:px-20 py-16 md:py-24 overflow-hidden">
-        {/* Subtle background circuit pattern */}
-
         <div className="relative z-10 max-w-6xl mx-auto">
           <ScrollReveal direction="up">
             <div className="bg-white dark:bg-[#141414] rounded-3xl border border-gray-200/80 dark:border-white/10 shadow-sm p-8 md:p-14">
@@ -244,75 +149,85 @@ export default async function ProjectSinglePage({ params }: PageProps) {
                   </div>
 
                   <p className="text-[16px] md:text-[17px] leading-[28px] text-gray-700 dark:text-gray-300">
-                    {project.overview}
+                    {project.description}
                   </p>
 
                   {/* Challenge */}
-                  <div className="space-y-2.5">
-                    <h3 className="text-[12px] font-bold tracking-[0.18em] uppercase text-gray-900 dark:text-white">
-                      The Challenge
-                    </h3>
-                    <p className="text-[15px] leading-[26px] text-gray-600 dark:text-gray-400">
-                      {project.challenge}
-                    </p>
-                  </div>
+                  {project.challenges && (
+                    <div className="space-y-2.5">
+                      <h3 className="text-[12px] font-bold tracking-[0.18em] uppercase text-gray-900 dark:text-white">
+                        The Challenge
+                      </h3>
+                      <p className="text-[15px] leading-[26px] text-gray-600 dark:text-gray-400">
+                        {project.challenges}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Solution */}
-                  <div className="space-y-2.5">
-                    <h3 className="text-[12px] font-bold tracking-[0.18em] uppercase text-gray-900 dark:text-white">
-                      Our Solution
-                    </h3>
-                    <p className="text-[15px] leading-[26px] text-gray-600 dark:text-gray-400">
-                      {project.solution}
-                    </p>
-                  </div>
+                  {project.solution && (
+                    <div className="space-y-2.5">
+                      <h3 className="text-[12px] font-bold tracking-[0.18em] uppercase text-gray-900 dark:text-white">
+                        Our Solution
+                      </h3>
+                      <p className="text-[15px] leading-[26px] text-gray-600 dark:text-gray-400">
+                        {project.solution}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Technologies */}
-                  <div className="space-y-3 pt-2">
-                    <h3 className="text-[12px] font-bold tracking-[0.18em] uppercase text-gray-900 dark:text-white">
-                      Technologies Used
-                    </h3>
-                    <div className="flex flex-wrap gap-2.5">
-                      {project.technologies.map((tech) => (
-                        <span
-                          key={tech}
-                          className="px-4 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300"
-                        >
-                          {tech}
-                        </span>
-                      ))}
+                  {technologies.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      <h3 className="text-[12px] font-bold tracking-[0.18em] uppercase text-gray-900 dark:text-white">
+                        Technologies Used
+                      </h3>
+                      <div className="flex flex-wrap gap-2.5">
+                        {technologies.map((tech) => (
+                          <span
+                            key={tech}
+                            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300"
+                          >
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Right Column: Deliverables Card */}
-                <div className="bg-[#FAF9F5] dark:bg-[#1A1A1A] rounded-2xl border border-gray-200/70 dark:border-white/10 p-7 md:p-8 space-y-6">
-                  <h3 className="text-[13px] font-bold tracking-[0.18em] uppercase text-gray-900 dark:text-white">
-                    What We Delivered
-                  </h3>
+                {deliverables.length > 0 && (
+                  <div className="bg-[#FAF9F5] dark:bg-[#1A1A1A] rounded-2xl border border-gray-200/70 dark:border-white/10 p-7 md:p-8 space-y-6">
+                    <h3 className="text-[13px] font-bold tracking-[0.18em] uppercase text-gray-900 dark:text-white">
+                      What We Delivered
+                    </h3>
 
-                  <ul className="space-y-4">
-                    {project.deliverables.map((item, idx) => (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-3 text-[14px] text-gray-700 dark:text-gray-300 leading-snug"
+                    <ul className="space-y-4">
+                      {deliverables.map((item, idx) => (
+                        <li
+                          key={idx}
+                          className="flex items-start gap-3 text-[14px] text-gray-700 dark:text-gray-300 leading-snug"
+                        >
+                          <span className="text-primary font-bold text-[13px] leading-none shrink-0 mt-0.5 select-none">
+                            ✦
+                          </span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="pt-4 border-t border-gray-200/60 dark:border-white/10">
+                      <Link
+                        href="/partnerships/apply"
+                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-semibold text-[14px] hover:bg-primary dark:hover:bg-primary dark:hover:text-white transition-all shadow-sm"
                       >
-                        <span className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="pt-4 border-t border-gray-200/60 dark:border-white/10">
-                    <Link
-                      href="/partnerships/apply"
-                      className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-semibold text-[14px] hover:bg-primary dark:hover:bg-primary dark:hover:text-white transition-all shadow-sm"
-                    >
-                      <span>Start a Similar Project</span>
-                      <RiArrowRightLine className="text-base" />
-                    </Link>
+                        <span>Start a Similar Project</span>
+                        <RiArrowRightLine className="text-base" />
+                      </Link>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </ScrollReveal>
@@ -320,8 +235,17 @@ export default async function ProjectSinglePage({ params }: PageProps) {
       </section>
 
       {/* ── Client Testimonials ── */}
-      {project.testimonials.length > 0 && (
+      {testimonials.length > 0 && (
         <section className="relative w-full px-4 md:px-20 pb-24 overflow-hidden">
+          {/* Subtle concentric radar watermark */}
+          <div className="absolute right-[-8%] top-[0%] w-[600px] h-[600px] pointer-events-none opacity-[0.14] dark:opacity-[0.05] select-none">
+            <img
+              src="/ecocard.png"
+              alt=""
+              className="w-full h-full object-contain"
+            />
+          </div>
+
           <div className="relative z-10 max-w-6xl mx-auto space-y-12">
             <div>
               <h2 className="text-[32px] md:text-[42px] font-primary font-normal tracking-tight text-gray-900 dark:text-white">
@@ -335,53 +259,58 @@ export default async function ProjectSinglePage({ params }: PageProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {project.testimonials.map((t, idx) => (
+              {testimonials.map((t, idx) => (
                 <ScrollReveal key={idx} delay={idx * 120}>
-                  <div className="h-full bg-white dark:bg-[#141414] rounded-2xl border border-gray-200/80 dark:border-white/10 p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
-                    <div className="space-y-5">
-                      {/* Quote Icon & Stars */}
-                      <div className="flex items-center justify-between">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                          <RiDoubleQuotesL className="text-[20px]" />
-                        </div>
-                        <div className="flex items-center gap-1 text-primary">
-                          {Array.from({ length: t.rating }).map((_, i) => (
-                            <RiStarFill key={i} className="text-sm" />
-                          ))}
-                        </div>
+                  <div className="h-full bg-white dark:bg-[#141414] rounded-2xl border border-gray-100/80 dark:border-white/5 p-8 md:p-10 flex flex-col justify-between shadow-[0_4px_25px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_25px_rgba(0,0,0,0.2)] hover:shadow-md transition-shadow">
+                    <div>
+                      {/* Top Quote Squircle */}
+                      <div className="w-14 h-14 rounded-2xl bg-[#F8F5EE] dark:bg-white/5 flex items-center justify-center">
+                        <TbQuote className="text-[#C28E2C] text-[28px]" />
                       </div>
 
-                      <p className="text-[15px] md:text-[16px] leading-[28px] text-gray-700 dark:text-gray-300 italic">
+                      {/* 5 Stars placed below quote box */}
+                      <div className="flex items-center gap-1.5 text-[#C28E2C] mt-6 mb-6">
+                        {Array.from({ length: t.rating }).map((_, i) => (
+                          <RiStarFill key={i} className="text-[16px]" />
+                        ))}
+                      </div>
+
+                      {/* Quote Text: NOT ITALIC */}
+                      <p className="text-[16px] md:text-[17px] leading-[28px] md:leading-[30px] text-[#2D3748] dark:text-gray-200 font-normal">
                         {t.quote}
                       </p>
                     </div>
 
-                    {/* Author row */}
-                    <div className="mt-8 pt-5 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-11 h-11 rounded-full overflow-hidden bg-gray-200 dark:bg-white/10">
-                          <Image
-                            src={t.avatar}
-                            alt={t.author}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                        <div>
-                          <p className="text-[15px] font-semibold text-gray-900 dark:text-white leading-tight">
-                            {t.author}
-                          </p>
-                          <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
-                            {t.role}
-                          </p>
-                        </div>
-                      </div>
+                    {/* Divider and Author Row */}
+                    <div>
+                      <div className="w-full h-px bg-[#F1F3F5] dark:bg-white/10 mt-8 mb-6" />
 
-                      {t.featured && (
-                        <span className="px-3 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase bg-primary/15 text-primary border border-primary/30">
-                          Featured
-                        </span>
-                      )}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3.5">
+                          <div className="relative w-12 h-12 rounded-full overflow-hidden shrink-0 border border-gray-100 dark:border-white/10">
+                            <Image
+                              src={t.avatar}
+                              alt={t.author}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-[15px] font-bold text-gray-900 dark:text-white leading-tight">
+                              {t.author}
+                            </p>
+                            <p className="text-[13px] text-[#6B7280] dark:text-gray-400 mt-1">
+                              {t.role}
+                            </p>
+                          </div>
+                        </div>
+
+                        {t.featured && (
+                          <span className="px-3.5 py-1.5 rounded-[3px] text-[11px] font-bold tracking-wider uppercase bg-[#C28E2C] text-white shadow-sm">
+                            FEATURED
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </ScrollReveal>
