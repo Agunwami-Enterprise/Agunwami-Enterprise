@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useActionState } from "react";
+import React, { useActionState, useState } from "react";
 import Buttons from "@/app/components/common/ui/Buttons";
 import { BiSend } from "react-icons/bi";
 import { sendContactEmail, type ActionState } from "@/lib/actions/contact";
@@ -13,6 +13,7 @@ const initialState: ActionState = {
 
 export default function ContactForm() {
   const [state, action, isPending] = useActionState(sendContactEmail, initialState);
+  const [projectType, setProjectType] = useState("");
 
   const inputClass =
     "px-4 py-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-600";
@@ -86,6 +87,8 @@ export default function ContactForm() {
           id="projectType"
           name="projectType"
           required
+          value={projectType}
+          onChange={(e) => setProjectType(e.target.value)}
           className={`${inputClass} appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20fill%3D%27none%27%20viewBox%3D%270%200%2020%2020%27%3E%3Cpath%20stroke%3D%27%236b7280%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%20stroke-width%3D%271.5%27%20d%3D%27m6%208%204%204%204-4%27%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat`}
         >
           <option value="" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Select a Project type</option>
@@ -97,6 +100,15 @@ export default function ContactForm() {
           <option value="Partnership Inquiry" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Partnership Inquiry</option>
           <option value="Other" className="bg-white dark:bg-[#141414] text-gray-900 dark:text-white">Other</option>
         </select>
+        {projectType === "Other" && (
+          <textarea
+            id="projectTypeOther"
+            name="projectTypeOther"
+            rows={3}
+            placeholder="Please describe your project type..."
+            className={`${inputClass} resize-none`}
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

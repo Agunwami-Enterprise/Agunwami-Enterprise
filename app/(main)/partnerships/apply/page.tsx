@@ -54,13 +54,16 @@ type FormData = {
   yearsInOperation: string;
   // Step 3
   helpNeeded: string[];
+  otherHelpNeeded: string;
   projectDescription: string;
   // Step 4
   challenges: string[];
+  otherChallenge: string;
   desiredOutcome: string;
   currentSolutionType: string;
   // Step 5
   services: string[];
+  otherService: string;
   additionalNotes: string;
   // Step 6
   budgetRange: string;
@@ -68,6 +71,8 @@ type FormData = {
   deadline: string;
   decisionMakers: string;
   otherStakeholders: string;
+  // Other specify
+  otherRole: string;
 };
 
 /* -----------------------------------------------------------------------
@@ -209,6 +214,7 @@ const INITIAL: FormData = {
   phone: "",
   linkedin: "",
   role: "",
+  otherRole: "",
   orgName: "",
   orgType: "",
   industry: "",
@@ -217,11 +223,14 @@ const INITIAL: FormData = {
   location: "",
   yearsInOperation: "",
   helpNeeded: [],
+  otherHelpNeeded: "",
   projectDescription: "",
   challenges: [],
+  otherChallenge: "",
   desiredOutcome: "",
   currentSolutionType: "",
   services: [],
+  otherService: "",
   additionalNotes: "",
   budgetRange: "",
   startTime: "",
@@ -290,15 +299,18 @@ function Textarea({
   onChange,
   rows = 4,
   cream,
+  id,
 }: {
   placeholder?: string;
   value: string;
   onChange: (v: string) => void;
   rows?: number;
   cream?: boolean;
+  id?: string;
 }) {
   return (
     <textarea
+      id={id}
       rows={rows}
       placeholder={placeholder}
       value={value}
@@ -454,6 +466,17 @@ function StepAboutYou({
             />
           ))}
         </div>
+        {data.role === "Other" && (
+          <div className="mt-3">
+            <Textarea
+              id="otherRole"
+              placeholder="Please specify your role..."
+              rows={3}
+              value={data.otherRole}
+              onChange={(v) => set("otherRole", v)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -602,6 +625,17 @@ function StepProject({
             );
           })}
         </div>
+        {data.helpNeeded.includes("Other") && (
+          <div className="mt-3">
+            <Textarea
+              id="otherHelpNeeded"
+              placeholder="Please describe what you need help with..."
+              rows={3}
+              value={data.otherHelpNeeded}
+              onChange={(v) => setField("otherHelpNeeded", v)}
+            />
+          </div>
+        )}
       </div>
 
       <div>
@@ -661,6 +695,17 @@ function StepSituation({
             />
           ))}
         </div>
+        {data.challenges.includes("Other") && (
+          <div className="mt-3">
+            <Textarea
+              id="otherChallenge"
+              placeholder="Please describe your challenge..."
+              rows={3}
+              value={data.otherChallenge}
+              onChange={(v) => set("otherChallenge", v)}
+            />
+          </div>
+        )}
       </div>
 
       <div>
@@ -752,6 +797,17 @@ function StepServices({
             );
           })}
         </div>
+        {data.services.includes("Other") && (
+          <div className="mt-3">
+            <Textarea
+              id="otherService"
+              placeholder="Please describe the service you need..."
+              rows={3}
+              value={data.otherService}
+              onChange={(v) => setField("otherService", v)}
+            />
+          </div>
+        )}
       </div>
 
       <div>
