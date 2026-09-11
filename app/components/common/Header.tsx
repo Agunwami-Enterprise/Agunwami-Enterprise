@@ -33,7 +33,7 @@ export default function Header() {
   ];
 
   return (
-    <header className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[80%] max-w-[80%]">
+    <header className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[70%] max-w-[80%]">
       <div
         className={cn(
           "bg-white/80 dark:bg-[#111111]/85 backdrop-blur-md border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-black/40 px-4 md:px-8 py-3 transition-all duration-300",
