@@ -55,6 +55,8 @@
   --background-image-delight-hero-dark: linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.70) 50%, rgba(10,10,10,0.40) 100%), url('/delighthero.png');
   --background-image-awa-hero: linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.60) 50%, rgba(10,10,10,0.30) 100%), url('/awahero.jpg');
   --background-image-awa-hero-dark: linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.70) 50%, rgba(10,10,10,0.40) 100%), url('/awahero.jpg');
+  --background-image-trendora-hero: linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.60) 50%, rgba(10,10,10,0.30) 100%), url('/trendorahero.png');
+  --background-image-trendora-hero-dark: linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.70) 50%, rgba(10,10,10,0.40) 100%), url('/trendorahero.png');
 
   @keyframes float {
     0%, 100% { transform: translateY(0); }
