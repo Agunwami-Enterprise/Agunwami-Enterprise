@@ -1,6 +1,7 @@
 import CTA from "@/app/components/common/CTA";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
 import Badge from "@/app/components/common/ui/Badge";
+import Buttons from "@/app/components/common/ui/Buttons";
 import Card from "@/app/components/common/ui/Card";
 import Section, {
   SectionWithHeading,
@@ -141,6 +142,30 @@ export default function Projects() {
                                 </div>
                               ))}
                             </div>
+                          </div>
+
+                          <div className="pt-2">
+                            <Link href={project.link} className="w-fit">
+                              <Buttons
+                                md
+                                className="w-fit gap-2 text-white bg-black dark:bg-white dark:text-black transition-colors hover:bg-secondary hover:border-secondary hover:text-white dark:hover:bg-primary dark:hover:border-primary dark:hover:text-black"
+                              >
+                                Learn More
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M17 8l4 4m0 0l-4 4m4-4H3"
+                                  />
+                                </svg>
+                              </Buttons>
+                            </Link>
                           </div>
                         </div>
                       </div>

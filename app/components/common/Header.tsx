@@ -53,9 +53,6 @@ export default function Header() {
                 className="object-contain"
               />
             </div>
-            <h1 className="text-lg md:text-2xl 3xl:text-3xl 4xl:text-4xl font-primary font-normal tracking-tight text-gray-900 dark:text-white">
-              Agunwami Enterprise
-            </h1>
           </Link>
 
           {/* Desktop Nav */}
@@ -152,7 +149,9 @@ export default function Header() {
                             : "hover:bg-gray-100 dark:hover:bg-white/5 text-gray-800 dark:text-gray-200",
                         )}
                       >
-                        <div className="text-sm font-semibold">{item.title}</div>
+                        <div className="text-sm font-semibold">
+                          {item.title}
+                        </div>
                         <div className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
                           {item.description}
                         </div>
