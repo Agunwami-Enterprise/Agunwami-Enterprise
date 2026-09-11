@@ -29,7 +29,7 @@ export default function MainPage() {
       ],
     },
     {
-      title: "Graphic Design Systes",
+      title: "Graphic Design Systems",
       description: ["Brand identity", "Visual consistency", "Asset management"],
     },
     {
@@ -158,7 +158,7 @@ export default function MainPage() {
             <div className="mt-6 flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
               <Link href={"/projects"} className="w-full sm:w-auto">
                 <Buttons lg primaryButton className="w-full">
-                  Explore Our Work <BsArrowRight />
+                  Explore Our Projects <BsArrowRight />
                 </Buttons>
               </Link>
               <Link href={"/partnerships/apply"} className="w-full sm:w-auto">
@@ -365,8 +365,8 @@ export default function MainPage() {
                   item.status === "ACTIVE"
                     ? "bg-[#1A1A1A] hover:bg-primary/100 hover:-translate-y-1 group"
                     : item.status === "DISABLED"
-                    ? "bg-[#F5F2EC]/50 dark:bg-[#1C1C1C]/50 opacity-50 cursor-not-allowed pointer-events-none"
-                    : "bg-[#F5F2EC] dark:bg-[#1C1C1C] hover:-translate-y-1",
+                      ? "bg-[#F5F2EC]/50 dark:bg-[#1C1C1C]/50 opacity-50 cursor-not-allowed pointer-events-none"
+                      : "bg-[#F5F2EC] dark:bg-[#1C1C1C] hover:-translate-y-1",
                 )}
               >
                 {/* Concentric circles pattern */}
@@ -386,8 +386,8 @@ export default function MainPage() {
                       item.status === "ACTIVE"
                         ? "bg-primary text-white"
                         : item.status === "DISABLED"
-                        ? "bg-gray-300 dark:bg-white/5 text-gray-500 dark:text-gray-600"
-                        : "bg-[#E8E5DF] dark:bg-white/10 text-[#555555] dark:text-gray-400",
+                          ? "bg-gray-300 dark:bg-white/5 text-gray-500 dark:text-gray-600"
+                          : "bg-[#E8E5DF] dark:bg-white/10 text-[#555555] dark:text-gray-400",
                     )}
                   >
                     {item.status}
@@ -398,7 +398,9 @@ export default function MainPage() {
                   <h2
                     className={cn(
                       "text-[28px] md:text-[34px] font-primary font-normal leading-tight",
-                      item.status === "ACTIVE" ? "text-white" : "text-gray-900 dark:text-white",
+                      item.status === "ACTIVE"
+                        ? "text-white"
+                        : "text-gray-900 dark:text-white",
                     )}
                   >
                     {item.title}
