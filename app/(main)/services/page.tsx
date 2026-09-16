@@ -162,27 +162,27 @@ export default function Services() {
       {/* ── Hero ── */}
       <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-services-hero dark:bg-services-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-16">
         {/* Text block — left column */}
-        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
+        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-20 pointer-events-none">
           <img
             src="/ecobg.png"
             alt=""
             className="w-full h-fit scale-[0.6] mt-[-300px]"
           />
         </div>
-        <div className="flex flex-col gap-6 justify-center flex-1 w-full">
+        <div className="flex flex-col gap-6 justify-center flex-1 w-full relative z-10">
           <ScrollReveal direction="none">
             <Badge title="Platform Solutions" type="primary" />
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={100}>
-            <h1 className="text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 dark:text-white w-full">
+            <h1 className="text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-white drop-shadow-sm w-full">
               Services Built for <br className="hidden sm:block" />
               <span className="text-primary">Impact &amp; Scale</span>
             </h1>
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={220}>
-            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C]">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-gray-200 drop-shadow-sm">
               Comprehensive platform solutions designed to solve real-world
               challenges and empower your organization&apos;s digital
               transformation.
@@ -205,13 +205,13 @@ export default function Services() {
           <SectionWithHeading heading="Core Services" />
         </ScrollReveal>
         <div className="flex flex-col md:flex-row items-center gap-10 justify-between">
-          <ScrollReveal direction="left" className="overflow-hidden w-fit">
+          <ScrollReveal direction="left" className="overflow-hidden rounded-xl w-full md:w-fit shadow-lg">
             <Image
               src="/coreservices.jpg"
-              alt=""
-              width={100}
-              height={100}
-              className="relative w-full h-full object-cover hover:scale-105 transition-all duration-300 ease-in-out"
+              alt="Core Services - Platform Systems, Architecture and Engineering"
+              width={700}
+              height={450}
+              className="relative w-full h-full object-cover rounded-xl hover:scale-105 transition-all duration-300 ease-in-out"
               style={{ width: "100%", maxWidth: "700px" }}
             />
           </ScrollReveal>
@@ -239,13 +239,13 @@ export default function Services() {
       </Section>
 
       <Section className="flex flex-col md:flex-row items-start md:items-center gap-10 justify-between">
-        <ScrollReveal direction="left" className="w-full md:w-[40%]">
+        <ScrollReveal direction="left" className="w-full md:w-[45%] overflow-hidden rounded-xl shadow-lg">
           <Image
             src="/built.jpg"
-            alt=""
-            width={100}
-            height={100}
-            className="relative w-full h-auto object-cover"
+            alt="Built for Your Success - Collaborative Partnership & Impact"
+            width={700}
+            height={500}
+            className="relative w-full h-auto object-cover rounded-xl hover:scale-105 transition-all duration-300 ease-in-out"
           />
         </ScrollReveal>
 

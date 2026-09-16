@@ -150,13 +150,13 @@ export default function InsightsPage() {
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={100}>
-            <h1 className="w-full text-[44px] sm:text-[60px] md:text-[72px] lg:text-[84px] xl:text-[96px] leading-[1.1] font-primary font-normal tracking-tight text-white">
+            <h1 className="w-full text-[44px] sm:text-[60px] md:text-[72px] lg:text-[84px] xl:text-[96px] leading-[1.1] font-primary font-normal tracking-tight text-white drop-shadow-md">
               Expert Insights<span className="text-primary">.</span>
             </h1>
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={220}>
-            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[26px] leading-relaxed text-gray-300">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[26px] leading-relaxed text-gray-200 drop-shadow-sm">
               Ideas, strategies, and perspectives on building digital
               infrastructure that drives real impact.
             </p>

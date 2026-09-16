@@ -111,14 +111,16 @@ export default function EcosystemPage() {
             </ul>
           </blockquote>
         </div>
-        <ScrollReveal direction="right" delay={200}>
-          <Image
-            src="/buildinter.jpg"
-            alt=""
-            width={500}
-            height={500}
-            className="object-cover w-full rounded-lg shadow-xl"
-          />
+        <ScrollReveal direction="right" delay={200} className="w-full">
+          <div className="overflow-hidden rounded-xl shadow-xl">
+            <Image
+              src="/buildinter.jpg"
+              alt="Building Interconnected Infrastructure - People, Ideas, Capital & Sustainable Growth"
+              width={700}
+              height={500}
+              className="object-cover w-full h-auto rounded-xl hover:scale-105 transition-all duration-500 ease-in-out"
+            />
+          </div>
         </ScrollReveal>
       </Section>
       <Section>
@@ -160,7 +162,8 @@ export default function EcosystemPage() {
                     />
 
                     <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] items-stretch relative z-10 h-full">
-                      <div className="space-y-8 md:space-y-10 p-6 md:p-16 flex flex-col justify-center">
+                      {/* Platform Content (order-2 on mobile, order-1 on desktop) */}
+                      <div className="space-y-8 md:space-y-10 p-6 md:p-16 flex flex-col justify-center order-2 md:order-1">
                         <div className="space-y-6">
                           <div className="flex gap-6 items-center">
                             {item.icon && (
@@ -268,25 +271,33 @@ export default function EcosystemPage() {
                         </div>
                       </div>
 
-                      <div className="relative min-h-[300px] md:min-h-full overflow-hidden">
+                      {/* Platform Image (order-1 on mobile, order-2 on desktop) */}
+                      <div className="relative h-[260px] sm:h-[340px] md:h-auto md:min-h-full overflow-hidden order-1 md:order-2">
                         <Image
                           src={item.image ?? ""}
                           alt={item.name}
                           fill
                           className="object-cover w-full h-full transition-transform duration-1000 hover:scale-[1.05]"
                         />
-                        {/* Gradient Fade Overlay */}
+                        {/* Desktop Gradient Fade Overlay */}
                         <div
                           className={cn(
-                            "absolute inset-0 bg-gradient-to-r via-transparent to-transparent pointer-events-none",
+                            "absolute inset-0 hidden md:block bg-gradient-to-r via-transparent to-transparent pointer-events-none",
                             isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7] dark:from-[#1C1C1C]",
                           )}
                           style={{ backgroundSize: "200% 100%" }}
                         />
-                        {/* Stronger left edge fade */}
+                        {/* Desktop Stronger left edge fade */}
                         <div
                           className={cn(
-                            "absolute inset-y-0 left-0 w-32 bg-gradient-to-r pointer-events-none",
+                            "absolute inset-y-0 left-0 w-32 hidden md:block bg-gradient-to-r pointer-events-none",
+                            isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7] dark:from-[#1C1C1C]",
+                          )}
+                        />
+                        {/* Mobile bottom edge fade */}
+                        <div
+                          className={cn(
+                            "absolute inset-x-0 bottom-0 h-16 md:hidden bg-gradient-to-t pointer-events-none",
                             isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7] dark:from-[#1C1C1C]",
                           )}
                         />

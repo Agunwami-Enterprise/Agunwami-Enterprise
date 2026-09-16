@@ -97,13 +97,13 @@ export default function AboutPage() {
       <Section className="bg-about dark:bg-about-dark bg-cover bg-center bg-no-repeat min-h-[100dvh] flex flex-col justify-center items-center md:items-start pt-28 md:pt-32 pb-16">
         <div className="w-full space-y-6 flex flex-col items-center md:items-start text-center md:text-left">
           <ScrollReveal direction="up">
-            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-gray-900 dark:text-white">
+            <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-white drop-shadow-sm">
               About <br className="hidden sm:block" />
               <span className="text-primary">Agunwami Enterprise</span>
             </h1>
           </ScrollReveal>
           <ScrollReveal direction="none" delay={200}>
-            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C] dark:text-gray-400 max-w-2xl xl:max-w-3xl">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-gray-200 max-w-2xl xl:max-w-3xl drop-shadow-sm">
               Building the digital infrastructure that powers organizations and
               enables opportunity across emerging ecosystems.
             </p>
@@ -143,11 +143,11 @@ export default function AboutPage() {
 
         {/* Right: image */}
         <ScrollReveal direction="right" delay={150} className="relative w-full">
-          <div className="absolute inset-0 rounded-xl translate-x-3 translate-y-3" />
+          <div className="absolute inset-0 rounded-2xl bg-primary/20 translate-x-3 translate-y-3 -z-10" />
           <img
             src="/whoweare.jpg"
-            alt="Agunwami Enterprise team member at work"
-            className="relative w-full h-full object-cover rounded-xl"
+            alt="Agunwami Enterprise team collaborating on digital systems"
+            className="relative w-full h-full object-cover rounded-2xl shadow-xl border border-gray-100 dark:border-white/10 hover:scale-[1.01] transition-all duration-300"
             style={{ minHeight: "400px", maxHeight: "500px" }}
           />
         </ScrollReveal>
@@ -346,24 +346,29 @@ export default function AboutPage() {
       </section>
 
       {/* ── Partner closing ── */}
-      <Section className="flex flex-col items-center justify-center text-center">
-        <ScrollReveal direction="none">
-          <div className="w-full flex flex-col justify-center items-center gap-4">
-            <h2 className="font-primary text-[32px] md:text-[48px] leading-tight dark:text-white">
-              You are not just getting a vendor
-            </h2>
-            <h2 className="font-primary text-[32px] md:text-[48px] text-primary leading-tight">
-              You are gaining a partner
-            </h2>
-          </div>
-        </ScrollReveal>
-        <ScrollReveal direction="up" delay={150}>
-          <p className="text-[20px] leading-[32px] text-[#7C7C7C] dark:text-gray-400">
-            One who understands your mission, commits to your success, and
-            builds infrastructure that scales with your vision for the long
-            term.
-          </p>
-        </ScrollReveal>
+      <Section className="relative overflow-hidden w-full py-28 md:py-36 flex flex-col items-center justify-center text-center bg-partner-closing dark:bg-partner-closing-dark bg-cover bg-center bg-no-repeat border-t border-b border-primary/20">
+        {/* Soft ambient overlay to ensure the background stays warm, luminous, and legible */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30 pointer-events-none" />
+
+        <div className="relative z-10 max-w-4xl mx-auto space-y-6 flex flex-col items-center">
+          <ScrollReveal direction="none">
+            <div className="w-full flex flex-col justify-center items-center gap-4">
+              <h2 className="font-primary text-[32px] sm:text-[40px] md:text-[52px] leading-tight text-white drop-shadow-md">
+                You are not just getting a vendor
+              </h2>
+              <h2 className="font-primary text-[32px] sm:text-[40px] md:text-[52px] text-primary leading-tight drop-shadow-md">
+                You are gaining a partner
+              </h2>
+            </div>
+          </ScrollReveal>
+          <ScrollReveal direction="up" delay={150}>
+            <p className="text-[18px] md:text-[22px] leading-[32px] md:leading-[36px] text-gray-200 max-w-2xl mx-auto drop-shadow-sm">
+              One who understands your mission, commits to your success, and
+              builds infrastructure that scales with your vision for the long
+              term.
+            </p>
+          </ScrollReveal>
+        </div>
       </Section>
     </main>
   );
