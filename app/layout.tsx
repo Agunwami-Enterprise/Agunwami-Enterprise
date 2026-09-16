@@ -28,8 +28,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agunwami Enterprise",
-  description: "Next Generation Solutions",
+  title: "Digital Infrastructure Company in the World | Software Development | Agunwami Enterprise",
+  description:
+    "Agunwami Enterprise builds enterprise software, AI solutions, fintech platforms, digital infrastructure, business automation systems, and scalable technology solutions for organizations across the world.",
+  keywords: [
+    "digital infrastructure company in the world",
+    "enterprise software development",
+    "software development company in the world",
+    "business automation solutions",
+  ],
   icons: {
     icon: "/logo.png",
   },

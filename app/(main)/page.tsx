@@ -11,68 +11,77 @@ import CTA from "../components/common/CTA";
 import { projects } from "@/lib/dummy";
 
 export default function MainPage() {
-  const whatYouGet = [
+  const whatYouGain = [
     {
-      title: "Business Architecture",
-      description: [
-        "Requirements structuring",
-        "System design planning",
-        "Scalability roadmaps",
-      ],
+      title: "Enterprise-Grade Solutions",
+      description:
+        "Build secure, high-performance software designed to support growing businesses, startups, and large nonprofit organizations.",
     },
     {
-      title: "UI Systems",
-      description: [
-        "Component libraries",
-        "Design systems",
-        "Responsive layouts",
-      ],
+      title: "Faster Time to Market",
+      description:
+        "Move from idea to launch with an experienced team that delivers efficiently without compromising quality.",
     },
     {
-      title: "Graphic Design Systems",
-      description: ["Brand identity", "Visual consistency", "Asset management"],
+      title: "Scalable Technology",
+      description:
+        "Create digital products that grow with your business, support more users, and adapt to changing market demands.",
     },
     {
-      title: "Transparent Delivery",
-      description: [
-        "Clear milestones",
-        "Regular updates",
-        "Collaborative process",
-      ],
+      title: "AI & Automation",
+      description:
+        "Reduce manual work and improve decision-making with intelligent automation and AI-powered business solutions.",
+    },
+    {
+      title: "Long-Term Technology Partnership",
+      description:
+        "Beyond development, we provide continuous support, optimization, and innovation to help your technology evolve.",
+    },
+    {
+      title: "Business-Driven Results",
+      description:
+        "Every solution is built to improve efficiency, increase productivity, reduce operational costs, and create sustainable growth.",
     },
   ];
   const whatWeDo = [
     {
       title: "Digital Solutions",
       description:
-        "Custom websites and digital platforms built with modern technology stacks and best practices.",
-      className: "",
+        "Secure software, mobile apps, web platforms, AI solutions, and cloud technologies designed to solve real business challenges.",
     },
     {
       title: "Platform Development",
       description:
-        "Comprehensive platform systems including admin dashboards, membership systems, and workflow automation.",
-      className: "",
+        "Scalable digital platforms that connect people, streamline operations, and power innovation.",
     },
     {
-      title: "Impact & Partnerships",
+      title: "AI & Business Automation",
       description:
-        "Strategic collaboration with nonprofits, institutions, and tech teams to build infrastructure that scales.",
-      className: "",
+        "Intelligent automation and AI-driven solutions that improve efficiency, reduce manual work, and support better decision-making.",
+    },
+    {
+      title: "Technology Consulting",
+      description:
+        "Strategic guidance to help organizations adopt the right technologies, optimize operations, and accelerate digital transformation.",
+    },
+    {
+      title: "Impact & Strategic Partnerships",
+      description:
+        "Collaborating with startups, businesses, NGOs, and innovation partners to build sustainable digital ecosystems that deliver measurable impact.",
     },
   ];
   const OurServices = [
-    { title: "Website Development" },
-    { title: "Platform Systems" },
-    { title: "Mobile App Design" },
-    { title: "User Experience Research" },
-    { title: "Security Audits" },
-    { title: "API Development" },
-    { title: "UI/UX Design" },
-    { title: "Database Architecture" },
-    { title: "DevOps & CI/CD" },
-    { title: "Technical Consulting" },
-    { title: "QA & Testing" },
+    { title: "Website Development", href: "/services" },
+    { title: "Platform Systems", href: "/services" },
+    { title: "Mobile App Design", href: "/services" },
+    { title: "User Experience Research", href: "/services" },
+    { title: "Security Audits", href: "/services" },
+    { title: "API Development", href: "/services" },
+    { title: "UI/UX Design", href: "/services" },
+    { title: "Database Architecture", href: "/services" },
+    { title: "DevOps & CI/CD", href: "/services" },
+    { title: "Technical Consulting", href: "/services" },
+    { title: "QA & Testing", href: "/services" },
   ];
   const FeaturedProjects = [
     {
@@ -139,31 +148,35 @@ export default function MainPage() {
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={100}>
-            <h1 className="w-full text-[36px] sm:text-[48px] md:text-[56px] lg:text-[64px] xl:text-[80px] 2xl:text-[96px] 3xl:text-[120px] 4xl:text-[160px] leading-[44px] sm:leading-[56px] md:leading-[64px] lg:leading-[72px] xl:leading-[88px] 2xl:leading-[104px] 3xl:leading-[128px] 4xl:leading-[168px] font-primary font-normal tracking-tight text-gray-900 dark:text-white">
-              Building Platforms. <br className="hidden sm:flex" />
-              Empowering Institutions. <br className="hidden sm:flex" />{" "}
-              <span className="text-primary">Expanding Opportunity.</span>
+            <h1 className="w-full text-[36px] sm:text-[48px] md:text-[56px] lg:text-[64px] xl:text-[76px] 2xl:text-[88px] leading-[44px] sm:leading-[56px] md:leading-[64px] lg:leading-[74px] xl:leading-[88px] 2xl:leading-[98px] font-primary font-normal tracking-tight text-gray-900 dark:text-white">
+              Building Digital Infrastructure <br className="hidden sm:flex" />
+              That Helps Start-ups, <br className="hidden sm:flex" />
+              Businesses, and Non-profit organizations{" "}
+              <span className="text-primary">Scale Faster.</span>
             </h1>
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={200}>
-            <p className="text-[17px] md:text-[20px] lg:text-[22px] xl:text-[26px] 2xl:text-[30px] 3xl:text-[38px] 4xl:text-[48px] leading-[26px] md:leading-[30px] lg:leading-[34px] xl:leading-[40px] 2xl:leading-[46px] 3xl:leading-[56px] 4xl:leading-[68px] text-[#7C7C7C] dark:text-gray-400 max-w-2xl xl:max-w-3xl 2xl:max-w-4xl 3xl:max-w-6xl 4xl:max-w-7xl">
-              We partner with nonprofits, institutions, and technology teams to
-              build scalable digital infrastructure that drives impact and
-              enables growth.
+            <p className="text-[17px] md:text-[20px] lg:text-[22px] xl:text-[24px] leading-[26px] md:leading-[32px] lg:leading-[36px] text-[#7C7C7C] dark:text-gray-300 max-w-3xl">
+              Agunwami Enterprise partners with businesses, startups,
+              institutions, and non-profit organizations to design, build, and
+              scale secure digital infrastructure, enterprise software,
+              AI-powered solutions, and technology ecosystems that accelerate
+              innovation, improve operational efficiency, and drive sustainable
+              growth across the world.
             </p>
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={300}>
             <div className="mt-6 flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-              <Link href={"/projects"} className="w-full sm:w-auto">
+              <Link href={"/partnerships/apply"} className="w-full sm:w-auto">
                 <Buttons lg primaryButton className="w-full">
-                  Explore Our Projects <BsArrowRight />
+                  Partner With Us <BsArrowRight />
                 </Buttons>
               </Link>
-              <Link href={"/partnerships/apply"} className="w-full sm:w-auto">
+              <Link href={"/projects"} className="w-full sm:w-auto">
                 <Buttons lg secondaryButton className="w-full">
-                  Partner With Us
+                  Explore Our Projects
                 </Buttons>
               </Link>
             </div>
@@ -171,55 +184,202 @@ export default function MainPage() {
         </div>
       </Section>
 
-      {/* ── What You Get ── */}
+      {/* ── Key Metrics & Statistics Strip ── */}
+      <section className="w-full bg-primary py-8 md:py-10 px-6 md:px-20 text-white shadow-md">
+        <div className="max-w-6xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-6 text-center divide-y sm:divide-y-0 sm:divide-x divide-white/20">
+          <div className="flex flex-col items-center justify-center gap-1.5 p-2">
+            <span className="text-[36px] md:text-[48px] font-primary font-bold leading-none tracking-tight">
+              20+
+            </span>
+            <span className="text-[11px] md:text-[12px] tracking-[0.2em] uppercase font-semibold text-white/90">
+              Digital Solutions Delivered
+            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-1.5 p-2">
+            <span className="text-[36px] md:text-[48px] font-primary font-bold leading-none tracking-tight">
+              99.9%
+            </span>
+            <span className="text-[11px] md:text-[12px] tracking-[0.2em] uppercase font-semibold text-white/90">
+              Platform Reliability
+            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-1.5 p-2">
+            <span className="text-[36px] md:text-[48px] font-primary font-bold leading-none tracking-tight">
+              5+
+            </span>
+            <span className="text-[11px] md:text-[12px] tracking-[0.2em] uppercase font-semibold text-white/90">
+              Industries Served
+            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-1.5 p-2">
+            <span className="text-[28px] md:text-[36px] font-primary font-bold leading-none tracking-tight">
+              End-to-End
+            </span>
+            <span className="text-[11px] md:text-[12px] tracking-[0.2em] uppercase font-semibold text-white/90">
+              Strategy to Deployment
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── What You Gain When You Build With Agunwami Enterprise ── */}
       <Section>
-        <div className="space-y-10 pb-10">
+        <div className="space-y-12 pb-6">
           <ScrollReveal>
             <SectionWithHeading
-              heading="What You Get When You Build With Agunwami"
-              heading2="Enterprise"
+              heading="What You Gain When You Build With Agunwami Enterprise"
+              description="Partner with Agunwami Enterprise to turn ambitious ideas into secure, scalable, and future-ready digital solutions. We combine strategy, engineering, and innovation to help organizations achieve measurable business outcomes."
             />
           </ScrollReveal>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            {whatYouGet.map((item, index) => (
-              <ScrollReveal key={index} delay={index * 100}>
-                <div className="space-y-7">
-                  <h3 className="text-[32px] md:text-[40px] lg:text-[48px] font-primary font-normal leading-tight text-gray-900 dark:text-white">
-                    {item.title}
-                  </h3>
-                  <div className="flex flex-col gap-4">
-                    {item.description.map((desc, i) => (
-                      <p
-                        key={i}
-                        className="flex items-center gap-2 text-[#656565] dark:text-gray-400 text-[20px]"
-                      >
-                        <span className="rounded-full h-2 w-2 bg-primary" />
-                        {desc}
-                      </p>
-                    ))}
+
+          {/* Six Value Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {whatYouGain.map((item, index) => (
+              <ScrollReveal key={index} delay={index * 80}>
+                <Card className="h-full border border-gray-200/80 dark:border-white/10 hover:border-primary transition-all duration-300 group">
+                  <div className="space-y-4">
+                    <div className="w-10 h-1 bg-primary group-hover:w-16 transition-all duration-300" />
+                    <h3 className="text-[24px] md:text-[26px] font-primary font-normal leading-snug text-gray-900 dark:text-white">
+                      {item.title}
+                    </h3>
+                    <p className="text-[16px] leading-[26px] text-gray-600 dark:text-gray-400">
+                      {item.description}
+                    </p>
                   </div>
-                </div>
+                </Card>
               </ScrollReveal>
             ))}
           </div>
+
+          {/* Trust Statement & CTA */}
+          <ScrollReveal>
+            <div className="border-t border-gray-200 dark:border-white/10 pt-14 space-y-10">
+              <div className="max-w-4xl space-y-3">
+                <span className="text-xs font-semibold tracking-[0.25em] uppercase text-primary">
+                  Why Organizations Choose Agunwami Enterprise
+                </span>
+                <p className="text-[20px] md:text-[24px] lg:text-[28px] leading-snug font-primary text-gray-900 dark:text-white">
+                  We don&apos;t just develop software. We engineer digital
+                  ecosystems that help businesses innovate, governments
+                  modernize public services, and organizations create lasting
+                  impact through technology.
+                </p>
+              </div>
+
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-950 via-black to-gray-900 p-8 md:p-14 text-white shadow-2xl border border-primary/20">
+                <div className="relative z-10 space-y-5 max-w-3xl">
+                  <h2 className="text-[30px] sm:text-[38px] md:text-[46px] font-primary font-normal leading-tight">
+                    Ready to Build Something{" "}
+                    <span className="text-primary">Extraordinary?</span>
+                  </h2>
+                  <p className="text-[17px] md:text-[20px] text-gray-300 leading-relaxed">
+                    Let&apos;s transform your vision into a secure, scalable,
+                    and impactful digital solution.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                    <Link href="/partnerships/apply">
+                      <Buttons lg primaryButton className="w-full sm:w-auto">
+                        Partner With Us <BsArrowRight />
+                      </Buttons>
+                    </Link>
+                    <Link href="/projects">
+                      <Buttons
+                        lg
+                        secondaryButton
+                        className="w-full sm:w-auto border-white/30 text-white hover:bg-white/10"
+                      >
+                        Explore Our Projects
+                      </Buttons>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
         </div>
-        <ScrollReveal>
-          <div className="border-t-1 border-[#0000001A] dark:border-white/10 pt-15">
-            <h2 className="text-[42px] xl:text-[52px] leading-[42px] xl:leading-[52px] font-primary dark:text-white">
-              You are not hiring a developer.
-            </h2>
-            <h1 className="text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] font-primary font-[400] tracking-tight text-[#C89B3C]">
-              You are partnering with a platform-building team.
-            </h1>
+      </Section>
+
+      {/* ── Executive Leadership Preview ── */}
+      <Section className="bg-primary/5 dark:bg-white/[0.02]">
+        <div className="space-y-10 w-full">
+          <ScrollReveal>
+            <SectionWithHeading
+              heading="Executive Leadership"
+              description="The experienced leaders steering our vision, platforms, and strategic partnerships."
+            />
+          </ScrollReveal>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* CEO */}
+            <ScrollReveal direction="up" delay={100}>
+              <div className="flex flex-col sm:flex-row items-center gap-6 p-6 rounded-2xl bg-white dark:bg-[#161616] border border-gray-200 dark:border-white/10 shadow-sm h-full">
+                <div className="relative w-28 h-28 rounded-full overflow-hidden flex-shrink-0 border-2 border-primary/30">
+                  <Image
+                    src="/whoweare.jpg"
+                    alt="Agunwami Ang."
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="space-y-2 text-center sm:text-left">
+                  <h3 className="text-[24px] font-primary text-gray-900 dark:text-white">
+                    Agunwami Ang.
+                  </h3>
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wider">
+                    Chief Executive Officer
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    Visionary leader with over 12 years of experience in digital
+                    strategy, business development, and platform innovation.
+                  </p>
+                </div>
+              </div>
+            </ScrollReveal>
+
+            {/* COO */}
+            <ScrollReveal direction="up" delay={200}>
+              <div className="flex flex-col sm:flex-row items-center gap-6 p-6 rounded-2xl bg-white dark:bg-[#161616] border border-gray-200 dark:border-white/10 shadow-sm h-full">
+                <div className="relative w-28 h-28 rounded-full overflow-hidden flex-shrink-0 border-2 border-primary/30">
+                  <Image
+                    src="/whoweare.jpg"
+                    alt="Japhet Marshall"
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="space-y-2 text-center sm:text-left">
+                  <h3 className="text-[24px] font-primary text-gray-900 dark:text-white">
+                    Japhet Marshall
+                  </h3>
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wider">
+                    Chief Operation Officer
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                    A strategist with expertise in systems architecture,
+                    process optimization, and organizational excellence.
+                  </p>
+                </div>
+              </div>
+            </ScrollReveal>
           </div>
-        </ScrollReveal>
+
+          <ScrollReveal>
+            <div className="flex justify-center pt-2">
+              <Link href="/about">
+                <Buttons lg secondaryButton>
+                  Meet Our Full Leadership Team <BsArrowRight />
+                </Buttons>
+              </Link>
+            </div>
+          </ScrollReveal>
+        </div>
       </Section>
 
       {/* ── What We Do ── */}
       <Section className="bg-primary/10 dark:bg-primary/5">
         <ScrollReveal className="w-full">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-            <div className="overflow-hidden rounded-xl w-full">
+            <div className="overflow-hidden rounded-xl w-full shadow-lg">
               <Image
                 src="/whatwedo.png"
                 alt="What We Do - Digital Infrastructure & Systems"
@@ -232,24 +392,23 @@ export default function MainPage() {
             <div className="space-y-5 justify-center flex flex-col">
               <SectionWithHeading
                 heading="What We Do"
-                description="We build digital infrastructure that empowers organizations to"
-                description2="operate at scale."
+                description="We design, build, and scale digital solutions and infrastructure that help businesses, startups, and organizations operate at scale and create lasting impact"
               />
             </div>
           </div>
         </ScrollReveal>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {whatWeDo.map((item, index) => (
-            <ScrollReveal key={index} delay={index * 120} className="w-full">
-              <Card className="h-full min-h-[20rem] 3xl:min-h-[30rem] 4xl:min-h-[40rem]">
-                <div className="space-y-8">
-                  <div className="space-y-5">
-                    <div className="w-12 h-1 3xl:h-2 bg-[#C89B3C] group-hover:w-[30%] group-hover:bg-gradient-to-r from-primary to-gray-300 transition-all duration-300 ease-in-out" />
-                    <h3 className="text-[32px] md:text-[32px] lg:text-[34px] xl:text-[36px] 2xl:text-[40px] 3xl:text-[56px] 4xl:text-[72px] font-primary font-normal leading-tight text-gray-900 dark:text-white">
+            <ScrollReveal key={index} delay={index * 100} className="w-full">
+              <Card className="h-full min-h-[16rem] border border-gray-200/80 dark:border-white/10 hover:border-primary transition-all duration-300">
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="w-10 h-1 bg-[#C89B3C] group-hover:w-16 transition-all duration-300 ease-in-out" />
+                    <h3 className="text-[26px] md:text-[28px] font-primary font-normal leading-tight text-gray-900 dark:text-white">
                       {item.title}
                     </h3>
                   </div>
-                  <p className="text-[16px] md:text-[18px] lg:text-[20px] xl:text-[22px] 2xl:text-[24px] 3xl:text-[32px] 4xl:text-[40px] leading-[22px] md:leading-[24px] lg:leading-[26px] xl:leading-[28px] 2xl:leading-[30px] 3xl:leading-[40px] 4xl:leading-[52px] text-[#7C7C7C] dark:text-gray-400">
+                  <p className="text-[16px] leading-[26px] text-[#7C7C7C] dark:text-gray-400">
                     {item.description}
                   </p>
                 </div>
@@ -264,27 +423,34 @@ export default function MainPage() {
         <ScrollReveal direction="left">
           <SectionWithHeading heading="Our Services" dash="md:w-[20%]" />
         </ScrollReveal>
-        <div className="w-full md:w-[50%]">
+        <div className="w-full md:w-[50%] divide-y divide-gray-200/50 dark:divide-white/10">
           {OurServices.map((item, index) => (
-            <ScrollReveal key={index} delay={index * 50}>
-              <p className="group relative font-[400] text-[22px] md:text-[28px] leading-[30px] md:leading-[34px] flex items-center py-6 md:py-10 cursor-pointer">
-                <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 dark:bg-white group-hover:w-full transition-[width] duration-300 ease-out" />
-                <span className="h-2 w-2 bg-primary rounded-full mr-2 transition-transform duration-300 group-hover:scale-150" />
-                <span className="transition-transform duration-300 group-hover:translate-x-2">
-                  {item.title}
-                </span>
-              </p>
+            <ScrollReveal key={index} delay={index * 40}>
+              <Link
+                href={item.href}
+                className="group font-[400] text-[20px] md:text-[26px] leading-[30px] md:leading-[34px] flex items-center justify-between py-5 md:py-7 hover:text-primary transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="h-2 w-2 bg-primary rounded-full transition-transform duration-300 group-hover:scale-150" />
+                  <span className="transition-transform duration-300 group-hover:translate-x-1">
+                    {item.title}
+                  </span>
+                </div>
+                <BsArrowRight className="text-gray-400 group-hover:text-primary transition-all duration-300 group-hover:translate-x-2 text-xl" />
+              </Link>
             </ScrollReveal>
           ))}
-          <ScrollReveal delay={OurServices.length * 50}>
-            <Link
-              href={"/services"}
-              className="group relative flex items-center gap-2 mt-10 w-fit text-[24px] pb-1"
-            >
-              <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 dark:bg-white group-hover:w-full transition-[width] duration-300 ease-out" />
-              View All Services
-              <BsArrowRight className="transition-all duration-300 group-hover:text-primary group-hover:translate-x-1" />
-            </Link>
+          <ScrollReveal delay={OurServices.length * 40}>
+            <div className="pt-6">
+              <Link
+                href={"/services"}
+                className="group relative flex items-center gap-2 w-fit text-[22px] font-semibold pb-1 hover:text-primary transition-colors"
+              >
+                <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-primary group-hover:w-full transition-[width] duration-300 ease-out" />
+                Explore All Services
+                <BsArrowRight className="transition-all duration-300 group-hover:text-primary group-hover:translate-x-1" />
+              </Link>
+            </div>
           </ScrollReveal>
         </div>
       </Section>
@@ -304,7 +470,7 @@ export default function MainPage() {
             .map((item, index) => (
               <ScrollReveal key={index} delay={index * 100}>
                 <Link
-                  href="/projects"
+                  href={item.link}
                   className="group relative p-6 flex flex-col md:flex-row md:justify-between md:items-center cursor-pointer gap-6 md:gap-0 block"
                 >
                   <span className="absolute bottom-0 left-0 h-[2px] w-0 bg-gray-900 dark:bg-white group-hover:w-full transition-[width] duration-300 ease-out" />

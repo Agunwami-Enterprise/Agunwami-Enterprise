@@ -131,7 +131,7 @@ export default function InsightsPage() {
   return (
     <main className="flex flex-col items-center w-full bg-[#FAFAFA] dark:bg-[#0a0a0a]">
       {/* ── Hero ── */}
-      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-insights-hero dark:bg-insights-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-36 pb-16">
+      <Section className="relative flex flex-col justify-between min-h-[540px] sm:min-h-[600px] md:min-h-[680px] lg:min-h-[760px] bg-insights-hero dark:bg-insights-hero-dark bg-cover bg-[position:center_top] md:bg-[position:center_15%] bg-no-repeat pt-28 md:pt-36 pb-16">
         {/* Subtle cyber ecobg overlay */}
         <div className="absolute right-[50%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-40 pointer-events-none">
           <img

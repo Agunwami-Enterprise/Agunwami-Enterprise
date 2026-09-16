@@ -22,59 +22,59 @@ export default function Services() {
       icon: LuLayers,
       title: "Website Development",
       description:
-        "Custom responsive websites built with modern technology stacks, optimized for performance and user experience.",
+        "Custom responsive websites built with modern technology stacks, optimized for performance, search visibility, and exceptional user experience across all devices.",
     },
     {
       icon: LuDatabase,
       title: "Platform Systems",
       description:
-        "Comprehensive digital infrastructure including APIs, integrations, and scalable system architecture.",
+        "Comprehensive digital infrastructure including APIs, system integrations, secure data architecture, and cloud backends that power your core operations.",
     },
     {
       icon: LuShield,
       title: "Admin Dashboards",
       description:
-        "Intuitive admin interfaces with data visualization, real-time reporting, and role-based access control.",
+        "Intuitive admin interfaces featuring real-time data visualization, operational analytics, user management, and fine-grained role-based access control.",
     },
     {
       icon: LuShieldCheck,
       title: "Membership Systems",
       description:
-        "Complete membership platforms with user authentication, directories, tier management, and engagement tools.",
+        "Complete membership platforms equipped with secure authentication, member directories, tier management, engagement tools, and renewal automation.",
     },
     {
       icon: LuZap,
       title: "Workflow Automation",
       description:
-        "Streamlined operations through automated workflows, email notifications, and process optimization.",
+        "Streamlined business operations through automated multi-step workflows, triggered notifications, CRM synchronization, and process optimization.",
     },
     {
       icon: LuCreditCard,
       title: "Payment Integration",
       description:
-        "Secure payment processing with gateway integration, subscription billing, and transaction reporting.",
+        "Secure payment processing featuring multi-gateway integration, subscription billing, automated invoicing, and reconciliation-ready transaction reporting.",
     },
   ];
   const builtForSuccess = [
     {
       title: "We Build for Scale",
       description:
-        "We design systems that grow with your organization, ensuring seamless scalability and long-term performance.",
+        "We design systems that grow with your organization, ensuring seamless scalability and long-term performance under increasing demand.",
     },
     {
       title: "Transparency-First",
       description:
-        "Clear communication, honest timelines, and collaborative decision-making at every stage.",
+        "Clear communication, honest timelines, milestone-based delivery, and collaborative decision-making at every stage.",
     },
     {
       title: "Impact-Driven",
       description:
-        "We prioritize projects that create opportunity, empower communities, and drive meaningful change.",
+        "We prioritize projects that create tangible value, empower communities, and drive meaningful, measurable change.",
     },
     {
       title: "Execution Excellence",
       description:
-        "Clean code, thoughtful design, and rigorous quality standards in everything we deliver.",
+        "Clean code, thoughtful design architecture, and rigorous quality assurance in everything we deliver.",
     },
   ];
   const coreValues = [
@@ -83,7 +83,7 @@ export default function Services() {
       title: "Requirements",
       title2: "Structuring",
       description:
-        "Translate ambiguous project goals into clear, actionable specifications.",
+        "Translate ambiguous project goals into clear, actionable technical specifications and product roadmaps.",
       list: [
         "Technical discovery sessions",
         "System requirements documentation",
@@ -96,7 +96,7 @@ export default function Services() {
       title: "UI",
       title2: "Architecture",
       description:
-        "Design system development and component libraries that scale across your product.",
+        "Design system development and component libraries that scale seamlessly across your entire digital product suite.",
       list: [
         "Component library development",
         "Design token systems",
@@ -109,7 +109,7 @@ export default function Services() {
       title: "Dashboard",
       title2: "Development",
       description:
-        "Custom analytics dashboards and data visualization tools for internal teams.",
+        "Custom operational dashboards and data visualization tools designed for internal management teams.",
       list: [
         "Real-time data visualization",
         "Custom metrics tracking",
@@ -122,7 +122,7 @@ export default function Services() {
       title: "Workflow",
       title2: "Modeling",
       description:
-        "Map complex business processes into efficient digital workflows.",
+        "Map complex business processes into structured, automated, and error-resilient digital workflows.",
       list: [
         "Process documentation",
         "Automation opportunities",
@@ -135,7 +135,7 @@ export default function Services() {
       title: "Scalability",
       title2: "Planning",
       description:
-        "Architecture review and infrastructure planning for growing platforms.",
+        "Architecture review, load forecasting, and infrastructure planning for rapidly growing platforms.",
       list: [
         "Performance audits",
         "Infrastructure optimization",
@@ -148,7 +148,7 @@ export default function Services() {
       title: "System",
       title2: "Integration",
       description:
-        "Seamlessly connect your digital ecosystem through robust API and data layers.",
+        "Seamlessly connect your digital ecosystem through robust APIs, secure webhooks, and synchronized data layers.",
       list: [
         "API development & documentation",
         "Legacy system migration",
@@ -183,9 +183,9 @@ export default function Services() {
 
           <ScrollReveal direction="up" delay={220}>
             <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-gray-200 drop-shadow-sm">
-              Comprehensive platform solutions designed to solve real-world
-              challenges and empower your organization&apos;s digital
-              transformation.
+              Agunwami Enterprise designs and builds platform solutions from
+              websites, dashboards, and systems that solve real problems and grow
+              with your organization.
             </p>
           </ScrollReveal>
         </div>
@@ -218,8 +218,8 @@ export default function Services() {
           <ScrollReveal direction="right" className="w-full md:w-[50%]">
             <blockquote className="border-l-4 border-primary bg-white dark:bg-white/5 shadow-sm rounded-r-xl pl-6 pr-6 py-10 md:py-20 w-full">
               <p className="text-[22px] md:text-[26px] leading-[32px] md:leading-[36px] font-semibold text-gray-900 dark:text-white">
-                We deliver end-to-end platform solutions designed to solve
-                real-world challenges and scale with your organization.
+                We deliver end-to-end platform solutions, from requirements to launch
+                engineered to solve real-world challenges and scale your organization.
               </p>
             </blockquote>
           </ScrollReveal>
@@ -342,9 +342,11 @@ export default function Services() {
       </Section>
       <CTA
         title="Ready to build your platform?"
-        description="Let us collaborate on digital infrastructure that scales with your vision and empowers your organization."
-        buttonText="Explore Our Work"
-        buttonHref="/projects"
+        description="Let's build digital infrastructure that scales with your vision and empowers your organization, from strategy to launch."
+        buttonText="Start a Project"
+        buttonHref="/contact"
+        secondaryButtonText="Explore Our Projects"
+        secondaryButtonHref="/projects"
       />
     </main>
   );

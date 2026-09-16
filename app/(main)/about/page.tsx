@@ -1,6 +1,8 @@
 import Section, {
   SectionWithHeading,
 } from "@/app/components/common/ui/Section";
+import Link from "next/link";
+import { BsArrowRight } from "react-icons/bs";
 import {
   RiShieldLine,
   RiLightbulbLine,
@@ -139,6 +141,16 @@ export default function AboutPage() {
             existing infrastructure, we partner with you to build systems that
             support your mission and drive measurable impact.
           </p>
+
+          <div className="pt-2">
+            <Link
+              href="/contact"
+              className="inline-flex items-center gap-3 px-6 py-3 rounded-lg bg-primary/10 dark:bg-primary/20 text-primary hover:bg-primary hover:text-white transition-all duration-300 font-medium group"
+            >
+              <span>Let&apos;s map out what your platform needs; talk to our team.</span>
+              <BsArrowRight className="group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
         </ScrollReveal>
 
         {/* Right: image */}
@@ -367,6 +379,15 @@ export default function AboutPage() {
               builds infrastructure that scales with your vision for the long
               term.
             </p>
+          </ScrollReveal>
+          <ScrollReveal direction="up" delay={250} className="pt-4">
+            <Link
+              href="/contact"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-medium rounded-md hover:bg-primary/90 transition-all duration-300 shadow-lg shadow-primary/20 hover:scale-[1.02]"
+            >
+              <span>Start the Conversation</span>
+              <BsArrowRight />
+            </Link>
           </ScrollReveal>
         </div>
       </Section>

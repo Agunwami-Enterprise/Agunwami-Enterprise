@@ -43,7 +43,7 @@ export default async function ProjectSinglePage({ params }: PageProps) {
       {/* ── Hero ── */}
       <Section
         className={cn(
-          "relative flex flex-col justify-between min-h-[100dvh] bg-cover bg-center bg-no-repeat pt-28 md:pt-36 pb-16",
+          "relative flex flex-col justify-between min-h-[540px] sm:min-h-[600px] md:min-h-[680px] lg:min-h-[760px] bg-cover bg-[position:center_top] md:bg-[position:center_20%] bg-no-repeat pt-28 md:pt-36 pb-16",
           heroBgClass,
         )}
       >
