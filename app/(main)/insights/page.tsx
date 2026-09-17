@@ -12,85 +12,11 @@ import {
   RiArrowRightLine,
   RiSearchLine,
   RiSparklingLine,
+  RiMailSendLine,
 } from "react-icons/ri";
+import NewsletterModal from "@/app/components/common/NewsletterModal";
 
-interface Article {
-  id: number;
-  title: string;
-  category:
-    | "Infrastructure"
-    | "Design"
-    | "Technology"
-    | "Partnerships"
-    | "Insights";
-  excerpt: string;
-  date: string;
-  image: string;
-  slug: string;
-}
-
-const ARTICLES: Article[] = [
-  {
-    id: 1,
-    title: "Building Scalable Platforms for Long-Term Impact",
-    category: "Infrastructure",
-    excerpt:
-      "Exploring the core principles of building digital platforms that scale with purpose and deliver sustainable impact.",
-    date: "May 15, 2025",
-    image: "/insight_infra.jpg",
-    slug: "building-scalable-platforms-for-long-term-impact",
-  },
-  {
-    id: 2,
-    title: "Design Systems: The Backbone of Consistent Experiences",
-    category: "Design",
-    excerpt:
-      "How design systems help teams ship faster, maintain consistency, and create better user experiences across platforms.",
-    date: "May 08, 2025",
-    image: "/insight_design.jpg",
-    slug: "design-systems-the-backbone-of-consistent-experiences",
-  },
-  {
-    id: 3,
-    title: "The Future of Digital Infrastructure",
-    category: "Technology",
-    excerpt:
-      "Key trends shaping the future of digital infrastructure and what forward-looking organizations should prepare for today.",
-    date: "May 01, 2025",
-    image: "/meridian.jpg",
-    slug: "the-future-of-digital-infrastructure",
-  },
-  {
-    id: 4,
-    title: "Strategic Partnerships That Drive Transformation",
-    category: "Partnerships",
-    excerpt:
-      "Why the right partnerships can accelerate growth, foster cross-sector innovation, and drive positive community impact.",
-    date: "Apr 24, 2025",
-    image: "/applyhero.jpg",
-    slug: "strategic-partnerships-that-drive-transformation",
-  },
-  {
-    id: 5,
-    title: "Data-Driven Decisions for Smarter Systems",
-    category: "Technology",
-    excerpt:
-      "How leveraging real-time data insights helps organizations make smarter decisions and build more effective, resilient systems.",
-    date: "Apr 10, 2025",
-    image: "/whatwedo.jpg",
-    slug: "data-driven-decisions-for-smarter-systems",
-  },
-  {
-    id: 6,
-    title: "From Strategy to Execution: Bridging the Gap",
-    category: "Insights",
-    excerpt:
-      "Turning ambitious ideas into concrete results with clear strategies, actionable roadmaps, and measurable mission outcomes.",
-    date: "Apr 17, 2025",
-    image: "/built.jpg",
-    slug: "from-strategy-to-execution-bridging-the-gap",
-  },
-];
+import { ARTICLES } from "./insightsData";
 
 const CATEGORIES = [
   "All",
@@ -105,6 +31,7 @@ export default function InsightsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isNewsletterOpen, setIsNewsletterOpen] = useState<boolean>(false);
   const itemsPerPage = 6;
 
   const filteredArticles = useMemo(() => {
@@ -238,45 +165,50 @@ export default function InsightsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {currentArticles.map((article, idx) => (
                 <ScrollReveal key={article.id} delay={idx * 80}>
-                  <article className="group h-full flex flex-col bg-white dark:bg-[#141414] rounded-2xl border border-gray-200/80 dark:border-white/10 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-                    {/* Card Image */}
-                    <div className="relative aspect-[16/10] w-full overflow-hidden bg-gray-100 dark:bg-white/5">
-                      <Image
-                        src={article.image}
-                        alt={article.title}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                      {/* Category Badge on image */}
-                      <span className="absolute bottom-3.5 left-3.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#1a1711]/90 backdrop-blur-md text-primary border border-primary/40 shadow-sm">
-                        {article.category}
-                      </span>
-                    </div>
-
-                    {/* Card Content */}
-                    <div className="p-6 md:p-7 flex flex-col justify-between flex-1">
-                      <div className="space-y-3">
-                        <h2 className="font-primary text-[20px] md:text-[22px] font-semibold text-gray-900 dark:text-white leading-snug group-hover:text-primary transition-colors">
-                          {article.title}
-                        </h2>
-                        <p className="text-[14px] leading-relaxed text-gray-600 dark:text-gray-400 line-clamp-3">
-                          {article.excerpt}
-                        </p>
-                      </div>
-
-                      {/* Card Footer */}
-                      <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <span className="flex items-center gap-1.5">
-                          <RiCalendarLine className="text-sm text-primary" />
-                          {article.date}
-                        </span>
-                        <span className="flex items-center gap-1 text-primary font-semibold group-hover:translate-x-1 transition-transform">
-                          <RiArrowRightLine className="text-base" />
+                  <Link
+                    href={`/insights/${article.slug}`}
+                    className="group block h-full focus:outline-none"
+                  >
+                    <article className="h-full flex flex-col bg-white dark:bg-[#141414] rounded-2xl border border-gray-200/80 dark:border-white/10 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                      {/* Card Image */}
+                      <div className="relative aspect-[16/10] w-full overflow-hidden bg-gray-100 dark:bg-white/5">
+                        <Image
+                          src={article.image}
+                          alt={article.title}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        />
+                        {/* Category Badge on image */}
+                        <span className="absolute bottom-3.5 left-3.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#1a1711]/90 backdrop-blur-md text-primary border border-primary/40 shadow-sm">
+                          {article.category}
                         </span>
                       </div>
-                    </div>
-                  </article>
+
+                      {/* Card Content */}
+                      <div className="p-6 md:p-7 flex flex-col justify-between flex-1">
+                        <div className="space-y-3">
+                          <h2 className="font-primary text-[20px] md:text-[22px] font-semibold text-gray-900 dark:text-white leading-snug group-hover:text-primary transition-colors">
+                            {article.title}
+                          </h2>
+                          <p className="text-[14px] leading-relaxed text-gray-600 dark:text-gray-400 line-clamp-3">
+                            {article.excerpt}
+                          </p>
+                        </div>
+
+                        {/* Card Footer */}
+                        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                          <span className="flex items-center gap-1.5">
+                            <RiCalendarLine className="text-sm text-primary" />
+                            {article.date}
+                          </span>
+                          <span className="flex items-center gap-1 text-primary font-semibold group-hover:translate-x-1 transition-transform">
+                            <RiArrowRightLine className="text-base" />
+                          </span>
+                        </div>
+                      </div>
+                    </article>
+                  </Link>
                 </ScrollReveal>
               ))}
             </div>
@@ -330,12 +262,49 @@ export default function InsightsPage() {
         </div>
       </section>
 
+      {/* ── Newsletter Section ── */}
+      <section className="w-full px-4 md:px-20 py-12 border-t border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#0f0f0f]">
+        <div className="max-w-7xl mx-auto rounded-3xl bg-gradient-to-r from-gray-950 via-neutral-900 to-gray-900 p-8 md:p-12 relative overflow-hidden border border-white/10 flex flex-col lg:flex-row items-center justify-between gap-8 shadow-xl">
+          {/* Ambient Glow */}
+          <div className="absolute right-0 top-0 w-96 h-96 rounded-full bg-primary/15 blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 max-w-2xl space-y-3 text-center lg:text-left">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-primary/20 text-primary border border-primary/40">
+              <RiSparklingLine />
+              <span>Stay Ahead</span>
+            </div>
+            <h2 className="text-[26px] md:text-[34px] font-primary font-bold text-white tracking-tight leading-tight">
+              Get the Agunwami Executive Briefing
+            </h2>
+            <p className="text-sm md:text-[15px] text-gray-300 leading-relaxed">
+              Curated perspectives on scalable platform architecture, emerging technology, and enterprise strategy delivered directly to your inbox.
+            </p>
+          </div>
+
+          <div className="relative z-10 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsNewsletterOpen(true)}
+              className="px-7 py-3.5 rounded-xl bg-primary hover:bg-primary/90 active:scale-95 text-white font-semibold text-sm transition-all shadow-lg hover:shadow-primary/25 cursor-pointer flex items-center gap-2"
+            >
+              <RiMailSendLine className="text-lg" />
+              <span>Subscribe Free</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* ── CTA Banner ── */}
       <CTA
         title="Interested in our ecosystem initiatives?"
         description="Connect with us to explore partnership opportunities or learn more about our platform roadmap."
         buttonText="Get in Touch"
         buttonHref="/contact"
+      />
+
+      <NewsletterModal
+        isOpen={isNewsletterOpen}
+        onClose={() => setIsNewsletterOpen(false)}
       />
     </main>
   );

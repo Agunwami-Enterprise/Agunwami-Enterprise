@@ -1,6 +1,7 @@
 import Script from "next/script";
 import Footer from "../components/Footer";
 import Header from "../components/common/Header";
+import ExitIntentPopup from "../components/common/ExitIntentPopup";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -26,6 +27,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Header />
       {children}
       <Footer />
+      <ExitIntentPopup />
     </div>
   );
 }

@@ -19,62 +19,68 @@ import { cn } from "@/lib/utils";
 export default function Services() {
   const services = [
     {
+      id: "website-development",
       icon: LuLayers,
       title: "Website Development",
       description:
-        "Custom responsive websites built with modern technology stacks, optimized for performance, search visibility, and exceptional user experience across all devices.",
+        "custom, responsive websites built on modern tech stacks and optimized for speed, SEO, and conversions.",
     },
     {
+      id: "platform-systems",
       icon: LuDatabase,
       title: "Platform Systems",
       description:
-        "Comprehensive digital infrastructure including APIs, system integrations, secure data architecture, and cloud backends that power your core operations.",
+        "Scalable digital infrastructure, APIs, Integrations, and backend architecture built to support growth.",
     },
     {
+      id: "admin-dashboards",
       icon: LuShield,
       title: "Admin Dashboards",
       description:
-        "Intuitive admin interfaces featuring real-time data visualization, operational analytics, user management, and fine-grained role-based access control.",
+        "Intuitive admin interfaces with real-time reporting, data visualization, and role-based access control.",
     },
     {
+      id: "membership-systems",
       icon: LuShieldCheck,
       title: "Membership Systems",
       description:
-        "Complete membership platforms equipped with secure authentication, member directories, tier management, engagement tools, and renewal automation.",
+        "Full membership platforms with secure authentication, member directories, tiered access, and engagement tools.",
     },
     {
+      id: "workflow-automation",
       icon: LuZap,
       title: "Workflow Automation",
       description:
-        "Streamlined business operations through automated multi-step workflows, triggered notifications, CRM synchronization, and process optimization.",
+        "Automate repetitive processes with smart workflows, email triggers, and operational efficiency built in.",
     },
     {
+      id: "payment-integration",
       icon: LuCreditCard,
       title: "Payment Integration",
       description:
-        "Secure payment processing featuring multi-gateway integration, subscription billing, automated invoicing, and reconciliation-ready transaction reporting.",
+        "Secure, PCI-compliant payment processing with subscription billing and transparent transaction reporting.",
     },
   ];
   const builtForSuccess = [
     {
       title: "We Build for Scale",
       description:
-        "We design systems that grow with your organization, ensuring seamless scalability and long-term performance under increasing demand.",
+        "Every system we design grows with your organization, ensuring seamless scalability and long-term performance.",
     },
     {
       title: "Transparency-First",
       description:
-        "Clear communication, honest timelines, milestone-based delivery, and collaborative decision-making at every stage.",
+        "Clear communication, honest timelines, and collaborative decision-making at every stage of your project.",
     },
     {
       title: "Impact-Driven",
       description:
-        "We prioritize projects that create tangible value, empower communities, and drive meaningful, measurable change.",
+        "We measure success by the real-world results our platforms deliver for your business and your users.",
     },
     {
       title: "Execution Excellence",
       description:
-        "Clean code, thoughtful design architecture, and rigorous quality assurance in everything we deliver.",
+        "Clean code, thoughtful design, and rigorous quality standards in everything we deliver.",
     },
   ];
   const coreValues = [
@@ -83,7 +89,7 @@ export default function Services() {
       title: "Requirements",
       title2: "Structuring",
       description:
-        "Translate ambiguous project goals into clear, actionable technical specifications and product roadmaps.",
+        "We translate ambiguous goals into clear, actionable specifications through technical discovery, requirements documentation, architecture planning, and stakeholder alignment.",
       list: [
         "Technical discovery sessions",
         "System requirements documentation",
@@ -96,7 +102,7 @@ export default function Services() {
       title: "UI",
       title2: "Architecture",
       description:
-        "Design system development and component libraries that scale seamlessly across your entire digital product suite.",
+        "We build scalable design systems and component libraries — including component development, design tokens, pattern documentation, and accessibility compliance.",
       list: [
         "Component library development",
         "Design token systems",
@@ -109,7 +115,7 @@ export default function Services() {
       title: "Dashboard",
       title2: "Development",
       description:
-        "Custom operational dashboards and data visualization tools designed for internal management teams.",
+        "We build custom analytics dashboards with real-time data visualization, custom metrics tracking, interactive reporting, and export capabilities.",
       list: [
         "Real-time data visualization",
         "Custom metrics tracking",
@@ -122,7 +128,7 @@ export default function Services() {
       title: "Workflow",
       title2: "Modeling",
       description:
-        "Map complex business processes into structured, automated, and error-resilient digital workflows.",
+        "We map complex business processes into efficient digital workflows through process documentation, automation opportunities, and integration planning.",
       list: [
         "Process documentation",
         "Automation opportunities",
@@ -135,7 +141,7 @@ export default function Services() {
       title: "Scalability",
       title2: "Planning",
       description:
-        "Architecture review, load forecasting, and infrastructure planning for rapidly growing platforms.",
+        "We review architecture and plan infrastructure for growing platforms through performance audits, optimization, load testing, and growth road-mapping.",
       list: [
         "Performance audits",
         "Infrastructure optimization",
@@ -148,7 +154,7 @@ export default function Services() {
       title: "System",
       title2: "Integration",
       description:
-        "Seamlessly connect your digital ecosystem through robust APIs, secure webhooks, and synchronized data layers.",
+        "We connect your digital ecosystem seamlessly through API development, documentation, legacy system migration, and third-party tool integration.",
       list: [
         "API development & documentation",
         "Legacy system migration",
@@ -183,8 +189,8 @@ export default function Services() {
 
           <ScrollReveal direction="up" delay={220}>
             <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-gray-200 drop-shadow-sm">
-              Agunwami Enterprise designs and builds platform solutions from
-              websites, dashboards, and systems that solve real problems and grow
+              Agunwami Enterprise designs and builds platform solutions, from
+              websites and dashboards to systems that solve real problems and grow
               with your organization.
             </p>
           </ScrollReveal>
@@ -202,7 +208,7 @@ export default function Services() {
       </Section>
       <Section>
         <ScrollReveal direction="up">
-          <SectionWithHeading heading="Core Services" />
+          <SectionWithHeading heading="Our Services" />
         </ScrollReveal>
         <div className="flex flex-col md:flex-row items-center gap-10 justify-between">
           <ScrollReveal direction="left" className="overflow-hidden rounded-xl w-full md:w-fit shadow-lg">
@@ -218,7 +224,7 @@ export default function Services() {
           <ScrollReveal direction="right" className="w-full md:w-[50%]">
             <blockquote className="border-l-4 border-primary bg-white dark:bg-white/5 shadow-sm rounded-r-xl pl-6 pr-6 py-10 md:py-20 w-full">
               <p className="text-[22px] md:text-[26px] leading-[32px] md:leading-[36px] font-semibold text-gray-900 dark:text-white">
-                We deliver end-to-end platform solutions, from requirements to launch
+                We deliver end-to-end platform solutions, from requirements to launch,
                 engineered to solve real-world challenges and scale your organization.
               </p>
             </blockquote>
@@ -227,13 +233,15 @@ export default function Services() {
       </Section>
       <Section className="grid grid-cols-1 md:grid-cols-3 gap-10">
         {services.map((service, index) => (
-          <ScrollReveal key={index} delay={index * 100}>
-            <Card
-              icon={service.icon}
-              title={service.title}
-              description={service.description}
-              className="h-full"
-            />
+          <ScrollReveal key={index} delay={index * 100} className="h-full">
+            <div id={service.id} className="scroll-mt-28 h-full">
+              <Card
+                icon={service.icon}
+                title={service.title}
+                description={service.description}
+                className="h-full"
+              />
+            </div>
           </ScrollReveal>
         ))}
       </Section>
@@ -273,7 +281,7 @@ export default function Services() {
         </div>
       </Section>
 
-      <Section className="space-y-16">
+      <Section id="core-values" className="space-y-16 scroll-mt-28">
         <ScrollReveal direction="up">
           <SectionWithHeading heading="Core Values" />
         </ScrollReveal>

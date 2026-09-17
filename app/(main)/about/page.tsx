@@ -9,10 +9,10 @@ import {
   RiHeartLine,
   RiUserLine,
   RiFocus3Line,
-  RiLinkedinBoxFill,
 } from "react-icons/ri";
 import { type IconType } from "react-icons";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
+import TeamSlider, { type TeamMember } from "@/app/components/common/TeamSlider";
 
 interface CoreValue {
   icon: IconType;
@@ -20,42 +20,41 @@ interface CoreValue {
   description: string;
 }
 
-interface LeadershipMember {
-  name: string;
-  role: string;
-  bio: string;
-  image: string;
-  linkedin: string;
-}
-
-const leadershipTeam: LeadershipMember[] = [
+const leadershipTeam: TeamMember[] = [
   {
-    name: "Agunwami Ang.",
+    name: "Agunwami .O.",
     role: "Chief Executive Officer",
     bio: "Visionary leader with over 12 years of experience in digital strategy, business development, and platform innovation.",
-    image: "/whoweare.jpg",
-    linkedin: "https://linkedin.com",
+    image: "/agunwami_ceo.jpg",
+    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
   },
   {
     name: "Japhet Marshall",
-    role: "Chief Operation Officer",
+    role: "Operation Manager",
     bio: "A strategist with expertise in systems architecture, process optimization, and organizational excellence.",
-    image: "/whoweare.jpg",
-    linkedin: "https://linkedin.com",
+    image: "/japhet_coo.jpg",
+    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
   },
   {
     name: "Jesse A.",
-    role: "Head of Technology",
+    role: "Technology Officer",
     bio: "Full-stack technologist with deep expertise in cloud infrastructure, platform engineering, and scalability.",
-    image: "/whoweare.jpg",
-    linkedin: "https://linkedin.com",
+    image: "/team_placeholder.jpg",
+    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
   },
   {
-    name: "Rita Nwosu",
-    role: "Head of Partnership",
-    bio: "Partnerships and stakeholder relations expert with a track record of building impactful collaborations.",
-    image: "/whoweare.jpg",
-    linkedin: "https://linkedin.com",
+    name: "Aisha Y.",
+    role: "Project Manager",
+    bio: "Agile delivery specialist ensuring complex digital projects launch seamlessly on time, within scope, and at peak quality.",
+    image: "/aisha_pm.jpg",
+    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
+  },
+  {
+    name: "Chris Hayes",
+    role: "Research & Development Director",
+    bio: "Pioneering technological exploration and architectural roadmaps for sustainable, next-generation digital ecosystems.",
+    image: "/chris_hayes.jpg",
+    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
   },
 ];
 
@@ -252,59 +251,12 @@ export default function AboutPage() {
         </div>
       </Section>
 
-      {/* ── Our Leadership ── */}
-      <Section className="bg-white dark:bg-[#0D0D0D]">
-        <ScrollReveal direction="up">
-          <SectionWithHeading heading="Our Leadership" className="mb-4" />
-        </ScrollReveal>
-        <ScrollReveal direction="none" delay={100}>
-          <p className="text-[18px] leading-[32px] text-[#7C7C7C] dark:text-gray-400 mb-12 max-w-2xl">
-            The minds behind Agunwami Enterprise, experienced leaders passionate
-            about building systems that create opportunity and drive impact.
-          </p>
-        </ScrollReveal>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {leadershipTeam.map((member, index) => (
-            <ScrollReveal key={index} direction="up" delay={index * 100}>
-              <div className="bg-[#FAFAFA] dark:bg-white/5 rounded-2xl overflow-hidden flex flex-col h-full border border-gray-100 dark:border-white/10 hover:shadow-lg transition-shadow duration-300">
-                {/* Photo */}
-                <div className="w-full aspect-[4/3] overflow-hidden">
-                  <img
-                    src={member.image}
-                    alt={member.name}
-                    className="w-full h-full object-cover object-top transition-transform duration-500 hover:scale-105"
-                  />
-                </div>
-
-                {/* Card body */}
-                <div className="flex flex-col gap-3 p-6 flex-1">
-                  <h3 className="text-[22px] font-primary font-semibold text-gray-900 dark:text-white leading-snug">
-                    {member.name}
-                  </h3>
-                  <p className="text-[15px] font-semibold text-primary">
-                    {member.role}
-                  </p>
-                  <p className="text-[15px] leading-[26px] text-[#7C7C7C] dark:text-gray-400 flex-1">
-                    {member.bio}
-                  </p>
-
-                  {/* LinkedIn */}
-                  <a
-                    href={member.linkedin}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-[14px] font-medium text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors duration-200 mt-2 w-fit"
-                  >
-                    <RiLinkedinBoxFill className="text-[28px] text-[#0A66C2]" />
-                    <span>LinkedIn ↗</span>
-                  </a>
-                </div>
-              </div>
-            </ScrollReveal>
-          ))}
-        </div>
-      </Section>
+      {/* ── Our Leadership (Slider) ── */}
+      <TeamSlider
+        variant="about"
+        aboutHeading="Our Leadership"
+        aboutDescription="The minds behind Agunwami Enterprise, experienced leaders passionate about building systems that create opportunity and drive impact."
+      />
 
       {/* ── Our Delivery Philosophy ── */}
       <section className="px-6 md:px-20 py-20 md:py-25 min-h-[50vh] flex flex-col justify-center bg-[#1A1A1A] text-white bg-cta bg-cover bg-center bg-no-repeat">

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { DM_Serif_Display, Geist, Geist_Mono, Inter } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 import ThemeProvider from "./components/common/ThemeProvider";
 import { AuthProvider } from "@/lib/workstation/auth-context";
@@ -53,18 +52,18 @@ export default function RootLayout({
       className={`${dmSerifDisplay.variable} ${inter.variable} ${geistSans.variable} ${geistMono.variable} antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        {/*
-          Blocking script — executes before first paint to prevent theme flash.
-          Handles both public site 'theme' key and workstation 'ae-theme' key.
-        */}
-        <Script
+      <head>
+        {/* Blocking script — executes before first paint to prevent theme flash.
+            Handles both public site 'theme' key and workstation 'ae-theme' key.
+            Placed in <head> so React 19 hoists it without triggering the script-in-body warning. */}
+        <script
           id="theme-init"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var s=localStorage.getItem('theme')||localStorage.getItem('ae-theme');var d=document.documentElement;if(s==='dark'){d.classList.add('dark');d.classList.remove('light')}else if(s==='light'){d.classList.remove('dark');d.classList.add('light')}else{d.classList.remove('light');if(window.matchMedia('(prefers-color-scheme: dark)').matches){d.classList.add('dark')}else{d.classList.remove('dark')}}}catch(e){}})();`,
           }}
         />
+      </head>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
             {children}
