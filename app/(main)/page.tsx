@@ -108,7 +108,8 @@ export default function MainPage() {
   const AE = [
     {
       title: "AE Hub",
-      description: "Interactive educational platform powering online learning, digital classrooms, and student success",
+      description:
+        "Interactive educational platform powering online learning, digital classrooms, and student success",
       status: "ACTIVE",
     },
     {
@@ -333,7 +334,13 @@ export default function MainPage() {
               strokeDasharray="6 6"
               opacity="0.2"
             />
-            <circle cx="1140" cy="160" r="3.5" fill="currentColor" opacity="0.3" />
+            <circle
+              cx="1140"
+              cy="160"
+              r="3.5"
+              fill="currentColor"
+              opacity="0.3"
+            />
             <path
               d="M100 700 H280 L320 660 H600 L640 700 H850"
               stroke="currentColor"
@@ -342,7 +349,6 @@ export default function MainPage() {
             />
           </svg>
         </div>
-
         <div className="relative z-10 max-w-7xl mx-auto space-y-12">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
