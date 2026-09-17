@@ -11,7 +11,6 @@ import { TeamMember, defaultTeam } from "./teamData";
 export type { TeamMember };
 export { defaultTeam };
 
-
 interface TeamSliderProps {
   members?: TeamMember[];
   variant?: "home" | "about";
@@ -32,10 +31,19 @@ export default function TeamSlider({
   title1 = "The Team",
   title2 = "Behind AE",
   aboutHeading = "Our Leadership",
-  aboutDescription = "The minds behind Agunwami Enterprise, experience leaders passionate about building systems that create opportunity and drive imapct.",
+  aboutDescription = "The minds behind Agunwami Enterprise, experienced leaders passionate about building systems that create opportunity and drive impact.",
   badgeText = "Leadership",
 }: TeamSliderProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const N = members.length;
+
+  // Cloned array for seamless infinite looping (3 copies)
+  const extendedMembers = N > 0 ? [...members, ...members, ...members] : [];
+
+  // Start in the middle copy (index N)
+  const [currentIndex, setCurrentIndex] = useState(N);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const isTransitioningRef = useRef(false);
+
   const [isPaused, setIsPaused] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -61,24 +69,77 @@ export default function TeamSlider({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const maxIndex = Math.max(0, members.length - itemsPerView);
+  // Update currentIndex if members change
+  useEffect(() => {
+    setCurrentIndex(members.length);
+  }, [members.length]);
 
-  const prevSlide = useCallback(() => {
-    setCurrentIndex((prev) => (prev > 0 ? prev - 1 : maxIndex));
-  }, [maxIndex]);
+  // Seamless jump reset on transition end
+  const handleTransitionEnd = useCallback(() => {
+    isTransitioningRef.current = false;
+    setIsAnimating(false);
+    if (N === 0) return;
 
+    setCurrentIndex((curr) => {
+      if (curr >= 2 * N) {
+        return curr - N;
+      }
+      if (curr < N) {
+        return curr + N;
+      }
+      return curr;
+    });
+  }, [N]);
+
+  // Fallback safety timer for transitions
+  useEffect(() => {
+    if (!isAnimating) return;
+    const timer = setTimeout(() => {
+      if (isTransitioningRef.current) {
+        handleTransitionEnd();
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [isAnimating, handleTransitionEnd]);
+
+  // Slide forward (infinite circular loop)
   const nextSlide = useCallback(() => {
-    setCurrentIndex((prev) => (prev < maxIndex ? prev + 1 : 0));
-  }, [maxIndex]);
+    if (isTransitioningRef.current || N <= 1) return;
+    isTransitioningRef.current = true;
+    setIsAnimating(true);
+    setCurrentIndex((prev) => prev + 1);
+  }, [N]);
+
+  // Slide backward (infinite circular loop)
+  const prevSlide = useCallback(() => {
+    if (isTransitioningRef.current || N <= 1) return;
+    isTransitioningRef.current = true;
+    setIsAnimating(true);
+    setCurrentIndex((prev) => prev - 1);
+  }, [N]);
+
+  // Active dot in the 0..N-1 space
+  const activeDot = N > 0 ? ((currentIndex % N) + N) % N : 0;
+
+  // Jump to specific dot smoothly via shortest circular path
+  const goToSlide = (dotIdx: number) => {
+    if (isTransitioningRef.current || dotIdx === activeDot || N <= 1) return;
+    isTransitioningRef.current = true;
+    setIsAnimating(true);
+    let diff = dotIdx - activeDot;
+    if (diff > N / 2) diff -= N;
+    if (diff < -N / 2) diff += N;
+    setCurrentIndex((prev) => prev + diff);
+  };
 
   // Autoplay
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || N <= 1) return;
     const timer = setInterval(() => {
       nextSlide();
     }, 5500);
     return () => clearInterval(timer);
-  }, [isPaused, nextSlide]);
+  }, [isPaused, nextSlide, N]);
 
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -273,12 +334,16 @@ export default function TeamSlider({
           onMouseUp={handleMouseUp}
         >
           <div
-            className="flex transition-transform duration-500 ease-out"
+            onTransitionEnd={handleTransitionEnd}
+            className="flex"
             style={{
               transform: `translateX(-${currentIndex * (100 / itemsPerView)}%)`,
+              transition: isAnimating
+                ? "transform 500ms cubic-bezier(0.25, 1, 0.5, 1)"
+                : "none",
             }}
           >
-            {members.map((member, idx) => (
+            {extendedMembers.map((member, idx) => (
               <div
                 key={idx}
                 className="flex-shrink-0 px-3 md:px-4"
@@ -328,20 +393,22 @@ export default function TeamSlider({
         </div>
 
         {/* Pagination Dots */}
-        <div className="flex items-center justify-center gap-2 pt-2">
-          {Array.from({ length: maxIndex + 1 }).map((_, dotIdx) => (
-            <button
-              key={dotIdx}
-              onClick={() => setCurrentIndex(dotIdx)}
-              aria-label={`Go to slide ${dotIdx + 1}`}
-              className={`h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
-                currentIndex === dotIdx
-                  ? "w-8 bg-primary"
-                  : "w-2.5 bg-gray-300 dark:bg-white/20 hover:bg-gray-400"
-              }`}
-            />
-          ))}
-        </div>
+        {N > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-2">
+            {Array.from({ length: N }).map((_, dotIdx) => (
+              <button
+                key={dotIdx}
+                onClick={() => goToSlide(dotIdx)}
+                aria-label={`Go to slide ${dotIdx + 1}`}
+                className={`h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
+                  activeDot === dotIdx
+                    ? "w-8 bg-primary"
+                    : "w-2.5 bg-gray-300 dark:bg-white/20 hover:bg-gray-400"
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

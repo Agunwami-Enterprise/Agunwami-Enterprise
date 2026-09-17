@@ -207,9 +207,9 @@ export const ARTICLES: Article[] = [
       "How leveraging real-time data insights helps organizations make smarter decisions and build more effective, resilient systems.",
     date: "Apr 10, 2025",
     readTime: "6 min read",
-    author: "Jesse A.",
-    authorRole: "Technology Officer",
-    authorImage: "/team_placeholder.jpg",
+    author: "Chris Hayes",
+    authorRole: "Research & Development Director",
+    authorImage: "/chris_hayes.jpg",
     image: "/whatwedo.jpg",
     slug: "data-driven-decisions-for-smarter-systems",
     intro:

@@ -22,13 +22,6 @@ export const defaultTeam: TeamMember[] = [
     linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
   },
   {
-    name: "Jesse A.",
-    role: "Technology Officer",
-    bio: "Full-stack technologist with deep expertise in cloud infrastructure, platform engineering, and scalability.",
-    image: "/team_placeholder.jpg",
-    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
-  },
-  {
     name: "Aisha Y.",
     role: "Project Manager",
     bio: "Agile delivery specialist ensuring complex digital projects launch seamlessly on time, within scope, and at peak quality.",
