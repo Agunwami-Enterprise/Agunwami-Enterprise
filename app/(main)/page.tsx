@@ -428,7 +428,7 @@ export default function MainPage() {
       <Section className="bg-primary/10 dark:bg-primary/5">
         <ScrollReveal className="w-full">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-            <div className="overflow-hidden rounded-xl w-full shadow-lg">
+            <div className="overflow-hidden rounded-xl w-full ">
               <Image
                 src="/whatwedo.png"
                 alt="What We Do - Digital Infrastructure & Systems"
