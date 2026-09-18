@@ -428,14 +428,14 @@ export default function MainPage() {
       <Section className="bg-primary/10 dark:bg-primary/5">
         <ScrollReveal className="w-full">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-            <div className="overflow-hidden rounded-xl w-full ">
+            <div className="overflow-hidden rounded-xl w-full">
               <Image
                 src="/whatwedo.png"
                 alt="What We Do - Digital Infrastructure & Systems"
                 width={700}
                 height={400}
                 className="relative w-full h-full object-cover hover:scale-105 transition-all duration-300 ease-in-out"
-                style={{ width: "100%", maxWidth: "700px" }}
+                style={{ width: "100%" }}
               />
             </div>
             <div className="space-y-5 justify-center flex flex-col">
