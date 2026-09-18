@@ -160,7 +160,7 @@ export default function MainPage() {
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={200}>
-            <p className="text-[17px] md:text-[20px] lg:text-[22px] xl:text-[24px] leading-[26px] md:leading-[32px] lg:leading-[36px] text-[#7C7C7C] dark:text-gray-300 max-w-3xl">
+            <p className="text-[17px] md:text-[20px] lg:text-[22px] xl:text-[24px] leading-[26px] md:leading-[32px] lg:leading-[36px] text-white dark:text-gray-300 max-w-3xl">
               Agunwami Enterprise partners with businesses, startups,
               institutions, and non-profit organizations to design, build, and
               scale secure digital infrastructure, enterprise software,
