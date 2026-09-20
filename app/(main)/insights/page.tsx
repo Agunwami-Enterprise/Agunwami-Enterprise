@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import CTA from "@/app/components/common/CTA";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
+import HeroScrollIndicator from "@/app/components/common/HeroScrollIndicator";
 import Section from "@/app/components/common/ui/Section";
 import { cn } from "@/lib/utils";
 import {
@@ -58,7 +59,7 @@ export default function InsightsPage() {
   return (
     <main className="flex flex-col items-center w-full bg-[#FAFAFA] dark:bg-[#0a0a0a]">
       {/* ── Hero ── */}
-      <Section className="relative flex flex-col justify-between min-h-[540px] sm:min-h-[600px] md:min-h-[680px] lg:min-h-[760px] bg-insights-hero dark:bg-insights-hero-dark bg-cover bg-[position:center_top] md:bg-[position:center_15%] bg-no-repeat pt-28 md:pt-36 pb-16">
+      <Section className="relative flex flex-col justify-between min-h-[540px] sm:min-h-[600px] md:min-h-[680px] lg:min-h-[760px] bg-insights-hero dark:bg-insights-hero-dark bg-cover bg-[position:center_top] md:bg-[position:center_15%] bg-no-repeat pt-28 md:pt-36 pb-8 md:pb-12 space-y-0">
         {/* Subtle cyber ecobg overlay */}
         <div className="absolute right-[50%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-40 pointer-events-none">
           <img
@@ -68,7 +69,7 @@ export default function InsightsPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-6 justify-center flex-1 w-full relative z-10 max-w-4xl">
+        <div className="flex flex-col gap-6 justify-center flex-1 w-full relative z-10 max-w-4xl my-auto py-6">
           <ScrollReveal direction="down">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase bg-primary/20 text-primary border border-primary/40 w-fit backdrop-blur-md">
               <RiSparklingLine className="text-sm" />
@@ -91,14 +92,7 @@ export default function InsightsPage() {
         </div>
 
         {/* Explore Scroll indicator */}
-        <ScrollReveal direction="none" delay={800}>
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10">
-            <span className="text-[11px] tracking-[0.25em] uppercase text-gray-400 font-medium animate-pulse-slow">
-              Explore
-            </span>
-            <div className="w-px h-12 bg-gradient-to-b from-gray-400 to-transparent animate-float" />
-          </div>
-        </ScrollReveal>
+        <HeroScrollIndicator label="Explore" delay={800} />
       </Section>
 
       {/* ── Articles Catalog Section ── */}

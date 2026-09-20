@@ -27,13 +27,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Digital Infrastructure Company in the World | Software Development | Agunwami Enterprise",
+  title: "Custom Software Development Company | Agunwami Enterprise",
   description:
-    "Agunwami Enterprise builds enterprise software, AI solutions, fintech platforms, digital infrastructure, business automation systems, and scalable technology solutions for organizations across the world.",
+    "Need digital infrastructure? Agunwami Enterprise builds custom software, digital platforms, and web solutions for organizations and technology teams.",
   keywords: [
-    "digital infrastructure company in the world",
+    "software development company",
+    "custom software development company",
+    "web development company",
+    "digital infrastructure",
     "enterprise software development",
-    "software development company in the world",
     "business automation solutions",
   ],
   icons: {
@@ -59,7 +61,8 @@ export default function RootLayout({
         <script
           id="theme-init"
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('theme')||localStorage.getItem('ae-theme');var d=document.documentElement;if(s==='dark'){d.classList.add('dark');d.classList.remove('light')}else if(s==='light'){d.classList.remove('dark');d.classList.add('light')}else{d.classList.remove('light');if(window.matchMedia('(prefers-color-scheme: dark)').matches){d.classList.add('dark')}else{d.classList.remove('dark')}}}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem('theme')||localStorage.getItem('ae-theme');var d=document.documentElement;if(s==='dark'){d.classList.add('dark');d.classList.remove('light')}else if(s==='light'){d.classList.remove('dark');d.classList.add('light')}else{d.classList.remove('light');if(window.matchMedia('(prefers-color-scheme: dark)').matches){d.classList.add('dark')}else{d.classList.remove('dark')}}}catch(e){}})();
+            (function(){if(typeof window!=='undefined'&&'serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(regs){for(var r of regs){r.unregister();}});}})();`,
           }}
         />
       </head>

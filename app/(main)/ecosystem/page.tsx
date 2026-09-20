@@ -1,7 +1,9 @@
 import CTA from "@/app/components/common/CTA";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
+import HeroScrollIndicator from "@/app/components/common/HeroScrollIndicator";
 import Badge from "@/app/components/common/ui/Badge";
 import Card from "@/app/components/common/ui/Card";
+import type { Metadata } from "next";
 import Section, {
   SectionWithHeading,
 } from "@/app/components/common/ui/Section";
@@ -16,6 +18,13 @@ import {
   SiChainlink,
   SiHiveBlockchain,
 } from "react-icons/si";
+
+export const metadata: Metadata = {
+  title: "Digital Platform Development Built for Scale | Agunwami Enterprise",
+  description:
+    "Explore Agunwami Enterprise digital platforms and infrastructure designed to connect technology, operations, and opportunity through scalable systems.",
+};
+
 
 export default function EcosystemPage() {
   const WhyEcosystem = [
@@ -40,16 +49,16 @@ export default function EcosystemPage() {
   ];
   return (
     <main className="flex flex-col items-center w-full">
-      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-eco-hero dark:bg-eco-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-16">
+      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-eco-hero dark:bg-eco-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-8 md:pb-12 space-y-0">
         {/* Text block — left column */}
-        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
+        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70 pointer-events-none">
           <img
             src="/ecobg.png"
             alt=""
             className="w-full h-fit scale-[0.6] mt-[-300px]"
           />
         </div>
-        <div className="flex flex-col gap-6 justify-center flex-1 w-full">
+        <div className="flex flex-col gap-6 justify-center flex-1 w-full relative z-10 my-auto py-6">
           <ScrollReveal direction="none">
             <Badge title="Interconnected Platforms" type="primary" />
           </ScrollReveal>
@@ -62,7 +71,7 @@ export default function EcosystemPage() {
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={220}>
-            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C]">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-gray-700 dark:text-gray-300">
               A growing network of interconnected platforms designed to solve
               real problems and create opportunities across emerging markets.
             </p>
@@ -70,14 +79,7 @@ export default function EcosystemPage() {
         </div>
 
         {/* Scroll indicator */}
-        <ScrollReveal direction="none" delay={800}>
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-            <span className="text-[11px] tracking-[0.2em] uppercase text-gray-400 font-medium animate-pulse-slow">
-              Explore
-            </span>
-            <div className="w-px h-12 bg-gradient-to-b from-gray-400 to-transparent animate-float" />
-          </div>
-        </ScrollReveal>
+        <HeroScrollIndicator label="Explore" delay={800} />
       </Section>
       <Section className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] items-start gap-20 justify-between">
         <div className="w-fit">
@@ -128,12 +130,17 @@ export default function EcosystemPage() {
           <div className="absolute right-[90%] top-0 h-[280vh] overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
             <img src="/ecobg.png" alt="" className="w-full h-full" />
           </div>
+          {/* SEO H1 — visually hidden, readable by search engines & screen readers */}
+          <h1 className="sr-only">
+            Building Digital Infrastructure That Helps Start-ups, Businesses, and Non-profit organizations Scale Faster
+          </h1>
           <SectionWithHeading
             heading="Our Platforms"
             description2="Active and upcoming platforms in the AE ecosystem"
             className="text-center flex flex-col items-center"
           />
         </ScrollReveal>
+
         <div className="space-y-12">
           {projects
             .filter((item) => !item.client)

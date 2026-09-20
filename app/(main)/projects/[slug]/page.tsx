@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
+import HeroScrollIndicator from "@/app/components/common/HeroScrollIndicator";
 import Section from "@/app/components/common/ui/Section";
 import { cn } from "@/lib/utils";
 import { getProjectBySlug, projects } from "@/lib/dummy";
@@ -17,11 +19,54 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+/** Per-project SEO metadata from the official metadata document */
+const PROJECT_META: Record<string, { title: string; description: string }> = {
+  trendora: {
+    title: "Trendora Store | E-commerce Platform Project | Agunwami Enterprise",
+    description:
+      "Explore Trendora Store, an e-commerce platform built by Agunwami Enterprise for fashion, lifestyle products, discovery, and retail growth.",
+  },
+  meridiancrestsolutions: {
+    title:
+      "Meridian Crest Solutions | Digital Platform Project | Agunwami Enterprise",
+    description:
+      "Explore the Meridian Crest Solutions project, a digital platform built by Agunwami Enterprise for business consulting and strategic services.",
+  },
+  abiawomenassembly: {
+    title: "Abia Women Assembly | Digital Platform Project | Agunwami Enterprise",
+    description:
+      "Explore how Agunwami Enterprise built a digital platform for Abia Women Assembly, supporting event registration, community management, and engagement.",
+  },
+  "delight-tees": {
+    title: "Delight Tees | E-commerce Platform Project | Agunwami Enterprise",
+    description:
+      "Explore Delight Tees, an e-commerce platform built by Agunwami Enterprise for product discovery, retail operations, and online customer experiences.",
+  },
+};
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const project = getProjectBySlug(slug);
+  if (!project) return {};
+
+  const custom = PROJECT_META[slug];
+  if (custom) return custom;
+
+  // Fallback for ecosystem projects not in the metadata doc
+  return {
+    title: `${project.name} | Digital Platform | Agunwami Enterprise`,
+    description: project.homeDescription,
+  };
+}
+
 export function generateStaticParams() {
   return projects.map((p) => ({
     slug: p.link.replace(/^\/projects\//, ""),
   }));
 }
+
 
 export default async function ProjectSinglePage({ params }: PageProps) {
   const { slug } = await params;
@@ -43,7 +88,7 @@ export default async function ProjectSinglePage({ params }: PageProps) {
       {/* ── Hero ── */}
       <Section
         className={cn(
-          "relative flex flex-col justify-between min-h-[540px] sm:min-h-[600px] md:min-h-[680px] lg:min-h-[760px] bg-cover bg-[position:center_top] md:bg-[position:center_20%] bg-no-repeat pt-28 md:pt-36 pb-16",
+          "relative flex flex-col justify-between min-h-[540px] sm:min-h-[600px] md:min-h-[680px] lg:min-h-[760px] bg-cover bg-[position:center_top] md:bg-[position:center_20%] bg-no-repeat pt-28 md:pt-36 pb-8 md:pb-12 space-y-0",
           heroBgClass,
         )}
       >
@@ -56,7 +101,7 @@ export default async function ProjectSinglePage({ params }: PageProps) {
           />
         </div>
 
-        <div className="flex flex-col gap-5 justify-center flex-1 w-full relative z-10 max-w-4xl">
+        <div className="flex flex-col gap-5 justify-center flex-1 w-full relative z-10 max-w-4xl my-auto py-6">
           {/* Breadcrumb */}
           <ScrollReveal direction="none">
             <nav className="flex items-center gap-2 text-[13px] text-gray-400 mb-2">
@@ -99,14 +144,7 @@ export default async function ProjectSinglePage({ params }: PageProps) {
         </div>
 
         {/* Explore Scroll indicator */}
-        <ScrollReveal direction="none" delay={700}>
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10">
-            <span className="text-[11px] tracking-[0.25em] uppercase text-gray-400 font-medium animate-pulse-slow">
-              Explore
-            </span>
-            <div className="w-px h-12 bg-gradient-to-b from-gray-400 to-transparent animate-float" />
-          </div>
-        </ScrollReveal>
+        <HeroScrollIndicator label="Explore" delay={700} />
       </Section>
 
       {/* ── Gold Stats Bar ── */}

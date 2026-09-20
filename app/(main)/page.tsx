@@ -144,8 +144,8 @@ export default function MainPage() {
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
-      <Section className="min-h-[100dvh] bg-hero-gradient dark:bg-hero-gradient-dark bg-cover bg-center bg-no-repeat flex flex-col justify-center items-center lg:items-start pt-28 md:pt-32 pb-16 w-full">
-        <div className="w-full space-y-6 flex flex-col items-center lg:items-start text-center lg:text-left">
+      <Section className="min-h-[100dvh] bg-hero-gradient dark:bg-hero-gradient-dark bg-cover bg-center bg-no-repeat flex flex-col justify-center items-center lg:items-start pt-28 md:pt-32 pb-16 w-full space-y-0">
+        <div className="w-full space-y-6 flex flex-col items-center lg:items-start text-center lg:text-left my-auto py-6">
           <ScrollReveal direction="down">
             <Badge title="Platform Infrastructure Partner" type="primary" />
           </ScrollReveal>
@@ -160,7 +160,7 @@ export default function MainPage() {
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={200}>
-            <p className="text-[17px] md:text-[20px] lg:text-[22px] xl:text-[24px] leading-[26px] md:leading-[32px] lg:leading-[36px] text-white dark:text-gray-300 max-w-3xl">
+            <p className="text-[17px] md:text-[20px] lg:text-[22px] xl:text-[24px] leading-[26px] md:leading-[32px] lg:leading-[36px] text-gray-700 dark:text-gray-300 max-w-3xl">
               Agunwami Enterprise partners with businesses, startups,
               institutions, and non-profit organizations to design, build, and
               scale secure digital infrastructure, enterprise software,

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
+import HeroScrollIndicator from "@/app/components/common/HeroScrollIndicator";
 import Badge from "@/app/components/common/ui/Badge";
 import Section from "@/app/components/common/ui/Section";
 import { cn } from "@/lib/utils";
@@ -994,7 +995,7 @@ export default function PartnershipApplyPage() {
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
-      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-apply-hero dark:bg-apply-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-16">
+      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-apply-hero dark:bg-apply-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-8 md:pb-12 space-y-0">
         {/* Background ecobg overlay */}
         <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70 pointer-events-none">
           <img
@@ -1004,7 +1005,7 @@ export default function PartnershipApplyPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-6 justify-center flex-1 w-full">
+        <div className="flex flex-col gap-6 justify-center flex-1 w-full relative z-10 my-auto py-6">
           <ScrollReveal direction="none">
             <nav className="flex items-center gap-2 text-[13px] text-gray-500 dark:text-gray-400">
               <Link
@@ -1032,7 +1033,7 @@ export default function PartnershipApplyPage() {
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={220}>
-            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C] dark:text-gray-400">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-gray-700 dark:text-gray-300">
               Tell us about yourself, your organization, and what you are
               looking to build. We review every application and respond within
               48 hours.
@@ -1041,14 +1042,7 @@ export default function PartnershipApplyPage() {
         </div>
 
         {/* Scroll indicator */}
-        <ScrollReveal direction="none" delay={800}>
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-            <span className="text-[11px] tracking-[0.2em] uppercase text-gray-400 font-medium animate-pulse-slow">
-              Scroll
-            </span>
-            <div className="w-px h-12 bg-gradient-to-b from-gray-400 to-transparent animate-float" />
-          </div>
-        </ScrollReveal>
+        <HeroScrollIndicator label="Scroll" delay={800} />
       </Section>
 
       {/* ── Multi-step Form ── */}

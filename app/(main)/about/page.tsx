@@ -3,6 +3,7 @@ import Section, {
 } from "@/app/components/common/ui/Section";
 import Link from "next/link";
 import { BsArrowRight } from "react-icons/bs";
+import type { Metadata } from "next";
 import {
   RiShieldLine,
   RiLightbulbLine,
@@ -13,6 +14,13 @@ import {
 import { type IconType } from "react-icons";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
 import TeamSlider, { type TeamMember } from "@/app/components/common/TeamSlider";
+
+export const metadata: Metadata = {
+  title: "Software Development Company For Growing Businesses | Agunwami Enterprise",
+  description:
+    "Learn how Agunwami Enterprise builds custom software, digital platforms, and scalable infrastructure for organizations, institutions, and technology teams.",
+};
+
 
 interface CoreValue {
   icon: IconType;
@@ -88,8 +96,8 @@ export default function AboutPage() {
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
-      <Section className="bg-about dark:bg-about-dark bg-cover bg-center bg-no-repeat min-h-[100dvh] flex flex-col justify-center items-center md:items-start pt-28 md:pt-32 pb-16">
-        <div className="w-full space-y-6 flex flex-col items-center md:items-start text-center md:text-left">
+      <Section className="bg-about dark:bg-about-dark bg-cover bg-center bg-no-repeat min-h-[100dvh] flex flex-col justify-center items-center md:items-start pt-28 md:pt-32 pb-16 space-y-0">
+        <div className="w-full space-y-6 flex flex-col items-center md:items-start text-center md:text-left my-auto py-6">
           <ScrollReveal direction="up">
             <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-white drop-shadow-sm">
               About <br className="hidden sm:block" />

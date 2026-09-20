@@ -199,7 +199,7 @@ export const projects: ProjectItem[] = [
     client: true,
     icon: BiShoppingBag,
     name: "Delight Tees",
-    image: "/delight.jpg",
+    image: "/delighthero.png",
     homeDescription: "Custom e-commerce platform for premium apparel brand",
     projectCategory: "E-Commerce",
     subtitle: "A custom apparel platform built to scale.",

@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
+import HeroScrollIndicator from "@/app/components/common/HeroScrollIndicator";
+
 import Badge from "@/app/components/common/ui/Badge";
 import Card from "@/app/components/common/ui/Card";
 import Section, {
@@ -11,7 +14,14 @@ import { CiClock1 } from "react-icons/ci";
 import { FaLocationPin } from "react-icons/fa6";
 import ContactForm from "@/app/components/contact/ContactForm";
 
+export const metadata: Metadata = {
+  title: "Contact a Software Development Company | Agunwami Enterprise",
+  description:
+    "Need a digital platform or software solution? Contact Agunwami Enterprise for custom software, web development, and scalable digital infrastructure.",
+};
+
 export default function ContactPage() {
+
   const contactDetails = [
     {
       icon: CgMail,
@@ -35,16 +45,16 @@ export default function ContactPage() {
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
-      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-contact-hero dark:bg-contact-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-16">
+      <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-contact-hero dark:bg-contact-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-8 md:pb-12 space-y-0">
         {/* Text block — left column */}
-        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
+        <div className="absolute right-[60%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-70 pointer-events-none">
           <img
             src="/ecobg.png"
             alt=""
             className="w-full h-fit scale-[0.6] mt-[-300px]"
           />
         </div>
-        <div className="flex flex-col gap-6 justify-center flex-1 w-full">
+        <div className="flex flex-col gap-6 justify-center flex-1 w-full relative z-10 my-auto py-6">
           <ScrollReveal direction="none">
             <Badge title="Start a Conversation" type="primary" />
           </ScrollReveal>
@@ -57,7 +67,7 @@ export default function ContactPage() {
           </ScrollReveal>
 
           <ScrollReveal direction="up" delay={220}>
-            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-[#7C7C7C] dark:text-gray-400">
+            <p className="w-full max-w-2xl text-[18px] md:text-[22px] lg:text-[24px] xl:text-[28px] 2xl:text-[30px] leading-[28px] md:leading-[34px] lg:leading-[38px] xl:leading-[42px] 2xl:leading-[46px] text-gray-700 dark:text-gray-300">
               Ready to build your platform? Have questions about our services?
               We would love to hear from you and explore how we can collaborate.
             </p>
@@ -65,14 +75,7 @@ export default function ContactPage() {
         </div>
 
         {/* Scroll indicator */}
-        <ScrollReveal direction="none" delay={500}>
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-            <span className="text-[11px] tracking-[0.2em] uppercase text-gray-400 font-medium">
-              Explore
-            </span>
-            <div className="w-px h-12 bg-gradient-to-b from-gray-400 to-transparent" />
-          </div>
-        </ScrollReveal>
+        <HeroScrollIndicator label="Explore" delay={500} />
       </Section>
       <Section>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

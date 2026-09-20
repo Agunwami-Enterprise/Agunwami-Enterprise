@@ -57,8 +57,8 @@
   --background-image-delight-hero-dark: linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.70) 50%, rgba(10,10,10,0.40) 100%), url('/delighthero.png');
   --background-image-awa-hero: linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.60) 50%, rgba(10,10,10,0.30) 100%), url('/awa.png');
   --background-image-awa-hero-dark: linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.70) 50%, rgba(10,10,10,0.40) 100%), url('/awa.png');
-  --background-image-trendora-hero: linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.60) 50%, rgba(10,10,10,0.30) 100%), url('/trendorahero.png');
-  --background-image-trendora-hero-dark: linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.70) 50%, rgba(10,10,10,0.40) 100%), url('/trendorahero.png');
+  --background-image-trendora-hero: linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.60) 50%, rgba(10,10,10,0.30) 100%), url('/trendora.jpg');
+  --background-image-trendora-hero-dark: linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.70) 50%, rgba(10,10,10,0.40) 100%), url('/trendora.jpg');
   --background-image-meridian-hero: linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.50) 35%, rgba(10,10,10,0.15) 65%, transparent 100%), url('/meridian.jpg');
   --background-image-meridian-hero-dark: linear-gradient(to right, rgba(10,10,10,0.90) 0%, rgba(10,10,10,0.60) 35%, rgba(10,10,10,0.20) 65%, transparent 100%), url('/meridian.jpg');
 
@@ -155,4 +155,15 @@ body {
 .dark .shimmer {
   background: linear-gradient(90deg, #232323 25%, #2e2e2e 50%, #232323 75%);
   background-size: 600px 100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HERO SCROLL INDICATOR — Viewport Height Responsiveness
+   Gracefully hides when viewport height is too constrained (<600px)
+   preventing any crowding of hero text on compact displays or landscape mode.
+═══════════════════════════════════════════════════════════════════════════ */
+@media (max-height: 600px) {
+  .hero-scroll-indicator {
+    display: none !important;
+  }
 }
