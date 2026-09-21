@@ -72,7 +72,7 @@ export default function ContactPage() {
               {contactDetail.link ? (
                 <a
                   href={contactDetail.link}
-                  className="flex items-center gap-2 text-primary"
+                  className="flex items-center gap-2 text-[#9A7A2E] dark:text-primary"
                 >
                   {contactDetail.name === "EMAIL"
                     ? "Send Email"
@@ -98,6 +98,7 @@ export default function ContactPage() {
               heading="Get in Touch"
               description="Whether you are launching a new platform, scaling existing infrastructure, or exploring partnership opportunities, we are here to help."
               heading2=""
+              as="h2"
             />
           </ScrollReveal>
 

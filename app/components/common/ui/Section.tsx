@@ -23,6 +23,7 @@ export function SectionWithHeading({
   description,
   description2,
   dash,
+  as: Tag = "h1",
 }: {
   // children: React.ReactNode;
   className?: string;
@@ -31,6 +32,7 @@ export function SectionWithHeading({
   description?: string;
   description2?: string;
   dash?: string;
+  as?: "h1" | "h2" | "h3";
 }) {
   const renderHeading = () => {
     if (heading2) {
@@ -57,9 +59,9 @@ export function SectionWithHeading({
   };
   return (
     <div className={cn("w-full space-y-4 md:space-y-5 3xl:space-y-8", className)}>
-      <h1 className="text-[32px] md:text-[48px] lg:text-[56px] xl:text-[64px] 2xl:text-[72px] 3xl:text-[96px] 4xl:text-[120px] leading-[40px] md:leading-[56px] lg:leading-[64px] xl:leading-[72px] 2xl:leading-[80px] 3xl:leading-[104px] 4xl:leading-[128px] font-primary font-normal tracking-tight text-gray-900 dark:text-white">
+      <Tag className="text-[32px] md:text-[48px] lg:text-[56px] xl:text-[64px] 2xl:text-[72px] 3xl:text-[96px] 4xl:text-[120px] leading-[40px] md:leading-[56px] lg:leading-[64px] xl:leading-[72px] 2xl:leading-[80px] 3xl:leading-[104px] 4xl:leading-[128px] font-primary font-normal tracking-tight text-gray-900 dark:text-white">
         {renderHeading()}
-      </h1>
+      </Tag>
       <div
         className={cn("bg-primary h-1 w-16 md:w-[10%] my-3 md:my-4", dash)}
       />
