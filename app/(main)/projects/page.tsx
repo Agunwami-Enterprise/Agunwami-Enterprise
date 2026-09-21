@@ -14,11 +14,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Software Development Project Management That Works | Agunwami Enterprise",
+  title: "Software Development Project Management That Works",
   description:
     "See how Agunwami Enterprise builds software, digital platforms, and web solutions for retail, nonprofit, corporate, and fintech organizations.",
 };
-
 
 export default function Projects() {
   return (

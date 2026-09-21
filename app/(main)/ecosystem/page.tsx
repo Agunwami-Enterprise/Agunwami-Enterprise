@@ -7,46 +7,18 @@ import type { Metadata } from "next";
 import Section, {
   SectionWithHeading,
 } from "@/app/components/common/ui/Section";
-import { projects } from "@/lib/dummy";
+import { projects, whyEcosystem } from "@/lib/dummy";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { BiCheckCircle, BiTrendingUp } from "react-icons/bi";
-import { FaBolt } from "react-icons/fa";
-import { RiShareBoxLine, RiStackshareLine } from "react-icons/ri";
-import {
-  SiBlockchaindotcom,
-  SiChainlink,
-  SiHiveBlockchain,
-} from "react-icons/si";
+import { BiCheckCircle } from "react-icons/bi";
 
 export const metadata: Metadata = {
-  title: "Digital Platform Development Built for Scale | Agunwami Enterprise",
+  title: "Digital Platform Development Built for Scale",
   description:
     "Explore Agunwami Enterprise digital platforms and infrastructure designed to connect technology, operations, and opportunity through scalable systems.",
 };
 
-
 export default function EcosystemPage() {
-  const WhyEcosystem = [
-    {
-      icon: RiStackshareLine,
-      title: "Shared Infrastructure",
-      description:
-        "Platforms leverage common technology, reducing costs and accelerating development.",
-    },
-    {
-      icon: FaBolt,
-      title: "Integrated Experience",
-      description:
-        "Users benefit from seamless connections between platforms, creating network effects.",
-    },
-    {
-      icon: BiTrendingUp,
-      title: "Scalable Impact",
-      description:
-        "Each platform strengthens the others, multiple value and opportunity across the ecosystem.",
-    },
-  ];
   return (
     <main className="flex flex-col items-center w-full">
       <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-eco-hero dark:bg-eco-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-8 md:pb-12 space-y-0">
@@ -132,7 +104,8 @@ export default function EcosystemPage() {
           </div>
           {/* SEO H1 — visually hidden, readable by search engines & screen readers */}
           <h1 className="sr-only">
-            Building Digital Infrastructure That Helps Start-ups, Businesses, and Non-profit organizations Scale Faster
+            Building Digital Infrastructure That Helps Start-ups, Businesses,
+            and Non-profit organizations Scale Faster
           </h1>
           <SectionWithHeading
             heading="Our Platforms"
@@ -154,7 +127,8 @@ export default function EcosystemPage() {
                     className={cn(
                       "relative overflow-hidden border-none p-0 md:p-0 min-h-fit md:min-h-[500px]",
                       !isActive && "bg-[#FDFBF7]",
-                      isDisabled && "opacity-50 pointer-events-none cursor-not-allowed bg-[#FDFBF7]/50 dark:bg-[#1C1C1C]/50"
+                      isDisabled &&
+                        "opacity-50 pointer-events-none cursor-not-allowed bg-[#FDFBF7]/50 dark:bg-[#1C1C1C]/50",
                     )}
                   >
                     {/* Background Pattern Overlay */}
@@ -195,18 +169,24 @@ export default function EcosystemPage() {
                                   isActive
                                     ? "bg-primary text-white"
                                     : isDisabled
-                                    ? "bg-gray-300 dark:bg-white/5 text-gray-500 dark:text-gray-400"
-                                    : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400",
+                                      ? "bg-gray-300 dark:bg-white/5 text-gray-500 dark:text-gray-400"
+                                      : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400",
                                 )}
                               >
-                                {isActive ? "ACTIVE" : isDisabled ? "DISABLED" : "COMING SOON"}
+                                {isActive
+                                  ? "ACTIVE"
+                                  : isDisabled
+                                    ? "DISABLED"
+                                    : "COMING SOON"}
                               </span>
                             </div>
                           </div>
                           <p
                             className={cn(
                               "text-[20px] md:text-[24px] font-primary leading-tight",
-                              isActive ? "text-white/90" : "text-gray-900 dark:text-white",
+                              isActive
+                                ? "text-white/90"
+                                : "text-gray-900 dark:text-white",
                             )}
                           >
                             {item.ecoshort}
@@ -216,7 +196,9 @@ export default function EcosystemPage() {
                         <p
                           className={cn(
                             "text-[18px] leading-relaxed max-w-2xl",
-                            isActive ? "text-white/70" : "text-gray-600 dark:text-gray-400",
+                            isActive
+                              ? "text-white/70"
+                              : "text-gray-600 dark:text-gray-400",
                           )}
                         >
                           {item.ecodesc}
@@ -270,7 +252,9 @@ export default function EcosystemPage() {
                           <p
                             className={cn(
                               "text-[17px] leading-relaxed",
-                              isActive ? "text-white/70" : "text-gray-600 dark:text-gray-400",
+                              isActive
+                                ? "text-white/70"
+                                : "text-gray-600 dark:text-gray-400",
                             )}
                           >
                             {item.impact}
@@ -290,7 +274,9 @@ export default function EcosystemPage() {
                         <div
                           className={cn(
                             "absolute inset-0 hidden md:block bg-gradient-to-r via-transparent to-transparent pointer-events-none",
-                            isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7] dark:from-[#1C1C1C]",
+                            isActive
+                              ? "from-[#1A1A1A]"
+                              : "from-[#FDFBF7] dark:from-[#1C1C1C]",
                           )}
                           style={{ backgroundSize: "200% 100%" }}
                         />
@@ -298,14 +284,18 @@ export default function EcosystemPage() {
                         <div
                           className={cn(
                             "absolute inset-y-0 left-0 w-32 hidden md:block bg-gradient-to-r pointer-events-none",
-                            isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7] dark:from-[#1C1C1C]",
+                            isActive
+                              ? "from-[#1A1A1A]"
+                              : "from-[#FDFBF7] dark:from-[#1C1C1C]",
                           )}
                         />
                         {/* Mobile bottom edge fade */}
                         <div
                           className={cn(
                             "absolute inset-x-0 bottom-0 h-16 md:hidden bg-gradient-to-t pointer-events-none",
-                            isActive ? "from-[#1A1A1A]" : "from-[#FDFBF7] dark:from-[#1C1C1C]",
+                            isActive
+                              ? "from-[#1A1A1A]"
+                              : "from-[#FDFBF7] dark:from-[#1C1C1C]",
                           )}
                         />
                       </div>
@@ -321,7 +311,7 @@ export default function EcosystemPage() {
           <SectionWithHeading heading="Why an Ecosystem Approach?" />
         </ScrollReveal>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
-          {WhyEcosystem.map((item, index) => (
+          {whyEcosystem.map((item, index) => (
             <ScrollReveal key={index} delay={index * 150} direction="up">
               <Card className="w-full border-[#D6B36B26] transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl group">
                 <div className="w-fit p-4 rounded-lg bg-primary/10 transition-colors duration-300">

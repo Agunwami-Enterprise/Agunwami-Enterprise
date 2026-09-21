@@ -4,93 +4,15 @@ import Section, {
 import Link from "next/link";
 import { BsArrowRight } from "react-icons/bs";
 import type { Metadata } from "next";
-import {
-  RiShieldLine,
-  RiLightbulbLine,
-  RiHeartLine,
-  RiUserLine,
-  RiFocus3Line,
-} from "react-icons/ri";
-import { type IconType } from "react-icons";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
-import TeamSlider, { type TeamMember } from "@/app/components/common/TeamSlider";
+import TeamSlider from "@/app/components/common/TeamSlider";
+import { coreValues, deliveryPhilosophy } from "@/lib/dummy";
 
 export const metadata: Metadata = {
-  title: "Software Development Company For Growing Businesses | Agunwami Enterprise",
+  title: "Software Development Company For Growing Businesses",
   description:
     "Learn how Agunwami Enterprise builds custom software, digital platforms, and scalable infrastructure for organizations, institutions, and technology teams.",
 };
-
-
-interface CoreValue {
-  icon: IconType;
-  title: string;
-  description: string;
-}
-
-const leadershipTeam: TeamMember[] = [
-  {
-    name: "Agunwami .O.",
-    role: "Chief Executive Officer",
-    bio: "Visionary leader with over 12 years of experience in digital strategy, business development, and platform innovation.",
-    image: "/agunwami_ceo.jpg",
-    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
-  },
-  {
-    name: "Japhet Marshall",
-    role: "Operation Manager",
-    bio: "A strategist with expertise in systems architecture, process optimization, and organizational excellence.",
-    image: "/japhet_coo.jpg",
-    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
-  },
-  {
-    name: "Aisha Y.",
-    role: "Project Manager",
-    bio: "Agile delivery specialist ensuring complex digital projects launch seamlessly on time, within scope, and at peak quality.",
-    image: "/aisha_pm.jpg",
-    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
-  },
-  {
-    name: "Chris Hayes",
-    role: "Research & Development Director",
-    bio: "Pioneering technological exploration and architectural roadmaps for sustainable, next-generation digital ecosystems.",
-    image: "/chris_hayes.jpg",
-    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
-  },
-];
-
-const coreValues: CoreValue[] = [
-  {
-    icon: RiFocus3Line,
-    title: "Partnership Over Transactions",
-    description:
-      "We build long-term relationships, not one-off projects. Your success is our success.",
-  },
-  {
-    icon: RiShieldLine,
-    title: "Systems Thinking",
-    description:
-      "We design for scale, sustainability, and growth—not just immediate needs.",
-  },
-  {
-    icon: RiLightbulbLine,
-    title: "Clarity & Transparency",
-    description:
-      "Clear communication, honest timelines, and collaborative decision-making at every stage.",
-  },
-  {
-    icon: RiHeartLine,
-    title: "Impact-Driven Work",
-    description:
-      "We prioritize projects that create opportunity, empower communities, and drive meaningful change.",
-  },
-  {
-    icon: RiUserLine,
-    title: "Execution Excellence",
-    description:
-      "Clean code, thoughtful design, and rigorous quality standards in everything we deliver.",
-  },
-];
 
 export default function AboutPage() {
   return (
@@ -147,7 +69,9 @@ export default function AboutPage() {
               href="/contact"
               className="inline-flex items-center gap-3 px-6 py-3 rounded-lg bg-primary/10 dark:bg-primary/20 text-primary hover:bg-primary hover:text-white transition-all duration-300 font-medium group"
             >
-              <span>Let&apos;s map out what your platform needs; talk to our team.</span>
+              <span>
+                Let&apos;s map out what your platform needs; talk to our team.
+              </span>
               <BsArrowRight className="group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
@@ -273,28 +197,7 @@ export default function AboutPage() {
 
         {/* 2×2 grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-20 gap-y-20">
-          {[
-            {
-              title: "No Hidden Complexity",
-              description:
-                "We break down technical decisions into clear, understandable language so you always know what is happening and why.",
-            },
-            {
-              title: "Milestone-Based Progress",
-              description:
-                "Work is structured around clear deliverables with regular check-ins, ensuring transparency and accountability.",
-            },
-            {
-              title: "Built to Scale",
-              description:
-                "Every platform we build is designed for growth, not just launch. We plan for your future, not just today.",
-            },
-            {
-              title: "Your Platform, Your Ownership",
-              description:
-                "You own everything we build—code, design systems, documentation. No vendor lock-in, ever.",
-            },
-          ].map((item, index) => (
+          {deliveryPhilosophy.map((item, index) => (
             <ScrollReveal key={index} direction="up" delay={index * 120}>
               <div className="flex flex-col gap-5 group">
                 <div className="bg-primary h-[3px] w-12 transition-all duration-300 group-hover:w-20 group-hover:bg-linear-to-r from-primary to-white" />
@@ -312,7 +215,7 @@ export default function AboutPage() {
 
       {/* ── Partner closing ── */}
       <Section className="relative overflow-hidden w-full py-28 md:py-36 flex flex-col items-center justify-center text-center bg-partner-closing dark:bg-partner-closing-dark bg-cover bg-center bg-no-repeat border-t border-b border-primary/20">
-        {/* Soft ambient overlay to ensure the background stays warm, luminous, and legible */}
+        {/* Soft ambient overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30 pointer-events-none" />
 
         <div className="relative z-10 max-w-4xl mx-auto space-y-6 flex flex-col items-center">

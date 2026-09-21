@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ARTICLES } from "../insightsData";
-import ShareButtons from "./ShareButtons";
+import ShareButtons from "@/app/components/insights/ShareButtons";
 import NewsletterCard from "@/app/components/common/NewsletterCard";
 import {
   RiCalendarLine,

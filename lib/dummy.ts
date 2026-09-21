@@ -1,7 +1,484 @@
-import { BiUser, BiShoppingBag, BiStore, BiChip, BiCar, BiDollar } from "react-icons/bi";
-import { LuUsers, LuBriefcase } from "react-icons/lu";
+import { BiUser, BiShoppingBag, BiStore, BiChip, BiCar, BiDollar, BiBuilding, BiTrendingUp } from "react-icons/bi";
+import { LuUsers, LuBriefcase, LuLayers, LuDatabase, LuShield, LuShieldCheck, LuZap, LuCreditCard } from "react-icons/lu";
 import { BsFillBagFill } from "react-icons/bs";
-import { RiHeartFill } from "react-icons/ri";
+import {
+  RiHeartFill,
+  RiShieldLine,
+  RiLightbulbLine,
+  RiHeartLine,
+  RiUserLine,
+  RiFocus3Line,
+  RiStackshareLine,
+} from "react-icons/ri";
+import { FaBolt, FaUsers } from "react-icons/fa";
+import { PiPlant } from "react-icons/pi";
+import { CgMail } from "react-icons/cg";
+
+import { BiPhone } from "react-icons/bi";
+import { FaLocationPin } from "react-icons/fa6";
+import { type IconType } from "react-icons";
+
+// ─────────────────────────────────────────────
+// HOME PAGE DATA
+// ─────────────────────────────────────────────
+
+export const whatYouGain = [
+  {
+    title: "Enterprise-Grade Solutions",
+    description:
+      "Build secure, high-performance software designed to support growing businesses, startups, and large nonprofit organizations.",
+  },
+  {
+    title: "Faster Time to Market",
+    description:
+      "Move from idea to launch with an experienced team that delivers efficiently without compromising quality.",
+  },
+  {
+    title: "Scalable Technology",
+    description:
+      "Create digital products that grow with your business, support more users, and adapt to changing market demands.",
+  },
+  {
+    title: "AI & Automation",
+    description:
+      "Reduce manual work and improve decision-making with intelligent automation and AI-powered business solutions.",
+  },
+  {
+    title: "Long-Term Technology Partnership",
+    description:
+      "Beyond development, we provide continuous support, optimization, and innovation to help your technology evolve.",
+  },
+  {
+    title: "Business-Driven Results",
+    description:
+      "Every solution is built to improve efficiency, increase productivity, reduce operational costs, and create sustainable growth.",
+  },
+];
+
+export const whatWeDo = [
+  {
+    title: "Digital Solutions",
+    description:
+      "Build secure, scalable, and user-focused digital solutions, including web applications, mobile apps, enterprise software, cloud systems, and AI-powered business tools that solve complex operational challenges.",
+  },
+  {
+    title: "Platform Development",
+    description:
+      "Develop custom digital platforms that connect users, automate workflows, enable secure transactions, and support sustainable growth across industries.",
+  },
+  {
+    title: "AI & Business Automation",
+    description:
+      "Automate repetitive processes, improve decision-making, and increase productivity through artificial intelligence, workflow automation, and intelligent business systems.",
+  },
+  {
+    title: "Technology Consulting",
+    description:
+      "Help organizations define digital strategies, modernize legacy systems, validate product ideas, and implement technology solutions that align with long-term business goals.",
+  },
+  {
+    title: "Impact & Partnerships",
+    description:
+      "Collaborate with startups, NGOs, enterprises, investors, and innovation partners to deliver technology-driven initiatives that create measurable economic and social impact.",
+  },
+];
+
+export const ourServices = [
+  { title: "Website Development", href: "/services#website-development" },
+  { title: "Platform Systems", href: "/services#platform-systems" },
+  { title: "Admin Dashboards", href: "/services#admin-dashboards" },
+  { title: "Membership Systems", href: "/services#membership-systems" },
+  { title: "Workflow Automation", href: "/services#workflow-automation" },
+  { title: "Payment Integration", href: "/services#payment-integration" },
+  { title: "Security Audits", href: "/services#platform-systems" },
+  { title: "API Development", href: "/services#platform-systems" },
+  { title: "UI Architecture", href: "/services#core-values" },
+  { title: "Scalability Planning", href: "/services#core-values" },
+  { title: "System Integration", href: "/services#core-values" },
+];
+
+export const aeEcosystemCards = [
+  {
+    title: "AE Hub",
+    description:
+      "Interactive educational platform powering online learning, digital classrooms, and student success",
+    status: "ACTIVE",
+  },
+  {
+    title: "Mobility Platform",
+    description: "Transportation and logistics infrastructure",
+    status: "COMING SOON",
+  },
+  {
+    title: "AE Workstation",
+    description: "Online office workspace and enterprise operations hub",
+    status: "ACTIVE",
+  },
+];
+
+export const howWeWork = [
+  {
+    title: "Discovery & Planning",
+    description:
+      "We start by understanding your mission, goals, and requirements to structure a clear roadmap.",
+  },
+  {
+    title: "Design & Development",
+    description:
+      "Our team builds your platform with modern technology, clean UI systems, and scalable architecture.",
+  },
+  {
+    title: "Launch & Support",
+    description:
+      "We deliver your platform and provide ongoing maintenance, updates, and strategic guidance.",
+  },
+];
+
+// ─────────────────────────────────────────────
+// SERVICES PAGE DATA
+// ─────────────────────────────────────────────
+
+export const coreServices = [
+  {
+    id: "website-development",
+    icon: LuLayers,
+    title: "Website Development",
+    description:
+      "custom, responsive websites built on modern tech stacks and optimized for speed, SEO, and conversions.",
+  },
+  {
+    id: "platform-systems",
+    icon: LuDatabase,
+    title: "Platform Systems",
+    description:
+      "Scalable digital infrastructure, APIs, Integrations, and backend architecture built to support growth.",
+  },
+  {
+    id: "admin-dashboards",
+    icon: LuShield,
+    title: "Admin Dashboards",
+    description:
+      "Intuitive admin interfaces with real-time reporting, data visualization, and role-based access control.",
+  },
+  {
+    id: "membership-systems",
+    icon: LuShieldCheck,
+    title: "Membership Systems",
+    description:
+      "Full membership platforms with secure authentication, member directories, tiered access, and engagement tools.",
+  },
+  {
+    id: "workflow-automation",
+    icon: LuZap,
+    title: "Workflow Automation",
+    description:
+      "Automate repetitive processes with smart workflows, email triggers, and operational efficiency built in.",
+  },
+  {
+    id: "payment-integration",
+    icon: LuCreditCard,
+    title: "Payment Integration",
+    description:
+      "Secure, PCI-compliant payment processing with subscription billing and transparent transaction reporting.",
+  },
+];
+
+export const builtForSuccess = [
+  {
+    title: "We Build for Scale",
+    description:
+      "Every system we design grows with your organization, ensuring seamless scalability and long-term performance.",
+  },
+  {
+    title: "Transparency-First",
+    description:
+      "Clear communication, honest timelines, and collaborative decision-making at every stage of your project.",
+  },
+  {
+    title: "Impact-Driven",
+    description:
+      "We measure success by the real-world results our platforms deliver for your business and your users.",
+  },
+  {
+    title: "Execution Excellence",
+    description:
+      "Clean code, thoughtful design, and rigorous quality standards in everything we deliver.",
+  },
+];
+
+export const servicesDetailCards = [
+  {
+    number: "01",
+    title: "Requirements",
+    title2: "Structuring",
+    description:
+      "We translate ambiguous goals into clear, actionable specifications through technical discovery, requirements documentation, architecture planning, and stakeholder alignment.",
+    list: [
+      "Technical discovery sessions",
+      "System requirements documentation",
+      "Architecture planning",
+      "Stakeholder alignment",
+    ],
+  },
+  {
+    number: "02",
+    title: "UI",
+    title2: "Architecture",
+    description:
+      "We build scalable design systems and component libraries — including component development, design tokens, pattern documentation, and accessibility compliance.",
+    list: [
+      "Component library development",
+      "Design token systems",
+      "Interface pattern documentation",
+      "Accessibility compliance",
+    ],
+  },
+  {
+    number: "03",
+    title: "Dashboard",
+    title2: "Development",
+    description:
+      "We build custom analytics dashboards with real-time data visualization, custom metrics tracking, interactive reporting, and export capabilities.",
+    list: [
+      "Real-time data visualization",
+      "Custom metrics tracking",
+      "Interactive reporting",
+      "Export capabilities",
+    ],
+  },
+  {
+    number: "04",
+    title: "Workflow",
+    title2: "Modeling",
+    description:
+      "We map complex business processes into efficient digital workflows through process documentation, automation opportunities, and integration planning.",
+    list: [
+      "Process documentation",
+      "Automation opportunities",
+      "Integration planning",
+      "Optimization strategies",
+    ],
+  },
+  {
+    number: "05",
+    title: "Scalability",
+    title2: "Planning",
+    description:
+      "We review architecture and plan infrastructure for growing platforms through performance audits, optimization, load testing, and growth road-mapping.",
+    list: [
+      "Performance audits",
+      "Infrastructure optimization",
+      "Load testing",
+      "Growth road-mapping",
+    ],
+  },
+  {
+    number: "06",
+    title: "System",
+    title2: "Integration",
+    description:
+      "We connect your digital ecosystem seamlessly through API development, documentation, legacy system migration, and third-party tool integration.",
+    list: [
+      "API development & documentation",
+      "Legacy system migration",
+      "Third-party tool integration",
+      "Data synchronization",
+    ],
+  },
+];
+
+// ─────────────────────────────────────────────
+// PARTNERSHIPS PAGE DATA
+// ─────────────────────────────────────────────
+
+export const partnershipCategories = [
+  {
+    icon: FaUsers,
+    title: "Shared Infrastructure",
+    description:
+      "Platforms leverage common technology, reducing costs and accelerating development.",
+    number: "01",
+    partnershipBenefits: [
+      "Cross-platform integration opportunities",
+      "Access to growing user base",
+      "Collaborative innovation pathways",
+      "Joint marketing and outreach",
+    ],
+  },
+  {
+    icon: PiPlant,
+    title: "Integrated Experience",
+    description:
+      "Users benefit from seamless connections between platforms, creating network effects.",
+    number: "02",
+    partnershipBenefits: [
+      "Cross-platform integration opportunities",
+      "Access to growing user base",
+      "Collaborative innovation pathways",
+      "Joint marketing and outreach",
+    ],
+  },
+  {
+    icon: BiBuilding,
+    title: "Scalable Impact",
+    description:
+      "Each platform strengthens the others, multiple value and opportunity across the ecosystem.",
+    number: "03",
+    partnershipBenefits: [
+      "Cross-platform integration opportunities",
+      "Access to growing user base",
+      "Collaborative innovation pathways",
+      "Joint marketing and outreach",
+    ],
+  },
+];
+
+export const partnershipApproach = [
+  {
+    title: "Collaborative Planning",
+    description:
+      "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
+  },
+  {
+    title: "Impact-Driven Development",
+    description:
+      "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
+  },
+  {
+    title: "Flexible Engagement",
+    description:
+      "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
+  },
+  {
+    title: "Long-Term Partnership",
+    description:
+      "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
+  },
+];
+
+// ─────────────────────────────────────────────
+// ECOSYSTEM PAGE DATA
+// ─────────────────────────────────────────────
+
+export const whyEcosystem = [
+  {
+    icon: RiStackshareLine,
+    title: "Shared Infrastructure",
+    description:
+      "Platforms leverage common technology, reducing costs and accelerating development.",
+  },
+  {
+    icon: FaBolt,
+    title: "Integrated Experience",
+    description:
+      "Users benefit from seamless connections between platforms, creating network effects.",
+  },
+  {
+    icon: BiTrendingUp,
+    title: "Scalable Impact",
+    description:
+      "Each platform strengthens the others, multiple value and opportunity across the ecosystem.",
+  },
+];
+
+// ─────────────────────────────────────────────
+// CONTACT PAGE DATA
+// ─────────────────────────────────────────────
+
+export interface ContactDetail {
+  icon: IconType;
+  name: string;
+  details: string;
+  link?: string;
+  text?: string;
+}
+
+export const contactDetails: ContactDetail[] = [
+  {
+    icon: CgMail,
+    name: "EMAIL",
+    details: "Contact@agunwamienterprise.com",
+    link: "mailto:Contact@agunwamienterprise.com",
+  },
+  {
+    icon: BiPhone,
+    name: "PHONE",
+    details: "+1 (470) 526-0343",
+    link: "tel:+14705260343",
+  },
+  {
+    icon: FaLocationPin,
+    name: "LOCATION",
+    details: "Atlanta, Georgia, US",
+    text: "Serving clients globally",
+  },
+];
+
+// ─────────────────────────────────────────────
+// ABOUT PAGE DATA
+// ─────────────────────────────────────────────
+
+export interface CoreValue {
+  icon: IconType;
+  title: string;
+  description: string;
+}
+
+export const coreValues: CoreValue[] = [
+  {
+    icon: RiFocus3Line,
+    title: "Partnership Over Transactions",
+    description:
+      "We build long-term relationships, not one-off projects. Your success is our success.",
+  },
+  {
+    icon: RiShieldLine,
+    title: "Systems Thinking",
+    description:
+      "We design for scale, sustainability, and growth—not just immediate needs.",
+  },
+  {
+    icon: RiLightbulbLine,
+    title: "Clarity & Transparency",
+    description:
+      "Clear communication, honest timelines, and collaborative decision-making at every stage.",
+  },
+  {
+    icon: RiHeartLine,
+    title: "Impact-Driven Work",
+    description:
+      "We prioritize projects that create opportunity, empower communities, and drive meaningful change.",
+  },
+  {
+    icon: RiUserLine,
+    title: "Execution Excellence",
+    description:
+      "Clean code, thoughtful design, and rigorous quality standards in everything we deliver.",
+  },
+];
+
+export const deliveryPhilosophy = [
+  {
+    title: "No Hidden Complexity",
+    description:
+      "We break down technical decisions into clear, understandable language so you always know what is happening and why.",
+  },
+  {
+    title: "Milestone-Based Progress",
+    description:
+      "Work is structured around clear deliverables with regular check-ins, ensuring transparency and accountability.",
+  },
+  {
+    title: "Built to Scale",
+    description:
+      "Every platform we build is designed for growth, not just launch. We plan for your future, not just today.",
+  },
+  {
+    title: "Your Platform, Your Ownership",
+    description:
+      "You own everything we build—code, design systems, documentation. No vendor lock-in, ever.",
+  },
+];
 
 export interface ProjectTestimonial {
   quote: string;

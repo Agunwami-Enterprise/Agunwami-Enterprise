@@ -7,41 +7,19 @@ import Card from "@/app/components/common/ui/Card";
 import Section, {
   SectionWithHeading,
 } from "@/app/components/common/ui/Section";
-import { BiArrowToRight, BiChat, BiPhone, BiRightArrow } from "react-icons/bi";
 import { BsArrowRight } from "react-icons/bs";
-import { CgMail } from "react-icons/cg";
 import { CiClock1 } from "react-icons/ci";
-import { FaLocationPin } from "react-icons/fa6";
+import { BiChat } from "react-icons/bi";
 import ContactForm from "@/app/components/contact/ContactForm";
+import { contactDetails } from "@/lib/dummy";
 
 export const metadata: Metadata = {
-  title: "Contact a Software Development Company | Agunwami Enterprise",
+  title: "Contact a Software Development Company | Agunwami",
   description:
     "Need a digital platform or software solution? Contact Agunwami Enterprise for custom software, web development, and scalable digital infrastructure.",
 };
 
 export default function ContactPage() {
-
-  const contactDetails = [
-    {
-      icon: CgMail,
-      name: "EMAIL",
-      details: "Contact@agunwamienterprise.com",
-      link: "mailto:Contact@agunwamienterprise.com",
-    },
-    {
-      icon: BiPhone,
-      name: "PHONE",
-      details: "+1 (470) 526-0343",
-      link: "tel:+14705260343",
-    },
-    {
-      icon: FaLocationPin,
-      name: "LOCATION",
-      details: "Atlanta, Georgia, US",
-      text: "Serving clients globally",
-    },
-  ];
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
@@ -80,12 +58,17 @@ export default function ContactPage() {
       <Section>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {contactDetails.map((contactDetail, index) => (
-            <Card key={index} className="border-[#0000000D] dark:border-white/10">
+            <Card
+              key={index}
+              className="border-[#0000000D] dark:border-white/10"
+            >
               <div className="p-3 w-fit bg-primary/10 rounded-xl text-primary space-y-2">
                 <contactDetail.icon size={24} />
               </div>
               <h3 className="text-lg font-medium">{contactDetail.name}</h3>
-              <p className="text-[#656565] dark:text-gray-400">{contactDetail.details}</p>
+              <p className="text-[#656565] dark:text-gray-400">
+                {contactDetail.details}
+              </p>
               {contactDetail.link ? (
                 <a
                   href={contactDetail.link}

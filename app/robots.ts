@@ -6,7 +6,8 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/ceo/"],
+        // Disallow internal workstation and auth routes from public indexing
+        disallow: ["/api/", "/ceo/", "/auth/"],
       },
     ],
     sitemap: "https://agunwamienterprise.com/sitemap.xml",

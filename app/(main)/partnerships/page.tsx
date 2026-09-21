@@ -7,86 +7,23 @@ import type { Metadata } from "next";
 import Section, {
   SectionWithHeading,
 } from "@/app/components/common/ui/Section";
-import { projects } from "@/lib/dummy";
+import {
+  projects,
+  partnershipCategories,
+  partnershipApproach,
+} from "@/lib/dummy";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
-import { BiBuilding } from "react-icons/bi";
 import { BsArrowRight } from "react-icons/bs";
-import { FaUsers } from "react-icons/fa";
-import { PiPlant } from "react-icons/pi";
 
 export const metadata: Metadata = {
-  title: "Technology Partnership for Smarter Digital Growth | Agunwami Enterprise",
+  title: "Technology Partnership for Smarter Digital Growth",
   description:
     "Need a technology partner? Agunwami Enterprise builds software, digital platforms, and scalable infrastructure through collaborative partnerships.",
 };
 
 export default function PartnershipsPage() {
-
-  const PartnershipCategories = [
-    {
-      icon: FaUsers,
-      title: "Shared Infrastructure",
-      description:
-        "Platforms leverage common technology, reducing costs and accelerating development.",
-      number: "01",
-      partnershipBenefits: [
-        "Cross-platform integration opportunities",
-        "Access to growing user base",
-        "Collaborative innovation pathways",
-        "Joint marketing and outreach",
-      ],
-    },
-    {
-      icon: PiPlant,
-      title: "Integrated Experience",
-      description:
-        "Users benefit from seamless connections between platforms, creating network effects.",
-      number: "02",
-      partnershipBenefits: [
-        "Cross-platform integration opportunities",
-        "Access to growing user base",
-        "Collaborative innovation pathways",
-        "Joint marketing and outreach",
-      ],
-    },
-    {
-      icon: BiBuilding,
-      title: "Scalable Impact",
-      description:
-        "Each platform strengthens the others, multiple value and opportunity across the ecosystem.",
-      number: "03",
-      partnershipBenefits: [
-        "Cross-platform integration opportunities",
-        "Access to growing user base",
-        "Collaborative innovation pathways",
-        "Joint marketing and outreach",
-      ],
-    },
-  ];
-  const approach = [
-    {
-      title: "Collaborative Planning",
-      description:
-        "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
-    },
-    {
-      title: "Impact-Driven Development",
-      description:
-        "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
-    },
-    {
-      title: "Flexible Engagement",
-      description:
-        "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
-    },
-    {
-      title: "Long-Term Partnership",
-      description:
-        "We start by understanding your mission, goals, and challenges. Together, we define requirements and map out a clear roadmap.",
-    },
-  ];
   return (
     <main className="flex flex-col items-center w-full">
       <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-partnerships-hero dark:bg-partnerships-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-8 md:pb-12 space-y-0">
@@ -180,7 +117,7 @@ export default function PartnershipsPage() {
           />
         </ScrollReveal>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-          {PartnershipCategories.map((category, index) => (
+          {partnershipCategories.map((category, index) => (
             <ScrollReveal key={index} delay={index * 100}>
               <div className="bg-white dark:bg-[#1C1C1C] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.1)] dark:shadow-none rounded-3xl p-6 md:p-10 relative overflow-hidden h-full group hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.15)] dark:hover:shadow-none transition-all duration-500 border border-gray-100/50 dark:border-white/10">
                 {/* Background Concentric Circles */}
@@ -259,7 +196,7 @@ export default function PartnershipsPage() {
       <Section>
         <SectionWithHeading heading="Our Partnership Approach" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-          {approach.map((item, idx) => (
+          {partnershipApproach.map((item, idx) => (
             <ScrollReveal key={idx} delay={idx * 150} direction="up">
               <Card className="flex flex-col gap-4 group transition-all duration-500 ease-in-out hover:translate-y-[-8px] hover:shadow-2xl border-transparent hover:border-primary/20 h-full">
                 <h3 className="text-[24px] font-primary font-normal text-gray-900 dark:text-white leading-tight">

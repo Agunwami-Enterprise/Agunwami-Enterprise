@@ -22,23 +22,22 @@ interface PageProps {
 /** Per-project SEO metadata from the official metadata document */
 const PROJECT_META: Record<string, { title: string; description: string }> = {
   trendora: {
-    title: "Trendora Store | E-commerce Platform Project | Agunwami Enterprise",
+    title: "Trendora Store | E-commerce Platform Project",
     description:
       "Explore Trendora Store, an e-commerce platform built by Agunwami Enterprise for fashion, lifestyle products, discovery, and retail growth.",
   },
   meridiancrestsolutions: {
-    title:
-      "Meridian Crest Solutions | Digital Platform Project | Agunwami Enterprise",
+    title: "Meridian Crest Solutions | Digital Platform Project",
     description:
       "Explore the Meridian Crest Solutions project, a digital platform built by Agunwami Enterprise for business consulting and strategic services.",
   },
   abiawomenassembly: {
-    title: "Abia Women Assembly | Digital Platform Project | Agunwami Enterprise",
+    title: "Abia Women Assembly | Digital Platform Project",
     description:
       "Explore how Agunwami Enterprise built a digital platform for Abia Women Assembly, supporting event registration, community management, and engagement.",
   },
   "delight-tees": {
-    title: "Delight Tees | E-commerce Platform Project | Agunwami Enterprise",
+    title: "Delight Tees | E-commerce Platform Project",
     description:
       "Explore Delight Tees, an e-commerce platform built by Agunwami Enterprise for product discovery, retail operations, and online customer experiences.",
   },
@@ -67,7 +66,6 @@ export function generateStaticParams() {
   }));
 }
 
-
 export default async function ProjectSinglePage({ params }: PageProps) {
   const { slug } = await params;
   const project = getProjectBySlug(slug);
@@ -77,7 +75,8 @@ export default async function ProjectSinglePage({ params }: PageProps) {
   }
 
   const subtitle = project.subtitle || project.homeDescription;
-  const heroBgClass = project.heroBgClass || "bg-project-hero dark:bg-project-hero-dark";
+  const heroBgClass =
+    project.heroBgClass || "bg-project-hero dark:bg-project-hero-dark";
   const stats = project.stats || [];
   const technologies = project.technologyStack || [];
   const deliverables = project.deliverables || project.key || [];
