@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { DM_Serif_Display, Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import ThemeProvider from "./components/common/ThemeProvider";
-import { AuthProvider } from "@/lib/workstation/auth-context";
 
 const dmSerifDisplay = DM_Serif_Display({
   variable: "--font-dm-serif",
@@ -67,9 +66,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </ThemeProvider>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
