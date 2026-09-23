@@ -18,9 +18,25 @@ import Link from "next/link";
 import { BsArrowRight } from "react-icons/bs";
 
 export const metadata: Metadata = {
-  title: "Technology Partnership for Smarter Digital Growth",
+  title: "Technology Partnership for Smarter Digital Growth | Agunwami",
   description:
     "Need a technology partner? Agunwami Enterprise builds software, digital platforms, and scalable infrastructure through collaborative partnerships.",
+  alternates: {
+    canonical: "/partnerships",
+  },
+  openGraph: {
+    title: "Technology Partnership for Smarter Digital Growth | Agunwami",
+    description:
+      "Need a technology partner? Agunwami Enterprise builds software, digital platforms, and scalable infrastructure through collaborative partnerships.",
+    url: "https://agunwamienterprise.com/partnerships",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Technology Partnership for Smarter Digital Growth | Agunwami",
+    description:
+      "Need a technology partner? Agunwami Enterprise builds software, digital platforms, and scalable infrastructure through collaborative partnerships.",
+  },
 };
 
 export default function PartnershipsPage() {

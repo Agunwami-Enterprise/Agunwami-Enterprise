@@ -27,9 +27,29 @@ export async function generateMetadata({
   const { slug } = await params;
   const article = ARTICLES.find((a) => a.slug === slug);
   if (!article) return {};
+  const canonicalUrl = `/insights/${slug}`;
+  const fullUrl = `https://agunwamienterprise.com${canonicalUrl}`;
   return {
     title: `${article.title} | Expert Insights — Agunwami Enterprise`,
     description: article.excerpt,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: article.title,
+      description: article.excerpt,
+      url: fullUrl,
+      type: "article",
+      publishedTime: article.date,
+      authors: [article.author],
+      images: article.image ? [{ url: article.image }] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: article.title,
+      description: article.excerpt,
+      images: article.image ? [article.image] : undefined,
+    },
   };
 }
 
@@ -58,8 +78,67 @@ export default async function BlogDetailPage({
   /* Other articles for "Continue Reading" — excluding the current one */
   const related = ARTICLES.filter((a) => a.slug !== slug).slice(0, 3);
 
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: "https://agunwamienterprise.com",
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Expert Insights",
+            item: "https://agunwamienterprise.com/insights",
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: article.title,
+            item: `https://agunwamienterprise.com/insights/${slug}`,
+          },
+        ],
+      },
+      {
+        "@type": "Article",
+        headline: article.title,
+        description: article.excerpt,
+        image: article.image
+          ? `https://agunwamienterprise.com${article.image}`
+          : undefined,
+        datePublished: article.date,
+        author: {
+          "@type": "Person",
+          name: article.author,
+          jobTitle: article.authorRole,
+        },
+        publisher: {
+          "@type": "Organization",
+          name: "Agunwami Enterprise",
+          logo: {
+            "@type": "ImageObject",
+            url: "https://agunwamienterprise.com/logo.png",
+          },
+        },
+        mainEntityOfPage: {
+          "@type": "WebPage",
+          "@id": `https://agunwamienterprise.com/insights/${slug}`,
+        },
+      },
+    ],
+  };
+
   return (
     <main className="flex flex-col w-full bg-[#FAFAFA] dark:bg-[#0a0a0a]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
+      />
       {/* ───────────── HERO ───────────── */}
       <section className="relative w-full min-h-[480px] md:min-h-[560px] flex flex-col justify-end bg-gray-950 overflow-hidden">
         {/* Background image with dark gradient overlay */}

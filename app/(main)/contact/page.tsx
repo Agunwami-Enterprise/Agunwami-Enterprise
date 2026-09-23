@@ -17,6 +17,22 @@ export const metadata: Metadata = {
   title: "Contact a Software Development Company | Agunwami",
   description:
     "Need a digital platform or software solution? Contact Agunwami Enterprise for custom software, web development, and scalable digital infrastructure.",
+  alternates: {
+    canonical: "/contact",
+  },
+  openGraph: {
+    title: "Contact a Software Development Company | Agunwami",
+    description:
+      "Need a digital platform or software solution? Contact Agunwami Enterprise for custom software, web development, and scalable digital infrastructure.",
+    url: "https://agunwamienterprise.com/contact",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Contact a Software Development Company | Agunwami",
+    description:
+      "Need a digital platform or software solution? Contact Agunwami Enterprise for custom software, web development, and scalable digital infrastructure.",
+  },
 };
 
 export default function ContactPage() {

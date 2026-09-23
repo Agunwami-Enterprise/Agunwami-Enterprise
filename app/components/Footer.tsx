@@ -13,6 +13,7 @@ const quickLinks = [
 const exploreLinks = [
   { title: "Projects", href: "/projects" },
   { title: "Ecosystem", href: "/ecosystem" },
+  { title: "Insights", href: "/insights" },
   { title: "Partnerships", href: "/partnerships" },
 ];
 

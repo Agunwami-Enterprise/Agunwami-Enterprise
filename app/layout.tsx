@@ -26,7 +26,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Custom Software Development Company",
+  metadataBase: new URL("https://agunwamienterprise.com"),
+  title: {
+    default: "Custom Software Development Company | Agunwami Enterprise",
+    template: "%s | Agunwami Enterprise",
+  },
   description:
     "Need digital infrastructure? Agunwami Enterprise builds custom software, digital platforms, and web solutions for organizations and technology teams.",
   keywords: [

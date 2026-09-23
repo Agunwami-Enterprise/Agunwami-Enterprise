@@ -13,9 +13,25 @@ import Image from "next/image";
 import { BiCheckCircle } from "react-icons/bi";
 
 export const metadata: Metadata = {
-  title: "Digital Platform Development Built for Scale",
+  title: "Digital Platform Development Built for Scale | AE Ecosystem",
   description:
     "Explore Agunwami Enterprise digital platforms and infrastructure designed to connect technology, operations, and opportunity through scalable systems.",
+  alternates: {
+    canonical: "/ecosystem",
+  },
+  openGraph: {
+    title: "Digital Platform Development Built for Scale | AE Ecosystem",
+    description:
+      "Explore Agunwami Enterprise digital platforms and infrastructure designed to connect technology, operations, and opportunity through scalable systems.",
+    url: "https://agunwamienterprise.com/ecosystem",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Digital Platform Development Built for Scale | AE Ecosystem",
+    description:
+      "Explore Agunwami Enterprise digital platforms and infrastructure designed to connect technology, operations, and opportunity through scalable systems.",
+  },
 };
 
 export default function EcosystemPage() {
@@ -102,11 +118,6 @@ export default function EcosystemPage() {
           <div className="absolute right-[90%] top-0 h-[280vh] overflow-hidden w-full md:flex hidden justify-start items-start opacity-70">
             <img src="/ecobg.png" alt="" className="w-full h-full" />
           </div>
-          {/* SEO H1 — visually hidden, readable by search engines & screen readers */}
-          <h1 className="sr-only">
-            Building Digital Infrastructure That Helps Start-ups, Businesses,
-            and Non-profit organizations Scale Faster
-          </h1>
           <SectionWithHeading
             heading="Our Platforms"
             description2="Active and upcoming platforms in the AE ecosystem"

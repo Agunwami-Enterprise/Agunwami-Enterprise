@@ -12,9 +12,25 @@ import { cn } from "@/lib/utils";
 import { coreServices, builtForSuccess, servicesDetailCards } from "@/lib/dummy";
 
 export const metadata: Metadata = {
-  title: "Software Development Services Built to Scale",
+  title: "Software Development Services Built to Scale | Agunwami",
   description:
     "Need digital infrastructure? Explore Agunwami Enterprise software development services, including websites, platforms, APIs, UI/UX, DevOps, and consulting.",
+  alternates: {
+    canonical: "/services",
+  },
+  openGraph: {
+    title: "Software Development Services Built to Scale | Agunwami",
+    description:
+      "Need digital infrastructure? Explore Agunwami Enterprise software development services, including websites, platforms, APIs, UI/UX, DevOps, and consulting.",
+    url: "https://agunwamienterprise.com/services",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Software Development Services Built to Scale | Agunwami",
+    description:
+      "Need digital infrastructure? Explore Agunwami Enterprise software development services, including websites, platforms, APIs, UI/UX, DevOps, and consulting.",
+  },
 };
 
 export default function Services() {

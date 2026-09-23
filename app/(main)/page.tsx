@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { BsArrowRight } from "react-icons/bs";
 import Badge from "../components/common/ui/Badge";
 import Buttons from "../components/common/ui/Buttons";
@@ -19,9 +20,72 @@ import {
   howWeWork,
 } from "@/lib/dummy";
 
+export const metadata: Metadata = {
+  title: "Custom Software Development Company | Agunwami Enterprise",
+  description:
+    "Need digital infrastructure? Agunwami Enterprise builds custom software, digital platforms, and web solutions for organizations and technology teams.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "Custom Software Development Company | Agunwami Enterprise",
+    description:
+      "Need digital infrastructure? Agunwami Enterprise builds custom software, digital platforms, and web solutions for organizations and technology teams.",
+    url: "https://agunwamienterprise.com",
+    siteName: "Agunwami Enterprise",
+    locale: "en_US",
+    type: "website",
+    images: [
+      {
+        url: "/logo.png",
+        width: 800,
+        height: 800,
+        alt: "Agunwami Enterprise Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Custom Software Development Company | Agunwami Enterprise",
+    description:
+      "Need digital infrastructure? Agunwami Enterprise builds custom software, digital platforms, and web solutions for organizations and technology teams.",
+    images: ["/logo.png"],
+  },
+};
+
+const homeSchema = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://agunwamienterprise.com/#organization",
+      name: "Agunwami Enterprise",
+      url: "https://agunwamienterprise.com",
+      logo: "https://agunwamienterprise.com/logo.png",
+      email: "Contact@agunwamienterprise.com",
+      description:
+        "Agunwami Enterprise builds custom software, digital platforms, and web solutions for organizations and technology teams.",
+      sameAs: ["https://www.linkedin.com/company/agunwami-enterprises/"],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://agunwamienterprise.com/#website",
+      url: "https://agunwamienterprise.com",
+      name: "Agunwami Enterprise",
+      publisher: {
+        "@id": "https://agunwamienterprise.com/#organization",
+      },
+    },
+  ],
+};
+
 export default function MainPage() {
   return (
     <main className="flex flex-col items-center w-full">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homeSchema) }}
+      />
       {/* ── Hero ── */}
       <Section className="min-h-[100dvh] bg-hero-gradient dark:bg-hero-gradient-dark bg-cover bg-center bg-no-repeat flex flex-col justify-center items-center lg:items-start pt-28 md:pt-32 pb-16 w-full space-y-0">
         <div className="w-full space-y-6 flex flex-col items-center lg:items-start text-center lg:text-left my-auto py-6">

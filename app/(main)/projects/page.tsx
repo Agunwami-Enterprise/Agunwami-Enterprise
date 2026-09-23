@@ -14,9 +14,25 @@ import Image from "next/image";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Software Development Project Management That Works",
+  title: "Software Development Projects & Case Studies | Agunwami",
   description:
     "See how Agunwami Enterprise builds software, digital platforms, and web solutions for retail, nonprofit, corporate, and fintech organizations.",
+  alternates: {
+    canonical: "/projects",
+  },
+  openGraph: {
+    title: "Software Development Projects & Case Studies | Agunwami",
+    description:
+      "See how Agunwami Enterprise builds software, digital platforms, and web solutions for retail, nonprofit, corporate, and fintech organizations.",
+    url: "https://agunwamienterprise.com/projects",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Software Development Projects & Case Studies | Agunwami",
+    description:
+      "See how Agunwami Enterprise builds software, digital platforms, and web solutions for retail, nonprofit, corporate, and fintech organizations.",
+  },
 };
 
 export default function Projects() {

@@ -41,6 +41,16 @@ const PROJECT_META: Record<string, { title: string; description: string }> = {
     description:
       "Explore Delight Tees, an e-commerce platform built by Agunwami Enterprise for product discovery, retail operations, and online customer experiences.",
   },
+  aehub: {
+    title: "AE Hub | Educational Platform Project",
+    description:
+      "Explore AE Hub, an educational and learning platform developed by Agunwami Enterprise for digital skills, coursework, and student certification.",
+  },
+  mobility: {
+    title: "Mobility Platform | Transportation & Logistics Project",
+    description:
+      "Explore the Mobility Platform, a transportation and logistics system built by Agunwami Enterprise to connect riders, drivers, and fleet partners.",
+  },
 };
 
 export async function generateMetadata({
@@ -51,19 +61,39 @@ export async function generateMetadata({
   if (!project) return {};
 
   const custom = PROJECT_META[slug];
-  if (custom) return custom;
+  const title =
+    custom?.title || `${project.name} | Digital Platform | Agunwami Enterprise`;
+  const description = custom?.description || project.homeDescription;
+  const canonicalUrl = `/projects/${slug}`;
 
-  // Fallback for ecosystem projects not in the metadata doc
   return {
-    title: `${project.name} | Digital Platform | Agunwami Enterprise`,
-    description: project.homeDescription,
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title,
+      description,
+      url: `https://agunwamienterprise.com${canonicalUrl}`,
+      type: "website",
+      images: project.image ? [{ url: project.image }] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: project.image ? [project.image] : undefined,
+    },
   };
 }
 
 export function generateStaticParams() {
-  return projects.map((p) => ({
-    slug: p.link.replace(/^\/projects\//, ""),
-  }));
+  return projects
+    .filter((p) => p.link && p.link.startsWith("/projects/"))
+    .map((p) => ({
+      slug: p.link.replace(/^\/projects\//, ""),
+    }));
 }
 
 export default async function ProjectSinglePage({ params }: PageProps) {
@@ -82,8 +112,37 @@ export default async function ProjectSinglePage({ params }: PageProps) {
   const deliverables = project.deliverables || project.key || [];
   const testimonials = project.testimonials || [];
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: "https://agunwamienterprise.com",
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Projects",
+        item: "https://agunwamienterprise.com/projects",
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: project.name,
+        item: `https://agunwamienterprise.com/projects/${slug}`,
+      },
+    ],
+  };
+
   return (
     <main className="flex flex-col items-center w-full bg-[#FAFAFA] dark:bg-[#0a0a0a]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       {/* ── Hero ── */}
       <Section
         className={cn(

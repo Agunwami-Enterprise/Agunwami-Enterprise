@@ -9,9 +9,25 @@ import TeamSlider from "@/app/components/common/TeamSlider";
 import { coreValues, deliveryPhilosophy } from "@/lib/dummy";
 
 export const metadata: Metadata = {
-  title: "Software Development Company For Growing Businesses",
+  title: "Software Development Company For Growing Businesses | About AE",
   description:
     "Learn how Agunwami Enterprise builds custom software, digital platforms, and scalable infrastructure for organizations, institutions, and technology teams.",
+  alternates: {
+    canonical: "/about",
+  },
+  openGraph: {
+    title: "Software Development Company For Growing Businesses | About AE",
+    description:
+      "Learn how Agunwami Enterprise builds custom software, digital platforms, and scalable infrastructure for organizations, institutions, and technology teams.",
+    url: "https://agunwamienterprise.com/about",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Software Development Company For Growing Businesses | About AE",
+    description:
+      "Learn how Agunwami Enterprise builds custom software, digital platforms, and scalable infrastructure for organizations, institutions, and technology teams.",
+  },
 };
 
 export default function AboutPage() {
