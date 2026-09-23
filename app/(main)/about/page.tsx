@@ -22,7 +22,7 @@ export default function AboutPage() {
         <div className="w-full space-y-6 flex flex-col items-center md:items-start text-center md:text-left my-auto py-6">
           <ScrollReveal direction="up">
             <h1 className="w-full text-[40px] md:text-[64px] lg:text-[72px] xl:text-[84px] 2xl:text-[96px] leading-[48px] md:leading-[72px] lg:leading-[80px] xl:leading-[92px] 2xl:leading-[104px] font-primary font-normal tracking-tight text-white drop-shadow-sm">
-              About <br className="hidden sm:block" />
+              Abou <br className="hidden sm:block" />
               <span className="text-primary">Agunwami Enterprise</span>
             </h1>
           </ScrollReveal>
