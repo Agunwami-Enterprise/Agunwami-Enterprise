@@ -35,4 +35,11 @@ export const defaultTeam: TeamMember[] = [
     image: "/chris_hayes.jpg",
     linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
   },
+  {
+    name: "Joseph",
+    role: "Content Lead Manager",
+    bio: "Strategic communication and editorial specialist spearheading high-impact brand storytelling, technical messaging, and engaging digital narratives across all platforms.",
+    image: "/joseph.jpg",
+    linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
+  },
 ];
