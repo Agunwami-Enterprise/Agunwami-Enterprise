@@ -57,13 +57,14 @@ export class NotificationsService {
    */
   static async createBroadcastAnnouncement(
     dto: BroadcastAnnouncementDto,
-    author = 'Agunwami CEO'
+    author: { uid: string; email: string }
   ): Promise<AnnouncementItem | null> {
     const data = {
       title: dto.title,
       content: dto.content,
-      author,
-      authorEmail: 'that.dev.guy.aeceo@aehub.io',
+      author: author.email,
+      authorId: author.uid,
+      authorEmail: author.email,
       department: dto.department || 'CEO',
       priority: dto.priority || 'Medium',
       targetAudience: dto.targetAudience || 'ALL',

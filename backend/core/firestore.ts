@@ -10,55 +10,34 @@ if (typeof window !== 'undefined') {
   throw new Error('This module can only be loaded on the server.');
 }
 import { FIREBASE_CONFIG } from '../config/firebase.config';
+import { applicationDefault } from 'firebase-admin/app';
 import type { FirestoreDoc, QueryOptions } from './types';
 
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
+let applicationCredential: ReturnType<typeof applicationDefault> | null = null;
 
 /**
- * Returns a valid Firebase Auth ID Token for server-side REST requests.
+ * Returns a Google Cloud access token for server-side Firestore REST requests.
  */
-export async function getAdminAuthToken(): Promise<string | null> {
+export async function getAdminAuthToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && tokenExpiresAt > now + 60_000) {
     return cachedToken;
   }
 
-  const email = process.env.WORKSTATION_FIRESTORE_AUTH_EMAIL || 'that.dev.guy.aeceo@aehub.io';
-  const password = process.env.WORKSTATION_FIRESTORE_AUTH_PASSWORD;
-  if (!password) {
-    console.error('[backend/core/firestore] WORKSTATION_FIRESTORE_AUTH_PASSWORD is not configured.');
-    return null;
+  if (!applicationCredential) {
+    applicationCredential = applicationDefault();
   }
 
   try {
-    const res = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_CONFIG.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password,
-          returnSecureToken: true,
-        }),
-        cache: 'no-store',
-      }
-    );
-
-    if (!res.ok) {
-      console.error('[backend/core/firestore] Auth failed:', res.status, await res.text());
-      return null;
-    }
-
-    const data = await res.json();
-    cachedToken = data.idToken;
-    const expiresInSec = parseInt(data.expiresIn || '3600', 10);
-    tokenExpiresAt = now + expiresInSec * 1000;
+    const data = await applicationCredential.getAccessToken();
+    cachedToken = data.access_token;
+    tokenExpiresAt = now + data.expires_in * 1000;
     return cachedToken;
   } catch (err) {
-    console.error('[backend/core/firestore] Auth network error:', err);
-    return null;
+    console.error('[backend/core/firestore] Unable to get Application Default Credentials for Firestore:', err);
+    throw err;
   }
 }
 
@@ -135,14 +114,17 @@ export function wrapFields(obj: Record<string, any>): Record<string, any> {
  */
 export async function getDoc(collection: string, docId: string): Promise<FirestoreDoc | null> {
   const token = await getAdminAuthToken();
-  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: HeadersInit = { Authorization: `Bearer ${token}` };
 
   const res = await fetch(`${FIREBASE_CONFIG.firestoreBaseUrl}/${collection}/${docId}`, {
     headers,
     cache: 'no-store',
   });
 
-  if (!res.ok) return null;
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`[backend/core/firestore] Failed to read ${collection}/${docId}: ${res.status} ${await res.text()}`);
+  }
   const raw = await res.json();
   return rawDocToObject(raw);
 }
@@ -152,7 +134,7 @@ export async function getDoc(collection: string, docId: string): Promise<Firesto
  */
 export async function listDocs(collection: string, pageSize = 50): Promise<FirestoreDoc[]> {
   const token = await getAdminAuthToken();
-  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: HeadersInit = { Authorization: `Bearer ${token}` };
 
   const res = await fetch(`${FIREBASE_CONFIG.firestoreBaseUrl}/${collection}?pageSize=${pageSize}`, {
     headers,
@@ -178,7 +160,7 @@ export async function queryCollection(
   const token = await getAdminAuthToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    Authorization: `Bearer ${token}`,
   };
 
   const where = options.filters && options.filters.length > 0
@@ -249,7 +231,7 @@ export async function createDoc(
   const token = await getAdminAuthToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    Authorization: `Bearer ${token}`,
   };
 
   const url = docId
@@ -284,7 +266,7 @@ export async function updateDoc(
   const token = await getAdminAuthToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    Authorization: `Bearer ${token}`,
   };
 
   const fields = updateMaskFields || Object.keys(data).filter(k => !k.startsWith('_'));
@@ -312,7 +294,7 @@ export async function updateDoc(
  */
 export async function deleteDoc(collection: string, docId: string): Promise<boolean> {
   const token = await getAdminAuthToken();
-  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: HeadersInit = { Authorization: `Bearer ${token}` };
 
   const res = await fetch(`${FIREBASE_CONFIG.firestoreBaseUrl}/${collection}/${docId}`, {
     method: 'DELETE',

@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const created = await MessagesService.sendMessage(body);
+    const created = await MessagesService.sendMessage(body, auth.session);
     return NextResponse.json(created, { status: 201 });
   } catch (err: any) {
     console.error('[/api/ceo/messages POST] error:', err);

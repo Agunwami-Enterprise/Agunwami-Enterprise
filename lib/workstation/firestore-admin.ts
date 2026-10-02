@@ -4,26 +4,10 @@
  * Server-side Firestore access via the Firebase REST API.
  * Uses the AEHub project credentials (aehub-eafa6).
  *
- * This avoids needing a service account JSON — instead it uses the
- * Google Identity Token endpoint to get an access token via the
- * Firebase REST API anonymous/open-readable documents.
- *
- * For CEO dashboard endpoints we primarily read:
- *   - analytics/* (read: isAuthenticated)
- *   - courses/* (published ones are public)
- *   - users/* (read: isAuthenticated)
- *   - leaveRequests/* (read: isAuthenticated)
- *   - staffTasks/* (read: isAuthenticated)
- *   - announcements/* (read: isAuthenticated)
- *
- * Since we don't have a service account, we access documents that are
- * publicly readable (status == 'published') or via the Firestore REST
- * API using a special approach for counting aggregated data.
- *
- * For collections that require auth, we expose a server-side aggregation
- * method that reads the /analytics summary documents (written by Cloud
- * Functions and readable by isAuthenticated) using a long-lived token
- * stored securely on the server.
+ * Public reads use Firestore rules that allow unauthenticated access.
+ * Authenticated reads accept the caller's Firebase ID token and remain
+ * subject to Firestore rules. CEO server routes use backend/core/firestore,
+ * which authenticates with Google Application Default Credentials.
  */
 
 import 'server-only';

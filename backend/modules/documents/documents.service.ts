@@ -6,7 +6,7 @@
  * documents collection with ZERO dummy fallbacks.
  */
 
-import { listDocs, getDoc, createDoc, deleteDoc } from '../../core/firestore';
+import { listDocs, createDoc, deleteDoc } from '../../core/firestore';
 import type {
   CorporateDocument,
   DocumentCategory,
@@ -55,7 +55,7 @@ export class DocumentsService {
    */
   static async createDocument(
     dto: CreateDocumentDto,
-    uploadedBy = 'that.dev.guy.aeceo@aehub.io'
+    uploadedBy: { uid: string; email: string }
   ): Promise<CorporateDocument | null> {
     const data = {
       title: dto.title,
@@ -64,8 +64,8 @@ export class DocumentsService {
       fileType: dto.fileType,
       fileSize: dto.fileSize,
       isConfidential: Boolean(dto.isConfidential),
-      uploadedBy,
-      uploadedByName: 'Agunwami CEO',
+      uploadedBy: uploadedBy.uid,
+      uploadedByName: uploadedBy.email,
       createdAt: new Date().toISOString(),
     };
 

@@ -75,9 +75,9 @@ backend/
 All API endpoints are protected by `requireCeoSession()` in `@/lib/workstation/api-auth`.
 Under the hood:
 1. Validates the `ae_session` cookie against the Firebase session verification.
-2. Ensures the user belongs to the workstation executive pool (`dept === 'ceo'` or `role === 'ceo'`).
-3. Queries Firestore with server-authenticated bearer tokens generated via Google Identity Toolkit REST API (`that.dev.guy.aeceo@aehub.io`).
+2. Ensures the user's Firestore profile belongs to the CEO department or has the CEO role.
+3. Queries Firestore with a Google Cloud bearer token from Application Default Credentials.
 
-The workstation Firestore REST client requires `WORKSTATION_FIRESTORE_AUTH_PASSWORD` at runtime. It may use `WORKSTATION_FIRESTORE_AUTH_EMAIL` to override the default service identity. Never commit either credential.
+The workstation Firestore REST client uses Google Application Default Credentials (ADC), not a shared Firebase Authentication user account. For local development, run `gcloud auth application-default login` with a Google identity that has the Firestore permissions needed by the app. In production, grant those permissions to the hosting service's workload identity or service account. Do not add a Firebase user email/password or commit credential files.
 
 The AE Hub metrics integration uses a shared server-only token: set `AEHUB_ENTERPRISE_METRICS_TOKEN` in the enterprise server environment and configure the same value as the Firebase Functions secret `ENTERPRISE_METRICS_TOKEN`. Requests attach this token only to AE Hub's configured metrics endpoint.

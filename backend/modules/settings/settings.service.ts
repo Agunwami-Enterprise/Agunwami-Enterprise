@@ -5,7 +5,7 @@
  * Manages CEO executive profile and company-wide enterprise configurations.
  */
 
-import { listDocs, updateDoc } from '../../core/firestore';
+import { getDoc, updateDoc } from '../../core/firestore';
 import type {
   ExecutiveProfile,
   EnterpriseSettings,
@@ -16,24 +16,19 @@ export class SettingsService {
   /**
    * Retrieves the current CEO profile.
    */
-  static async getExecutiveProfile(): Promise<ExecutiveProfile> {
-    const users = await listDocs('users', 50).catch(() => []);
-    const ceoUser = users.find(u =>
-      u.email === 'that.dev.guy.aeceo@aehub.io' ||
-      u.dept === 'ceo' ||
-      u.role === 'ceo'
-    );
+  static async getExecutiveProfile(uid: string, email: string): Promise<ExecutiveProfile> {
+    const ceoUser = await getDoc('users', uid);
 
     return {
-      uid: ceoUser?._id || '',
-      name: ceoUser?.displayName || ceoUser?.name || 'Executive CEO',
-      email: ceoUser?.email || 'that.dev.guy.aeceo@aehub.io',
-      role: 'CEO & Founder',
-      department: 'Executive Office',
+      uid,
+      name: ceoUser?.displayName || ceoUser?.name || email,
+      email: ceoUser?.email || email,
+      role: ceoUser?.departmentPosition || 'CEO',
+      department: ceoUser?.department || ceoUser?.dept || 'Executive Office',
       phone: ceoUser?.phone || '',
       avatarUrl: ceoUser?.avatarUrl || '',
       lastLogin: new Date().toISOString(),
-      twoFactorEnabled: true,
+      twoFactorEnabled: Boolean(ceoUser?.twoFactorEnabled),
     };
   }
 
@@ -67,12 +62,8 @@ export class SettingsService {
   /**
    * Updates CEO profile.
    */
-  static async updateProfile(dto: UpdateProfileDto): Promise<boolean> {
-    const users = await listDocs('users', 50).catch(() => []);
-    const ceoUser = users.find(u => u.email === 'that.dev.guy.aeceo@aehub.io');
-    if (!ceoUser) return true;
-
-    const updated = await updateDoc('users', ceoUser._id, {
+  static async updateProfile(uid: string, dto: UpdateProfileDto): Promise<boolean> {
+    const updated = await updateDoc('users', uid, {
       ...dto,
       updatedAt: new Date().toISOString(),
     });

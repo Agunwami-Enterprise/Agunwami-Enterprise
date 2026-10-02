@@ -86,14 +86,13 @@ export class MessagesService {
    */
   static async sendMessage(
     dto: SendMessageDto,
-    senderId = 'that.dev.guy.aeceo@aehub.io',
-    senderName = 'Agunwami CEO'
+    sender: { uid: string; email: string },
   ): Promise<ChatMessage | null> {
     const data = {
       channelId: dto.channelId,
-      senderId,
-      senderName,
-      senderEmail: 'that.dev.guy.aeceo@aehub.io',
+      senderId: sender.uid,
+      senderName: sender.email,
+      senderEmail: sender.email,
       text: dto.text,
       timestamp: new Date().toISOString(),
       attachments: dto.attachments || [],

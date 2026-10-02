@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const created = await NotificationsService.createBroadcastAnnouncement(body);
+    const created = await NotificationsService.createBroadcastAnnouncement(body, auth.session);
     if (!created) {
       return NextResponse.json({ error: 'Failed to broadcast announcement' }, { status: 400 });
     }

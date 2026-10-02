@@ -40,11 +40,13 @@ export async function requireCeoSession(): Promise<
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
-  if (!process.env.WORKSTATION_FIRESTORE_AUTH_PASSWORD) {
-    console.error('[api-auth] CEO authorization cannot be checked: Firestore credentials are not configured.');
-    return { error: NextResponse.json({ error: 'Authorization service is not configured.' }, { status: 503 }) };
+  let profile;
+  try {
+    profile = await getDoc('users', session.uid);
+  } catch (err) {
+    console.error('[api-auth] Unable to verify CEO profile using server credentials:', err);
+    return { error: NextResponse.json({ error: 'Authorization service is unavailable.' }, { status: 503 }) };
   }
-  const profile = await getDoc('users', session.uid);
   const isCeo =
     String(profile?.role || '').toLowerCase() === 'ceo' ||
     String(profile?.department || profile?.dept || '').toLowerCase() === 'ceo';

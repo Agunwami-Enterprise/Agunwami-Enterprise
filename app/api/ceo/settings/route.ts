@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       return NextResponse.json(enterprise);
     }
 
-    const profile = await SettingsService.getExecutiveProfile();
+    const profile = await SettingsService.getExecutiveProfile(auth.session.uid, auth.session.email);
     return NextResponse.json(profile);
   } catch (err: any) {
     console.error('[/api/ceo/settings] error:', err);
@@ -36,7 +36,7 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const success = await SettingsService.updateProfile(body);
+    const success = await SettingsService.updateProfile(auth.session.uid, body);
     return NextResponse.json({ success });
   } catch (err: any) {
     console.error('[/api/ceo/settings PATCH] error:', err);

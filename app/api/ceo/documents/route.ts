@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const created = await DocumentsService.createDocument(body);
+    const created = await DocumentsService.createDocument(body, auth.session);
     if (!created) {
       return NextResponse.json({ error: 'Failed to create document' }, { status: 400 });
     }
