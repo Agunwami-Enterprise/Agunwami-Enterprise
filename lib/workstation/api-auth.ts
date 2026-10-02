@@ -45,7 +45,7 @@ export async function requireCeoSession(): Promise<
     return { error: NextResponse.json({ error: 'Authorization service is not configured.' }, { status: 503 }) };
   }
   const profile = await getDoc('users', session.uid);
-  const isCeo = session.role.toLowerCase() === 'ceo' ||
+  const isCeo =
     String(profile?.role || '').toLowerCase() === 'ceo' ||
     String(profile?.department || profile?.dept || '').toLowerCase() === 'ceo';
   if (!isCeo) {
