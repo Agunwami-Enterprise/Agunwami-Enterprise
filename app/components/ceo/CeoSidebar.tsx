@@ -4,31 +4,71 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { onValue, ref } from 'firebase/database';
+import { rtdb } from '@/lib/workstation/firebase';
+import { useAuth } from '@/lib/workstation/auth-context';
+import { subscribeNotifications, type NotifItem } from '@/modules/notifications/services';
 
 const NAV = [
-  { label: 'Overview',         href: '/ceo/dashboard',        icon: <IconGrid />,    badge: false },
-  { label: 'Tasks',            href: '/ceo/tasks',             icon: <IconTasks />,   badge: false },
-  { label: 'Messages',         href: '/ceo/messages',          icon: <IconChat />,    badge: true  },
-  { label: 'Time Tracking',    href: '/ceo/time-tracking',     icon: <IconClock />,   badge: false },
-  { label: 'Documents',        href: '/ceo/documents',         icon: <IconDoc />,     badge: false },
-  { label: 'Analytics',        href: '/ceo/analytics',         icon: <IconChart />,   badge: false },
-  { label: 'Leave Request',    href: '/ceo/leave-requests',    icon: <IconLeave />,   badge: false },
-  { label: 'Staff Management', href: '/ceo/staff',             icon: <IconPeople />,  badge: false },
-  { label: 'Payment',          href: '/ceo/payments',          icon: <IconCard />,    badge: false },
-  { label: 'Notifications',    href: '/ceo/notifications',     icon: <IconBell />,    badge: true  },
-  { label: 'Training',         href: '/ceo/training',          icon: <IconBook />,    badge: false },
-  { label: 'Settings',         href: '/ceo/settings',          icon: <IconGear />,    badge: false },
+  { label: 'Overview',         href: '/ceo/dashboard',        icon: <IconGrid /> },
+  { label: 'Tasks',            href: '/ceo/tasks',             icon: <IconTasks /> },
+  { label: 'Messages',         href: '/ceo/messages',          icon: <IconChat /> },
+  { label: 'Time Tracking',    href: '/ceo/time-tracking',     icon: <IconClock /> },
+  { label: 'Documents',        href: '/ceo/documents',         icon: <IconDoc /> },
+  { label: 'Analytics',        href: '/ceo/analytics',         icon: <IconChart /> },
+  { label: 'Leave Request',    href: '/ceo/leave-requests',    icon: <IconLeave /> },
+  { label: 'Staff Management', href: '/ceo/staff',             icon: <IconPeople /> },
+  { label: 'Payment',          href: '/ceo/payments',          icon: <IconCard /> },
+  { label: 'Notifications',    href: '/ceo/notifications',     icon: <IconBell /> },
+  { label: 'Training',         href: '/ceo/training',          icon: <IconBook /> },
+  { label: 'Settings',         href: '/ceo/settings',          icon: <IconGear /> },
 ];
 
 interface Props { open: boolean; onClose: () => void; onNavigate?: () => void; }
 
 export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
   const path = usePathname();
+  const { user } = useAuth();
+  const uid = user?.uid;
   const navRef = useRef<HTMLElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
+  const [messageUnreadState, setMessageUnreadState] = useState<{ uid: string; count: number } | null>(null);
+  const [notificationState, setNotificationState] = useState<{ uid: string; items: NotifItem[] } | null>(null);
+
+  useEffect(() => {
+    if (!uid) return;
+
+    return onValue(
+      ref(rtdb, 'conversations'),
+      snapshot => {
+        const conversations = snapshot.val() as Record<string, { unreadCount?: Record<string, number> }> | null;
+        const count = Object.values(conversations || {}).reduce(
+          (total, conversation) => total + (Number(conversation.unreadCount?.[uid]) || 0),
+          0,
+        );
+        setMessageUnreadState({ uid, count });
+      },
+      error => {
+        console.error('[CeoSidebar] Failed to read conversation unread counts:', error);
+        setMessageUnreadState({ uid, count: 0 });
+      },
+    );
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+    return subscribeNotifications(uid, items => setNotificationState({ uid, items }));
+  }, [uid]);
 
   const activeHref = NAV.find(item => path === item.href || path.startsWith(item.href + '/'))?.href;
+  const unreadMessages = messageUnreadState?.uid === uid ? messageUnreadState?.count ?? 0 : 0;
+  const notifications = notificationState?.uid === uid ? notificationState?.items ?? [] : [];
+  const notificationUnread = notifications.filter(notification => !notification.read).length;
+  const badgeCounts: Record<string, number> = {
+    '/ceo/messages': unreadMessages,
+    '/ceo/notifications': notificationUnread,
+  };
 
   useEffect(() => {
     if (!activeHref || !navRef.current) return;
@@ -74,6 +114,7 @@ export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
           )}
           {NAV.map((item) => {
             const active = item.href === activeHref;
+            const badgeCount = badgeCounts[item.href] || 0;
             return (
               <div
                 key={item.href}
@@ -93,8 +134,10 @@ export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
                     {item.icon}
                   </span>
                   <span className="flex-1 truncate text-[12px] font-medium">{item.label}</span>
-                  {item.badge && (
-                    <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500" />
+                  {badgeCount > 0 && (
+                    <span className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
+                      {badgeCount > 9 ? '9+' : badgeCount}
+                    </span>
                   )}
                 </Link>
               </div>

@@ -1,0 +1,18 @@
+[
+  {
+    "_id": "ae-hub",
+    "id": "ae-hub",
+    "name": "AE Hub",
+    "subtitle": "E-learning & EdTech Platform",
+    "description": "",
+    "lead": "Arigbo Jesse",
+    "adminUrl": "https://aehub-eafa6.web.app/staff/auth",
+    "apiEndpoint": "https://aehub-eafa6.web.app/api/enterprise/metrics",
+    "feedEndpoint": null,
+    "revenueEndpoint": null,
+    "healthEndpoint": null,
+    "color": "#d97706",
+    "createdAt": "2026-10-02T00:19:42.539Z",
+    "updatedAt": "2026-10-02T03:39:02.707Z"
+  }
+]
