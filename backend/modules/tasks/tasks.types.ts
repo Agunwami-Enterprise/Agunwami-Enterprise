@@ -19,6 +19,12 @@ export interface TaskProjectOption {
   id: string;
   name: string;
   departments: Array<{ id: string; name: string }>;
+  assignees: TaskAssignee[];
+}
+
+export interface TaskDepartmentOption {
+  id: string;
+  name: string;
 }
 
 export interface PersonalTodo {
@@ -87,8 +93,8 @@ export interface CreateTaskDto {
   title: string;
   description?: string;
   kind?: 'task' | 'sprint';
-  projectId: string;
-  projectName: string;
+  projectId?: string;
+  projectName?: string;
   department: string;
   assigneeUid?: string;
   assigneeName?: string;

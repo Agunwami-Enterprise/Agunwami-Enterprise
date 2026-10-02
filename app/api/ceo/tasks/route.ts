@@ -46,6 +46,9 @@ export async function GET(request: Request) {
     if (mode === 'projects') {
       return NextResponse.json(await TasksService.getTaskProjects());
     }
+    if (mode === 'departments') {
+      return NextResponse.json(await TasksService.getTaskDepartments());
+    }
     if (searchParams.get('source') === 'todos') {
       return NextResponse.json(await TasksService.getPersonalTodos(auth.session.uid));
     }
@@ -113,14 +116,23 @@ export async function POST(request: Request) {
     if (typeof rawBody.priority !== 'string' || !isTaskPriority(rawBody.priority)) {
       return NextResponse.json({ error: 'A valid task priority is required.' }, { status: 400 });
     }
-    if (typeof rawBody.projectId !== 'string' || typeof rawBody.departmentId !== 'string') {
-      return NextResponse.json({ error: 'Choose a project and one of its departments.' }, { status: 400 });
+    const projectId = typeof rawBody.projectId === 'string' ? rawBody.projectId.trim() : '';
+    if (typeof rawBody.departmentId !== 'string' || !rawBody.departmentId.trim()) {
+      return NextResponse.json({ error: 'Choose a department.' }, { status: 400 });
     }
     const projects = await TasksService.getTaskProjects();
-    const selectedProject = projects.find(project => project.id === rawBody.projectId);
-    const selectedDepartment = selectedProject?.departments.find(department => department.id === rawBody.departmentId);
-    if (!selectedProject || !selectedDepartment) {
-      return NextResponse.json({ error: 'Choose a valid department for the selected project.' }, { status: 400 });
+    const selectedProject = projectId ? projects.find(project => project.id === projectId) : undefined;
+    if (projectId && !selectedProject) {
+      return NextResponse.json({ error: 'Choose a valid configured project.' }, { status: 400 });
+    }
+    if (kind === 'todo' && !selectedProject) {
+      return NextResponse.json({ error: 'Personal to-dos must be associated with a project.' }, { status: 400 });
+    }
+    const selectedDepartment = selectedProject
+      ? selectedProject.departments.find(department => department.id === rawBody.departmentId)
+      : (await TasksService.getTaskDepartments()).find(department => department.id === rawBody.departmentId);
+    if (!selectedDepartment) {
+      return NextResponse.json({ error: 'Choose a valid department for the selected destination.' }, { status: 400 });
     }
 
     if (kind === 'todo') {
@@ -135,8 +147,8 @@ export async function POST(request: Request) {
         description: typeof rawBody.description === 'string' ? rawBody.description : '',
         priority: rawBody.priority,
         dueDate: typeof rawBody.dueDate === 'string' ? rawBody.dueDate : '',
-        projectId: selectedProject.id,
-        projectName: selectedProject.name,
+        projectId: selectedProject!.id,
+        projectName: selectedProject!.name,
         department: selectedDepartment.name,
       };
       const created = await TasksService.createPersonalTodo(dto, auth.session.uid);
@@ -151,19 +163,29 @@ export async function POST(request: Request) {
     if (Boolean(assigneeUid) !== Boolean(assigneeName)) {
       return NextResponse.json({ error: 'Choose a valid assignee.' }, { status: 400 });
     }
+    const projectAssignees = selectedProject?.assignees || [];
+    const enterpriseAssignees = selectedProject ? [] : await TasksService.getTaskAssignees();
     const selectedAssignee = assigneeUid
-      ? (await TasksService.getTaskAssignees()).find(assignee => assignee.id === assigneeUid)
+      ? (selectedProject ? projectAssignees : enterpriseAssignees)
+        .find(assignee => assignee.id === assigneeUid)
       : undefined;
     if (assigneeUid && (!selectedAssignee || selectedAssignee.name !== assigneeName)) {
       return NextResponse.json({ error: 'The selected assignee is no longer available.' }, { status: 400 });
+    }
+    if (
+      selectedAssignee &&
+      selectedAssignee.department &&
+      selectedAssignee.department.toLowerCase() !== selectedDepartment.name.toLowerCase()
+    ) {
+      return NextResponse.json({ error: 'Choose an assignee from the selected department.' }, { status: 400 });
     }
 
     const dto: CreateTaskDto = {
       kind,
       title: rawBody.title.trim(),
       description: typeof rawBody.description === 'string' ? rawBody.description : '',
-      projectId: selectedProject.id,
-      projectName: selectedProject.name,
+      projectId: selectedProject?.id,
+      projectName: selectedProject?.name || 'Enterprise',
       department: selectedDepartment.name,
       assigneeUid: assigneeUid || undefined,
       assigneeName: assigneeName || undefined,

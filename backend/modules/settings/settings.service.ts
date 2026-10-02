@@ -50,12 +50,7 @@ export class SettingsService {
         sessionTimeoutMinutes: 60,
         enforceMfaForStaff: true,
       },
-      activeVentures: [
-        { id: 'ae-hub', name: 'AE Hub', status: 'active' },
-        { id: 'mcs', name: 'MCS', status: 'in_development' },
-        { id: 'awa', name: 'AWA', status: 'in_development' },
-        { id: 'trendora', name: 'Trendora', status: 'planned' },
-      ],
+      activeVentures: [],
     };
   }
 

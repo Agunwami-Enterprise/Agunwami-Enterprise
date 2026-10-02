@@ -35,7 +35,6 @@ export {
 export type {
   ProjectCardMetric,
   ProjectCardData,
-  AeHubDetailedProject,
 } from './projects';
 
 // 3. Tasks Management

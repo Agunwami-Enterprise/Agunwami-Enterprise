@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth, authDb } from './firebase';
 import { clockIn as clockInService, clockOut as clockOutService, subscribeToday, todayId } from '@/modules/time-tracking/services';
 import type { AccountStatus, ShiftStatus, UserProfile } from '@/modules/settings/services';
 
@@ -39,9 +39,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // 1. Firebase Auth listener
   useEffect(() => {
-    if (!auth || !db) { setLoading(false); return; }
+    if (!auth || !authDb) { setLoading(false); return; }
     const authInstance = auth;
-    const dbInstance = db;
+    const dbInstance = authDb;
     return onAuthStateChanged(authInstance, async (u) => {
       setUser(u);
       setLoading(false);
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = onSnapshot(
-      doc(db, 'users', user.uid),
+      doc(authDb, 'users', user.uid),
       (docSnap) => {
         if (docSnap.exists()) {
           setProfile(docSnap.data());

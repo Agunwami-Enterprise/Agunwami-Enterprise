@@ -97,9 +97,9 @@ export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
       >
         {/* Logo */}
         <div className="flex items-center gap-2 border-b border-black/10 dark:border-white/10 px-4 py-[14px]">
-          <Image src="/AE-Logo.svg" alt="AE Hub" width={26} height={26} />
+          <Image src="/AE-Logo.svg" alt="Agunwami Enterprise" width={26} height={26} />
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-bold leading-tight text-[#1a1a1a] dark:text-white">AE Hub</p>
+            <p className="truncate text-[13px] font-bold leading-tight text-[#1a1a1a] dark:text-white">Agunwami Enterprise</p>
             <p className="truncate text-[10px] text-[#6b7280]">Workstation</p>
           </div>
         </div>

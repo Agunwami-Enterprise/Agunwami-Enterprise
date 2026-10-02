@@ -1,7 +1,7 @@
 /**
  * backend/modules/projects/projects.types.ts
  *
- * Types for enterprise projects, venture configurations, and dynamic integrations.
+ * Types for enterprise project records and dashboard views.
  */
 
 export interface ProjectCardMetric {
@@ -14,12 +14,62 @@ export interface ProjectMonthlyRevenue {
   revenue: number;
 }
 
+export interface ProjectLeaveRequest {
+  id: string;
+  projectId: string;
+  project: string;
+  userId: string;
+  employeeName: string;
+  employeeEmail?: string;
+  department: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  reason?: string;
+  appliedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+}
+
+export interface ProjectActivityItem {
+  id: string;
+  text: string;
+  time: string | null;
+  type: 'announcement' | 'task' | 'leave' | 'payment' | 'course';
+}
+
 export interface ProjectStaffMember {
   id: string;
   name: string;
   department?: string;
   role?: string;
   status?: string;
+}
+
+export interface ProjectTaskCreatePayload {
+  kind: 'task' | 'sprint';
+  title: string;
+  description: string;
+  department: string;
+  assigneeUid?: string;
+  assigneeName?: string;
+  assigneeEmail?: string;
+  priority: string;
+  startDate?: string;
+  dueDate: string;
+  tags?: string[];
+  subTasks?: Array<{
+    title: string;
+    description?: string;
+    date: string;
+    priority: string;
+  }>;
+  createdBy: string;
+  createdByName: string;
+  projectId: string;
+  projectName: string;
 }
 
 export interface EnterpriseProjectDoc {
@@ -30,9 +80,6 @@ export interface EnterpriseProjectDoc {
   lead?: string;
   adminUrl?: string | null;
   apiEndpoint?: string | null;
-  feedEndpoint?: string | null;
-  revenueEndpoint?: string | null;
-  healthEndpoint?: string | null;
   color?: string;
   createdAt: string;
   updatedAt?: string;
@@ -131,18 +178,19 @@ export interface ProjectCardData {
   lead?: string;
   adminUrl: string | null;
   apiEndpoint: string | null;
-  feedEndpoint?: string | null;
-  revenueEndpoint?: string | null;
-  healthEndpoint?: string | null;
+  hasApiToken?: boolean;
   color?: string;
   metrics: ProjectCardMetric[];
   health: number | null;
   status: 'online' | 'pending' | 'error';
+  endpointError?: string;
   revenueTrend?: ProjectMonthlyRevenue[];
   approvals?: ProjectApprovalItem[];
+  activity?: ProjectActivityItem[];
   staff?: ProjectStaffMember[];
   departments?: ProjectDepartment[];
   tasks?: ProjectTasksSummary;
+  leaveRequests?: ProjectLeaveRequest[];
   analytics?: ProjectAnalyticsData;
   lastSyncedAt?: string;
 }
@@ -154,9 +202,7 @@ export interface CreateProjectDto {
   lead?: string;
   adminUrl?: string;
   apiEndpoint?: string;
-  feedEndpoint?: string;
-  revenueEndpoint?: string;
-  healthEndpoint?: string;
+  apiToken?: string;
   color?: string;
 }
 
@@ -167,28 +213,7 @@ export interface UpdateProjectDto {
   lead?: string;
   adminUrl?: string;
   apiEndpoint?: string;
-  feedEndpoint?: string;
-  revenueEndpoint?: string;
-  healthEndpoint?: string;
+  apiToken?: string;
+  clearApiToken?: boolean;
   color?: string;
-}
-
-export interface AeHubDetailedProject {
-  id: string;
-  name: string;
-  subtitle: string;
-  description: string;
-  status: 'active' | 'development' | 'planned';
-  adminUrl: string;
-  metrics: {
-    students: number;
-    activeCourses: number;
-    totalCourses: number;
-    totalStaff: number;
-    activeStaff: number;
-    revenueNGN: number;
-    health: number;
-  };
-  health?: number;
-  revenueTrend?: { month: string; revenue: number }[];
 }

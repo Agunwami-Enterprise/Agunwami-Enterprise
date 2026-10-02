@@ -7,7 +7,6 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { NextResponse } from 'next/server';
-import { getDoc } from '@/backend/core/firestore';
 
 const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET!);
 
@@ -18,7 +17,7 @@ export interface ApiSession {
 }
 
 /**
- * Verifies the ae_session cookie and confirms the user is in the CEO department.
+ * Verifies the signed session and the CEO role resolved during login.
  */
 export async function requireCeoSession(): Promise<
   { session: ApiSession; error?: never } | { session?: never; error: NextResponse }
@@ -40,17 +39,7 @@ export async function requireCeoSession(): Promise<
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
-  let profile;
-  try {
-    profile = await getDoc('users', session.uid);
-  } catch (err) {
-    console.error('[api-auth] Unable to verify CEO profile using server credentials:', err);
-    return { error: NextResponse.json({ error: 'Authorization service is unavailable.' }, { status: 503 }) };
-  }
-  const isCeo =
-    String(profile?.role || '').toLowerCase() === 'ceo' ||
-    String(profile?.department || profile?.dept || '').toLowerCase() === 'ceo';
-  if (!isCeo) {
+  if (session.role.toLowerCase() !== 'ceo') {
     return { error: NextResponse.json({ error: 'CEO access required.' }, { status: 403 }) };
   }
   return { session };

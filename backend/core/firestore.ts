@@ -10,12 +10,121 @@ if (typeof window !== 'undefined') {
   throw new Error('This module can only be loaded on the server.');
 }
 import { FIREBASE_CONFIG } from '../config/firebase.config';
-import { applicationDefault } from 'firebase-admin/app';
+import { applicationDefault, cert } from 'firebase-admin/app';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import type { FirestoreDoc, QueryOptions } from './types';
 
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
-let applicationCredential: ReturnType<typeof applicationDefault> | null = null;
+let credentialInstance: any = null;
+
+const FIREBASE_CLI_CLIENT_ID = '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com';
+const FIREBASE_CLI_CLIENT_SECRET = 'j9iVZfS8kkCEFUPaAeJV0sAi';
+
+/**
+ * Ensures local Application Default Credentials (ADC) file exists if the user
+ * has logged in via Firebase CLI (`firebase login`), without requiring gcloud CLI.
+ */
+function ensureLocalAdcFromFirebaseCli(): boolean {
+  try {
+    const homedir = os.homedir();
+    const configPath = path.join(homedir, '.config', 'configstore', 'firebase-tools.json');
+    if (!fs.existsSync(configPath)) return false;
+
+    const fbConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const refreshToken = fbConfig?.tokens?.refresh_token;
+    if (!refreshToken) return false;
+
+    const gcloudDir = process.env.APPDATA
+      ? path.join(process.env.APPDATA, 'gcloud')
+      : path.join(homedir, '.config', 'gcloud');
+    const adcPath = path.join(gcloudDir, 'application_default_credentials.json');
+
+    if (!fs.existsSync(adcPath)) {
+      if (!fs.existsSync(gcloudDir)) {
+        fs.mkdirSync(gcloudDir, { recursive: true });
+      }
+      const adc = {
+        client_id: FIREBASE_CLI_CLIENT_ID,
+        client_secret: FIREBASE_CLI_CLIENT_SECRET,
+        refresh_token: refreshToken,
+        type: 'authorized_user',
+      };
+      fs.writeFileSync(adcPath, JSON.stringify(adc, null, 2), 'utf8');
+      console.log('[backend/core/firestore] Auto-configured local ADC from Firebase CLI credentials.');
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Direct OAuth2 token refresh from local Firebase CLI refresh token as fallback.
+ */
+async function fetchTokenFromFirebaseCli(): Promise<{ access_token: string; expires_in: number } | null> {
+  try {
+    const homedir = os.homedir();
+    const configPath = path.join(homedir, '.config', 'configstore', 'firebase-tools.json');
+    if (!fs.existsSync(configPath)) return null;
+
+    const fbConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const refreshToken = fbConfig?.tokens?.refresh_token;
+    if (!refreshToken) return null;
+
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: FIREBASE_CLI_CLIENT_ID,
+        client_secret: FIREBASE_CLI_CLIENT_SECRET,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }).toString(),
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      access_token: data.access_token,
+      expires_in: data.expires_in || 3600,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function initCredential(): any {
+  // 1. Service account JSON in environment variable (for production hosting e.g. Vercel, Railway, App Hosting)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    try {
+      const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+      const jsonStr = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+      const parsed = JSON.parse(jsonStr);
+      return cert(parsed);
+    } catch (e) {
+      console.warn('[backend/core/firestore] Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY, falling back to ADC:', e);
+    }
+  }
+
+  // 2. Local serviceAccountKey.json if present in project root
+  const localKeyPath = path.resolve(process.cwd(), 'serviceAccountKey.json');
+  if (fs.existsSync(localKeyPath)) {
+    try {
+      return cert(localKeyPath);
+    } catch (e) {
+      console.warn('[backend/core/firestore] Failed to load local serviceAccountKey.json:', e);
+    }
+  }
+
+  // 3. Ensure local ADC exists from Firebase CLI if gcloud wasn't run
+  ensureLocalAdcFromFirebaseCli();
+
+  // 4. Standard Application Default Credentials (ADC)
+  return applicationDefault();
+}
 
 /**
  * Returns a Google Cloud access token for server-side Firestore REST requests.
@@ -26,17 +135,29 @@ export async function getAdminAuthToken(): Promise<string> {
     return cachedToken;
   }
 
-  if (!applicationCredential) {
-    applicationCredential = applicationDefault();
+  if (!credentialInstance) {
+    credentialInstance = initCredential();
   }
 
   try {
-    const data = await applicationCredential.getAccessToken();
-    cachedToken = data.access_token;
+    const data = await credentialInstance.getAccessToken();
+    if (!data.access_token) {
+      throw new Error('Google Cloud credentials returned no access token.');
+    }
+    const accessToken: string = data.access_token;
+    cachedToken = accessToken;
     tokenExpiresAt = now + data.expires_in * 1000;
-    return cachedToken;
+    return accessToken;
   } catch (err) {
-    console.error('[backend/core/firestore] Unable to get Application Default Credentials for Firestore:', err);
+    // If ADC failed, attempt direct token refresh from Firebase CLI
+    const fallback = await fetchTokenFromFirebaseCli();
+    if (fallback) {
+      cachedToken = fallback.access_token;
+      tokenExpiresAt = now + fallback.expires_in * 1000;
+      return fallback.access_token;
+    }
+
+    console.error('[backend/core/firestore] Unable to get Google Cloud credentials for Firestore:', err);
     throw err;
   }
 }

@@ -21,6 +21,7 @@ import type {
   TaskStage,
   TaskAssignee,
   TaskProjectOption,
+  TaskDepartmentOption,
   PersonalTodo,
   CreatePersonalTodoDto,
 } from './tasks.types';
@@ -30,12 +31,40 @@ export class TasksService {
     return (await this.getProjectTaskData()).projects;
   }
 
+  static async getTaskDepartments(): Promise<TaskDepartmentOption[]> {
+    const [departments, users] = await Promise.all([
+      listDocs('departments', 250),
+      listDocs('users', 250),
+    ]);
+    const byName = new Map<string, TaskDepartmentOption>();
+    for (const item of departments) {
+      const name = String(item.name || item.label || item.title || '').trim();
+      const id = String(item._id || '').trim();
+      if (name && id) byName.set(name.toLowerCase(), { id, name });
+    }
+    for (const user of users) {
+      if (String(user.role || '').toLowerCase() !== 'staff' && user.isStaff !== true) continue;
+      const name = String(user.department || user.dept || '').trim();
+      if (!name || byName.has(name.toLowerCase())) continue;
+      byName.set(name.toLowerCase(), {
+        id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+        name,
+      });
+    }
+    return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   static async getTaskAssignees(): Promise<TaskAssignee[]> {
     const users = await listDocs('users', 250);
     return users.flatMap(user => {
       const department = String(user.department || user.dept || '').trim();
       const name = String(user.displayName || user.name || user.email || '').trim();
-      return user._id && name && department
+      const status = String(user.status || user.accountStatus || '').trim().toLowerCase();
+      const isStaff = String(user.role || '').toLowerCase() === 'staff' || user.isStaff === true;
+      const isActive = user.disabled !== true && user.isDisabled !== true &&
+        user.isDeleted !== true && user.isFired !== true && user.isSuspended !== true &&
+        !['inactive', 'fired', 'suspended', 'terminated', 'deleted', 'disabled'].includes(status);
+      return user._id && name && department && isStaff && isActive
         ? [{ id: user._id, name, department }]
         : [];
     });
@@ -111,6 +140,11 @@ export class TasksService {
         departments: (project.departments || []).map(department => ({
           id: department.id,
           name: department.name,
+        })),
+        assignees: (project.staff || []).map(staff => ({
+          id: staff.id,
+          name: staff.name,
+          department: staff.department || '',
         })),
       })),
       tasks: projects.flatMap(project =>
@@ -304,6 +338,48 @@ export class TasksService {
       priority: subTask.priority,
       stage,
     }));
+    if (dto.projectId) {
+      const created = await ProjectsService.createProjectTask(dto.projectId, {
+        kind,
+        title: dto.title,
+        description: dto.description || '',
+        department: dto.department,
+        assigneeUid: dto.assigneeUid,
+        assigneeName: dto.assigneeName,
+        priority: dto.priority,
+        startDate: dto.startDate,
+        dueDate: dto.dueDate || '',
+        tags: dto.tags || [],
+        subTasks: dto.subTasks || [],
+        createdBy,
+        createdByName,
+        projectId: dto.projectId,
+        projectName: dto.projectName || dto.projectId,
+      });
+      return {
+        id: created.id,
+        title: dto.title,
+        description: dto.description || '',
+        assignee: dto.assigneeName || 'Unassigned',
+        assigneeUid: dto.assigneeUid,
+        department: dto.department,
+        status: 'Pending',
+        priority: dto.priority,
+        stage,
+        startDate: dto.startDate,
+        dueDate: dto.dueDate || '',
+        createdBy,
+        createdByName,
+        createdAt,
+        tags: dto.tags || [],
+        projectId: dto.projectId,
+        project: dto.projectName,
+        kind,
+        isSprint: kind === 'sprint',
+        subTasks,
+      };
+    }
+
     const data = {
       title: dto.title,
       task: dto.title,
@@ -317,8 +393,8 @@ export class TasksService {
       startDate: dto.startDate || '',
       dueDate: dto.dueDate || '',
       tags: dto.tags || [],
-      projectId: dto.projectId,
-      project: dto.projectName,
+      ...(dto.projectId ? { projectId: dto.projectId } : {}),
+      project: dto.projectName || 'Enterprise',
       taskKind: kind,
       isSprint: kind === 'sprint',
       subTasks,

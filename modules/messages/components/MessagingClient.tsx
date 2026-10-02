@@ -16,7 +16,7 @@ import {
   uploadBytes,
   getDownloadURL,
 } from "firebase/storage";
-import { rtdb, db, storage, auth } from "@/lib/workstation/firebase";
+import { rtdb, db, storage } from "@/lib/workstation/firebase";
 import { useAuth } from "@/lib/workstation/auth-context";
 import {
   storeLocalSticker,
@@ -26,13 +26,21 @@ import {
   deleteLocalSticker,
 } from "@/lib/workstation/stickerEngine";
 import {
-  Search, Plus, Send, MessageSquare, Users, ChevronLeft, ChevronRight,
+  Search, Plus, Send, MessageSquare, Users, ChevronLeft, ChevronRight, ChevronDown, ArrowDown,
   Loader2, X, Check, CheckCheck, MoreVertical, Phone, Video,
   Smile, Paperclip, Calendar, Zap, Hash, Trash2, Shield, Clock,
   LogOut, Settings, UserPlus, ClipboardList, Edit3, Crown,
   Camera, Upload, Sticker, Image as ImageIcon, FileText, AtSign, AlertTriangle, AlertCircle, Bookmark, Reply,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import {
+  checkStaffArrangement,
+  fetchApprovedLeaves,
+  ApprovedLeaveRecord,
+  StaffArrangementStatus,
+} from "@/utils/staffArrangementUtils";
+import AttendeeInviteSelector from "./AttendeeInviteSelector";
+import UserScheduleDrawer from "./UserScheduleDrawer";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 const LiveKitMeetingModal = dynamic(() => import("./LiveKitMeetingModal"), { ssr: false });
@@ -88,9 +96,19 @@ interface StaffMember {
   id: string;
   displayName?: string | null;
   email?: string | null;
-  role?: string;
+  role?: string | null;
   department?: string | null;
+  departmentPosition?: string | null;
   photoURL?: string | null;
+  status?: string | null;
+  accountStatus?: string | null;
+  shiftStatus?: string | null;
+  isOnLeave?: boolean;
+  isSuspended?: boolean;
+  isFired?: boolean;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
+  [key: string]: any;
 }
 
 // ─── Invite Helper Notifications ──────────────────────────────────────────────
@@ -679,9 +697,10 @@ function DateSeparator({ ms }: { ms: number }) {
 
 // ─── Assign Task Modal (Communities) ───────────────────────────────────────────
 
-function AssignTaskModal({ isOpen, onClose, convo, myUid, myName }: {
+function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves = [] }: {
   isOpen: boolean; onClose: () => void;
   convo: Conversation | null; myUid: string; myName: string;
+  approvedLeaves?: ApprovedLeaveRecord[];
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -708,9 +727,20 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName }: {
 
   const handleAssign = async () => {
     if (!title.trim() || !assigneeId) return;
+    const assignee = members.find(m => m.id === assigneeId);
+    const arrangement = assignee ? checkStaffArrangement({
+      staffId: assignee.id,
+      staffMember: assignee,
+      targetDate: dueDate || undefined,
+      approvedLeaves,
+      type: "task",
+    }) : null;
+    if (arrangement?.isBlocked) {
+      toast.warning(`${assignee?.displayName || "Staff Member"} is unavailable: ${arrangement.details}`);
+      return;
+    }
     setSaving(true);
     try {
-      const assignee = members.find(m => m.id === assigneeId);
       await addDoc(collection(db, "staffTasks"), {
         task: title.trim(),
         title: title.trim(),
@@ -754,7 +784,21 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName }: {
             <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
               className="w-full px-3.5 py-2.5 text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/40 text-gray-900 dark:text-white">
               <option value="">Select member...</option>
-              {members.map(m => <option key={m.id} value={m.id}>{m.displayName || m.email}</option>)}
+              {members.map(m => {
+                const name = m.displayName || m.email || "Member";
+                const arrangement = checkStaffArrangement({
+                  staffId: m.id,
+                  staffMember: m,
+                  targetDate: dueDate || undefined,
+                  approvedLeaves,
+                  type: "task",
+                });
+                return (
+                  <option key={m.id} value={m.id} disabled={arrangement.isBlocked}>
+                    {name} {arrangement.isBlocked ? `— [${arrangement.badge}]` : ""}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -864,8 +908,19 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
       const rolesToFetch = canManageStudents ? ["staff", "student"] : ["staff"];
 
       const snap = await getDocs(query(collection(db, "users"), where("role", "in", rolesToFetch)));
-      setStaffList(snap.docs.map(d => ({ id: d.id, ...d.data() } as StaffMember))
-        .filter(u => u.id !== myUid && !convo?.memberIds?.[u.id]));
+      setStaffList(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as StaffMember))
+          .filter(u => {
+            if (u.id === myUid || convo?.memberIds?.[u.id]) return false;
+            const st = ((u as any).status || "").toLowerCase();
+            const ast = ((u as any).accountStatus || "").toLowerCase();
+            if (st === "inactive" || st === "fired" || ast === "fired" || ast === "inactive" || (u as any).isDeleted) {
+              return false;
+            }
+            return true;
+          })
+      );
     })();
   }, [tab, convo, myUid, myDept]);
 
@@ -1262,7 +1317,19 @@ function NewChatModal({ isOpen, onClose, myUid, myName, myDept, onCreated }: {
       const rolesToFetch = canManageStudents ? ["staff", "student"] : ["staff"];
 
       const snap = await getDocs(query(collection(db, "users"), where("role", "in", rolesToFetch)));
-      setStaffList(snap.docs.map(d => ({ id: d.id, ...d.data() } as StaffMember)).filter(u => u.id !== myUid));
+      setStaffList(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as StaffMember))
+          .filter(u => {
+            if (u.id === myUid) return false;
+            const st = ((u as any).status || "").toLowerCase();
+            const ast = ((u as any).accountStatus || "").toLowerCase();
+            if (st === "inactive" || st === "fired" || ast === "fired" || ast === "inactive" || (u as any).isDeleted) {
+              return false;
+            }
+            return true;
+          })
+      );
     })();
   }, [isOpen, myUid, myDept]);
 
@@ -1442,7 +1509,7 @@ function NewChatModal({ isOpen, onClose, myUid, myName, myDept, onCreated }: {
 
 // ─── Calendar Tab ────────────────────────────────────────────────────────────
 
-function CalendarTab({ myUid, myName, memberProfiles, conversations, activities, loading, onRefresh, onSharePrompt, onJoinMeeting, joiningMeeting, onEditInvitees }: {
+function CalendarTab({ myUid, myName, memberProfiles, conversations, activities, loading, onRefresh, onSharePrompt, onJoinMeeting, joiningMeeting, onEditInvitees, approvedLeaves = [] }: {
   myUid: string; myName: string;
   memberProfiles: Record<string, StaffMember>;
   conversations: Conversation[];
@@ -1453,6 +1520,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
   onJoinMeeting: (act: Activity) => void;
   joiningMeeting: boolean;
   onEditInvitees?: (act: Activity) => void;
+  approvedLeaves?: ApprovedLeaveRecord[];
 }) {
   const today = dateToStr(new Date());
   const [viewDate, setViewDate] = useState(new Date());
@@ -1470,6 +1538,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
   });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [scheduleDrawerStaff, setScheduleDrawerStaff] = useState<StaffMember | null>(null);
 
   // Sync viewingActivity whenever activities prop changes (updates on edit, RSVP, invitee changes)
   useEffect(() => {
@@ -1616,6 +1685,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
     setInvitedConvoIds([]);
     setForm({ title: "", description: "", startTime: "09:00", endTime: "10:00", allDay: false, category: "meeting", reminderTime: "15m" });
     setShowPanel(true);
+    setScheduleDrawerStaff(null);
   };
 
   const openView = (act: Activity) => {
@@ -1625,6 +1695,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
     setInvitedUserIds([]);
     setInvitedConvoIds([]);
     setShowPanel(true);
+    setScheduleDrawerStaff(null);
   };
 
   const startEdit = (act: Activity) => {
@@ -1724,6 +1795,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
         toast.success("Activity updated!");
         setEditingActivityId(null);
         setShowPanel(false);
+        setScheduleDrawerStaff(null);
         onRefresh();
       } catch (e) {
         toast.error("Failed to update activity.");
@@ -1789,6 +1861,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
         setInvitedUserIds([]);
         setInvitedConvoIds([]);
         setShowPanel(false);
+        setScheduleDrawerStaff(null);
         onRefresh();
       } catch (e) { toast.error("Failed to create activity."); }
       finally { setSaving(false); }
@@ -2003,9 +2076,29 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
         </div>
       </div>
 
+      {/* ── Schedule Drawer (pops out next to the create activity drawer) ── */}
+      {showPanel && scheduleDrawerStaff && (
+        <UserScheduleDrawer
+          isOpen={true}
+          onClose={() => setScheduleDrawerStaff(null)}
+          staff={scheduleDrawerStaff}
+          targetDate={selectedDay || today}
+          plannedStartTime={form.allDay ? undefined : form.startTime}
+          plannedEndTime={form.allDay ? undefined : form.endTime}
+          plannedAllDay={form.allDay}
+          activities={activities}
+          approvedLeaves={approvedLeaves}
+          onToggleInvite={(uid) => {
+            setInvitedUserIds(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]);
+          }}
+          isInvited={invitedUserIds.includes(scheduleDrawerStaff.id)}
+          mode="docked"
+        />
+      )}
+
       {/* ── Create / View Activity Panel ─────────────────── */}
       {showPanel && (
-        <div className="w-72 xl:w-80 shrink-0 border-l border-gray-100 dark:border-zinc-800 flex flex-col overflow-hidden bg-white dark:bg-zinc-900 shadow-xl">
+        <div className="w-80 md:w-96 lg:w-[440px] xl:w-[480px] shrink-0 border-l border-gray-100 dark:border-zinc-800 flex flex-col overflow-hidden bg-white dark:bg-zinc-900 shadow-xl">
 
           {/* Panel header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800 shrink-0">
@@ -2020,7 +2113,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
               )}
             </div>
             <button
-              onClick={() => { setShowPanel(false); setViewingActivity(null); setEditingActivityId(null); }}
+              onClick={() => { setShowPanel(false); setViewingActivity(null); setEditingActivityId(null); setScheduleDrawerStaff(null); }}
               className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 transition-colors shrink-0"
             >
               <X className="w-4 h-4" />
@@ -2042,16 +2135,27 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
                 </div>
 
                 {/* Join LiveKit Video Meeting Button */}
-                {(viewingActivity.category === "meeting" || viewingActivity.category === "event") && (
-                  <button
-                    onClick={() => onJoinMeeting(viewingActivity)}
-                    disabled={joiningMeeting}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    {joiningMeeting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4 text-emerald-200 animate-pulse" />}
-                    {joiningMeeting ? "Connecting to LiveKit Room..." : `Join Live Video ${viewingActivity.category === "meeting" ? "Meeting" : "Event"}`}
-                  </button>
-                )}
+                {(viewingActivity.category === "meeting" || viewingActivity.category === "event") && (() => {
+                  const isHost = viewingActivity.createdBy === myUid;
+                  const isDirectlyInvited = Array.isArray(viewingActivity.invitedUsers) && viewingActivity.invitedUsers.includes(myUid);
+                  const isInInvitedConvo = Array.isArray(viewingActivity.invitedConvoIds) && viewingActivity.invitedConvoIds.some(cid => {
+                    const conv = conversations.find(c => c.id === cid);
+                    return conv && conv.memberIds && conv.memberIds[myUid];
+                  });
+                  const isInvited = isHost || isDirectlyInvited || isInInvitedConvo;
+                  if (!isInvited) return null;
+
+                  return (
+                    <button
+                      onClick={() => onJoinMeeting(viewingActivity)}
+                      disabled={joiningMeeting}
+                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      {joiningMeeting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4 text-emerald-200 animate-pulse" />}
+                      {joiningMeeting ? "Connecting to LiveKit Room..." : `Join Live Video ${viewingActivity.category === "meeting" ? "Meeting" : "Event"}`}
+                    </button>
+                  );
+                })()}
 
                 {(viewingActivity.startTime || viewingActivity.allDay) && (
                   <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -2211,7 +2315,31 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
                         </div>
                       ) : (
                         (() => {
-                          const myRsvp = getEffectiveRSVPStatus(viewingActivity, myUid);
+                          const isHost = viewingActivity.createdBy === myUid;
+                          const isDirectlyInvited = Array.isArray(viewingActivity.invitedUsers) && viewingActivity.invitedUsers.includes(myUid);
+                          const isInInvitedConvo = Array.isArray(viewingActivity.invitedConvoIds) && viewingActivity.invitedConvoIds.some(cid => {
+                            const conv = conversations.find(c => c.id === cid);
+                            return conv && conv.memberIds && conv.memberIds[myUid];
+                          });
+                          const isInvited = isHost || isDirectlyInvited || isInInvitedConvo;
+                          const myRsvp = isInvited ? getEffectiveRSVPStatus(viewingActivity, myUid) : "not_invited";
+
+                          if (!isInvited || myRsvp === "not_invited") {
+                            return (
+                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 font-medium bg-gray-50 dark:bg-zinc-800/60 px-3 py-1.5 rounded-xl border border-gray-100 dark:border-zinc-700">
+                                <span>You are not invited to this meeting/event</span>
+                              </div>
+                            );
+                          }
+
+                          if (isHost) {
+                            return (
+                              <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-xl border border-amber-200 dark:border-amber-800">
+                                <span>You are the host of this activity</span>
+                              </div>
+                            );
+                          }
+
                           if (myRsvp === "expired") {
                             return (
                               <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 font-semibold bg-gray-100 dark:bg-zinc-800 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-zinc-700">
@@ -2385,173 +2513,35 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
 
                 {/* Invite Attendees section for Meetings and Events */}
                 {(form.category === "meeting" || form.category === "event") && (
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">
-                        Invite Attendees
-                      </p>
-                      {invitedUserIds.length > 0 && (
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                          {invitedUserIds.length} selected
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Invite Type Tabs: Staff | Groups | Communities */}
-                    <div className="flex gap-1 mb-2 bg-gray-100 dark:bg-zinc-800 p-1 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setInviteTab("staff")}
-                        className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all ${
-                          inviteTab === "staff"
-                            ? "bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm"
-                            : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                        }`}
-                      >
-                        Staff
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setInviteTab("group")}
-                        className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all ${
-                          inviteTab === "group"
-                            ? "bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm"
-                            : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                        }`}
-                      >
-                        Groups
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setInviteTab("community")}
-                        className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all ${
-                          inviteTab === "community"
-                            ? "bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm"
-                            : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                        }`}
-                      >
-                        Communities
-                      </button>
-                    </div>
-
-                    {/* Selected badge pills */}
-                    {(invitedConvoIds.length > 0 || invitedUserIds.length > 0) && (
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {invitedConvoIds.map(cid => {
-                          const convo = conversations.find(c => c.id === cid);
-                          const name = convo?.name || "Group";
-                          return (
-                            <span key={cid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                              <MessageSquare className="w-3 h-3 text-amber-500 shrink-0" />
-                              <span className="truncate max-w-[120px]">{name}</span>
-                              <button
-                                type="button"
-                                onClick={() => setInvitedConvoIds(prev => prev.filter(id => id !== cid))}
-                                className="hover:text-rose-600 ml-0.5 shrink-0"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </span>
-                          );
-                        })}
-                        {invitedUserIds.map(uid => {
-                          const p = memberProfiles[uid];
-                          const name = p?.displayName || p?.email || "Staff";
-                          return (
-                            <span key={uid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                              <UserPlus className="w-3 h-3 text-amber-500 shrink-0" />
-                              <span className="truncate max-w-[100px]">{name}</span>
-                              <button
-                                type="button"
-                                onClick={() => setInvitedUserIds(prev => prev.filter(id => id !== uid))}
-                                className="hover:text-rose-600 ml-0.5 shrink-0"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Selector List depending on inviteTab */}
-                    <div className="max-h-36 overflow-y-auto space-y-1 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl p-1.5">
-                      {inviteTab === "staff" && (
-                        <>
-                          {Object.values(memberProfiles)
-                            .filter(u => u.id !== myUid)
-                            .map(u => {
-                              const isSelected = invitedUserIds.includes(u.id);
-                              const name = u.displayName || u.email || "Staff Member";
-                              return (
-                                <button
-                                  key={u.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setInvitedUserIds(prev =>
-                                      isSelected ? prev.filter(id => id !== u.id) : [...prev, u.id]
-                                    );
-                                  }}
-                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors ${
-                                    isSelected
-                                      ? "bg-amber-500 text-white font-bold"
-                                      : "hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-medium"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <Avatar initials={getInitials(name)} color={colorFromStr(name)} photoURL={u.photoURL} size="xs" />
-                                    <span className="truncate">{name}</span>
-                                  </div>
-                                  {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
-                                </button>
-                              );
-                            })}
-                          {Object.values(memberProfiles).filter(u => u.id !== myUid).length === 0 && (
-                            <p className="text-[11px] text-gray-400 text-center py-2">No other staff members available</p>
-                          )}
-                        </>
-                      )}
-
-                      {(inviteTab === "group" || inviteTab === "community") && (
-                        <>
-                          {conversations
-                            .filter(c => c.type === inviteTab)
-                            .map(c => {
-                              const memberUids = Object.keys(c.memberIds || {}).filter(id => id !== myUid);
-                              const isGroupSelected = invitedConvoIds.includes(c.id);
-
-                              return (
-                                <button
-                                  key={c.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setInvitedConvoIds(prev =>
-                                      isGroupSelected ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                                    );
-                                  }}
-                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors ${
-                                    isGroupSelected
-                                      ? "bg-amber-500 text-white font-bold"
-                                      : "hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-medium"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="font-bold">#</span>
-                                    <span className="truncate">{c.name || "Channel"}</span>
-                                    <span className="text-[10px] opacity-75">({memberUids.length} members)</span>
-                                  </div>
-                                  {isGroupSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
-                                </button>
-                              );
-                            })}
-                          {conversations.filter(c => c.type === inviteTab).length === 0 && (
-                            <p className="text-[11px] text-gray-400 text-center py-2">
-                              No active {inviteTab === "group" ? "groups" : "community channels"} found
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
+                  <div className="pt-2 border-t border-gray-100 dark:border-zinc-800">
+                    <AttendeeInviteSelector
+                      myUid={myUid}
+                      memberProfiles={memberProfiles}
+                      conversations={conversations}
+                      invitedUserIds={invitedUserIds}
+                      invitedConvoIds={invitedConvoIds}
+                      onToggleUser={(uid) => {
+                        setInvitedUserIds(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]);
+                      }}
+                      onToggleConvo={(cid) => {
+                        setInvitedConvoIds(prev => prev.includes(cid) ? prev.filter(id => id !== cid) : [...prev, cid]);
+                      }}
+                      onClearAll={() => {
+                        setInvitedUserIds([]);
+                        setInvitedConvoIds([]);
+                      }}
+                      targetDate={selectedDay || undefined}
+                      plannedStartTime={form.allDay ? undefined : form.startTime}
+                      plannedEndTime={form.allDay ? undefined : form.endTime}
+                      plannedAllDay={form.allDay}
+                      currentActivityId={editingActivityId || undefined}
+                      activities={activities}
+                      approvedLeaves={approvedLeaves}
+                      maxListHeightClass="max-h-72"
+                      onOpenSchedule={(staff) => {
+                        setScheduleDrawerStaff(prev => prev?.id === staff.id ? null : staff);
+                      }}
+                    />
                   </div>
                 )}
 
@@ -3029,6 +3019,8 @@ function EditInviteesModal({
   myUid,
   myName,
   onRefresh,
+  approvedLeaves = [],
+  activities = [],
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -3038,6 +3030,8 @@ function EditInviteesModal({
   myUid: string;
   myName: string;
   onRefresh: () => void;
+  approvedLeaves?: ApprovedLeaveRecord[];
+  activities?: Activity[];
 }) {
   const [invitedUserIds, setInvitedUserIds] = useState<string[]>([]);
   const [invitedConvoIds, setInvitedConvoIds] = useState<string[]>([]);
@@ -3123,195 +3117,72 @@ function EditInviteesModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-100 dark:border-zinc-800 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-xl md:max-w-2xl w-full p-6 shadow-2xl border border-gray-100 dark:border-zinc-800 flex flex-col max-h-[90vh] space-y-4">
+        <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 flex items-center justify-center text-amber-600 dark:text-amber-400">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-950/60 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold shadow-2xs">
               <UserPlus className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">
+              <h3 className="text-base font-extrabold text-gray-900 dark:text-white">
                 Edit Invitees
               </h3>
-              <p className="text-xs text-gray-400 truncate max-w-[240px]">{activity.title}</p>
+              <p className="text-xs text-gray-400 truncate max-w-md">{activity.title}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Invite Type Tabs */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-zinc-800 p-1 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setInviteTab("staff")}
-            className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${
-              inviteTab === "staff"
-                ? "bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm"
-                : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-            }`}
-          >
-            Staff
-          </button>
-          <button
-            type="button"
-            onClick={() => setInviteTab("group")}
-            className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${
-              inviteTab === "group"
-                ? "bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm"
-                : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-            }`}
-          >
-            Groups
-          </button>
-          <button
-            type="button"
-            onClick={() => setInviteTab("community")}
-            className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${
-              inviteTab === "community"
-                ? "bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm"
-                : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-            }`}
-          >
-            Communities
-          </button>
-        </div>
-
-        {/* Selected badge pills */}
-        {(invitedConvoIds.length > 0 || invitedUserIds.length > 0) && (
-          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-            {invitedConvoIds.map(cid => {
-              const convo = conversations.find(c => c.id === cid);
-              const name = convo?.name || "Group";
-              return (
-                <span key={cid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                  <MessageSquare className="w-3 h-3 text-amber-500 shrink-0" />
-                  <span className="truncate max-w-[120px]">{name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setInvitedConvoIds(prev => prev.filter(id => id !== cid))}
-                    className="hover:text-rose-600 ml-0.5 shrink-0"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              );
-            })}
-            {invitedUserIds.map(uid => {
-              const p = memberProfiles[uid];
-              const name = p?.displayName || p?.email || "Staff";
-              return (
-                <span key={uid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                  <UserPlus className="w-3 h-3 text-amber-500 shrink-0" />
-                  <span className="truncate max-w-[100px]">{name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setInvitedUserIds(prev => prev.filter(id => id !== uid))}
-                    className="hover:text-rose-600 ml-0.5 shrink-0"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Selector List */}
-        <div className="max-h-48 overflow-y-auto space-y-1 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl p-1.5">
-          {inviteTab === "staff" && (
-            <>
-              {Object.values(memberProfiles)
-                .filter(u => u.id !== myUid)
-                .map(u => {
-                  const isSelected = invitedUserIds.includes(u.id);
-                  const name = u.displayName || u.email || "Staff Member";
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => {
-                        setInvitedUserIds(prev =>
-                          isSelected ? prev.filter(id => id !== u.id) : [...prev, u.id]
-                        );
-                      }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors ${
-                        isSelected
-                          ? "bg-amber-500 text-white font-bold"
-                          : "hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-medium"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Avatar initials={getInitials(name)} color={colorFromStr(name)} photoURL={u.photoURL} size="xs" />
-                        <span className="truncate">{name}</span>
-                      </div>
-                      {isSelected ? (
-                        <span className="flex items-center gap-1 text-[10px] font-bold">
-                          <Check className="w-3.5 h-3.5 shrink-0" /> Invited
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20">
-                          <UserPlus className="w-3 h-3 shrink-0" /> Invite
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-            </>
-          )}
-
-          {(inviteTab === "group" || inviteTab === "community") && (
-            <>
-              {conversations
-                .filter(c => c.type === inviteTab)
-                .map(c => {
-                  const memberUids = Object.keys(c.memberIds || {}).filter(id => id !== myUid);
-                  const isGroupSelected = invitedConvoIds.includes(c.id);
-
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        setInvitedConvoIds(prev =>
-                          isGroupSelected ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                        );
-                      }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors ${
-                        isGroupSelected
-                          ? "bg-amber-500 text-white font-bold"
-                          : "hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-medium"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-bold">#</span>
-                        <span className="truncate">{c.name || "Channel"}</span>
-                        <span className="text-[10px] opacity-75">({memberUids.length} members)</span>
-                      </div>
-                      {isGroupSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
-                    </button>
-                  );
-                })}
-            </>
-          )}
+        <div className="flex-1 overflow-y-auto pr-1">
+          <AttendeeInviteSelector
+            myUid={myUid}
+            memberProfiles={memberProfiles}
+            conversations={conversations}
+            invitedUserIds={invitedUserIds}
+            invitedConvoIds={invitedConvoIds}
+            onToggleUser={(uid) => {
+              setInvitedUserIds(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]);
+            }}
+            onToggleConvo={(cid) => {
+              setInvitedConvoIds(prev => prev.includes(cid) ? prev.filter(id => id !== cid) : [...prev, cid]);
+            }}
+            onClearAll={() => {
+              setInvitedUserIds([]);
+              setInvitedConvoIds([]);
+            }}
+            targetDate={activity?.date || undefined}
+            plannedStartTime={activity?.allDay ? undefined : (activity?.startTime ?? undefined)}
+            plannedEndTime={activity?.allDay ? undefined : (activity?.endTime ?? undefined)}
+            plannedAllDay={!!activity?.allDay}
+            currentActivityId={activity?.id}
+            activities={activities}
+            approvedLeaves={approvedLeaves}
+            maxListHeightClass="max-h-96"
+          />
         </div>
 
         {/* Buttons */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800">
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-zinc-800 shrink-0">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 transition-colors"
+            className="px-4 py-2.5 text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 transition-colors"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-extrabold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
           >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            <span>{saving ? "Saving..." : "Save Invitees"}</span>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 stroke-[2.5]" />}
+            <span>{saving ? "Saving Changes..." : "Save Invitees"}</span>
           </button>
         </div>
       </div>
@@ -3330,23 +3201,23 @@ const TABS = [
 
 export default function MessagingClient() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<{ displayName?: string; photoURL?: string; department?: string; role?: string } | null>(null);
+  const [profile, setProfile] = useState<{
+    displayName?: string;
+    photoURL?: string;
+    department?: string;
+    role?: string;
+    isDepartmentAdmin?: boolean;
+    departmentPermissions?: string[];
+  } | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
 
   useEffect(() => {
     if (!user?.uid) return;
-    const unsub = onSnapshot(
+    return onSnapshot(
       doc(db, "users", user.uid),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setProfile(docSnap.data() as any);
-        }
-      },
-      (err) => {
-        console.warn("MessagingClient: Profile snapshot error", err);
-      }
+      snapshot => setProfile(snapshot.exists() ? snapshot.data() as typeof profile : null),
+      error => console.warn("MessagingClient: Profile snapshot error", error),
     );
-    return () => unsub();
   }, [user?.uid]);
 
   // Read initial tab from URL search params on mount & sync on popstate
@@ -3447,6 +3318,11 @@ export default function MessagingClient() {
   const [retryKey, setRetryKey] = useState(0);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
+  const [approvedLeaves, setApprovedLeaves] = useState<ApprovedLeaveRecord[]>([]);
+
+  useEffect(() => {
+    fetchApprovedLeaves().then(setApprovedLeaves).catch(console.error);
+  }, []);
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAssignTaskOpen, setIsAssignTaskOpen] = useState(false);
@@ -3525,27 +3401,45 @@ export default function MessagingClient() {
   // Member profiles state for mentions and active conversation
   const [memberProfiles, setMemberProfiles] = useState<Record<string, StaffMember>>({});
 
-  // Fetch profiles across all conversations for DM peer names, mentions, and avatars
+  // Fetch profiles: ALL staff members across the organization + any conversation members
   useEffect(() => {
-    if (!conversations.length) return;
-
     (async () => {
       const profiles: Record<string, StaffMember> = { ...memberProfiles };
-      const allUids = Array.from(new Set(conversations.flatMap(c => Object.keys(c.memberIds || {}))));
       let changed = false;
 
-      for (const uid of allUids) {
-        if (profiles[uid]) continue;
-        try {
-          const snap = await getDocs(query(collection(db, "users"), where("__name__", "==", uid)));
-          snap.forEach(d => {
-            profiles[uid] = { id: d.id, ...d.data() } as StaffMember;
+      // 1. Fetch ALL staff members so that the full staff directory is always visible for meeting invites & calendar
+      try {
+        const staffSnap = await getDocs(query(collection(db, "users"), where("role", "==", "staff")));
+        staffSnap.docs.forEach(d => {
+          const u = d.data();
+          const st = (u.status || "").toLowerCase();
+          const ast = (u.accountStatus || "").toLowerCase();
+          if (st !== "fired" && ast !== "fired" && !u.isDeleted) {
+            profiles[d.id] = { id: d.id, ...u } as StaffMember;
             changed = true;
-          });
-        } catch (e) {
-          console.error("Error loading profile for member", uid, e);
+          }
+        });
+      } catch (err) {
+        console.error("Error loading all staff profiles:", err);
+      }
+
+      // 2. Also fetch any additional members from conversations (e.g. students or admins)
+      if (conversations.length > 0) {
+        const allUids = Array.from(new Set(conversations.flatMap(c => Object.keys(c.memberIds || {}))));
+        for (const uid of allUids) {
+          if (profiles[uid]) continue;
+          try {
+            const snap = await getDocs(query(collection(db, "users"), where("__name__", "==", uid)));
+            snap.forEach(d => {
+              profiles[uid] = { id: d.id, ...d.data() } as StaffMember;
+              changed = true;
+            });
+          } catch (e) {
+            console.error("Error loading profile for member", uid, e);
+          }
         }
       }
+
       if (changed) setMemberProfiles(profiles);
     })();
   }, [conversations]);
@@ -3556,6 +3450,11 @@ export default function MessagingClient() {
   const [mentionIndex, setMentionIndex] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef<boolean>(true);
+  const isInitialLoadRef = useRef<boolean>(true);
+  const [showScrollBottomButton, setShowScrollBottomButton] = useState(false);
+  const prevMessagesLengthRef = useRef<number>(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stickerInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -3617,6 +3516,7 @@ export default function MessagingClient() {
           batch[`conversations/${activeConvId}/unreadCount/${uid}`] = (convo?.unreadCount?.[uid] || 0) + 1;
       });
       await update(ref(rtdb), batch);
+      scrollToBottom(true);
 
       toast.success("Attachment sent!");
     } catch (err) {
@@ -3674,14 +3574,11 @@ export default function MessagingClient() {
   // Conversations RTDB listener
   useEffect(() => {
     if (!myUid) return;
-    const q = ref(rtdb, "conversations");
+    const q = rtdbQuery(ref(rtdb, "conversations"), orderByChild(`memberIds/${myUid}`), equalTo(true));
     const handler = onValue(q, snap => {
       const val = snap.val() || {};
-      const userConvos = Object.entries(val)
-        .map(([id, d]: [string, any]) => ({ id, ...d }))
-        .filter(c => c.memberIds?.[myUid] === true)
-        .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
-      setConversations(userConvos);
+      setConversations(Object.entries(val).map(([id, d]: [string, any]) => ({ id, ...d }))
+        .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0)));
       setLoadingConvos(false);
     }, (err) => {
       console.error("Failed to load conversations:", err);
@@ -3698,6 +3595,89 @@ export default function MessagingClient() {
     return () => off(q, "value", handler);
   }, [myUid, retryKey]);
 
+  // Auto-open or create direct conversation if ?dm= or ?userId= query param is present
+  const dmHandledRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !myUid || loadingConvos || dmHandledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const dmTargetUid = params.get("dm") || params.get("userId");
+    const dmTargetName = params.get("name") || "Staff Member";
+
+    if (!dmTargetUid || dmTargetUid === myUid) return;
+
+    dmHandledRef.current = true;
+    (async () => {
+      try {
+        let foundId: string | null = null;
+        for (const c of conversations) {
+          if (
+            c.type === "direct" &&
+            c.memberIds?.[myUid] &&
+            c.memberIds?.[dmTargetUid] &&
+            Object.keys(c.memberIds).length === 2
+          ) {
+            foundId = c.id;
+            break;
+          }
+        }
+
+        if (foundId) {
+          setActiveTab("chat");
+          setActiveConvId(foundId);
+          setShowMobileChat(true);
+          return;
+        }
+
+        // Check in RTDB if not yet loaded in state
+        const snap = await get(ref(rtdb, "conversations"));
+        if (snap.exists()) {
+          const convos = snap.val() as Record<string, any>;
+          for (const [id, c] of Object.entries(convos)) {
+            if (
+              c.type === "direct" &&
+              c.memberIds?.[myUid] &&
+              c.memberIds?.[dmTargetUid] &&
+              Object.keys(c.memberIds).length === 2
+            ) {
+              foundId = id;
+              break;
+            }
+          }
+        }
+
+        if (foundId) {
+          setActiveTab("chat");
+          setActiveConvId(foundId);
+          setShowMobileChat(true);
+        } else {
+          // Create new direct conversation
+          const convRef = push(ref(rtdb, "conversations"));
+          const newConvId = convRef.key!;
+          const now = Date.now();
+          await update(ref(rtdb, `conversations/${newConvId}`), {
+            type: "direct",
+            name: dmTargetName,
+            memberIds: { [myUid]: true, [dmTargetUid]: true },
+            adminIds: { [myUid]: true },
+            lastMessage: "Conversation started",
+            lastMessageSenderId: myUid,
+            lastMessageSenderName: myName,
+            lastMessageAt: now,
+            unreadCount: { [myUid]: 0, [dmTargetUid]: 0 },
+            createdAt: now,
+            avatarColor: colorFromStr(dmTargetName),
+            initials: getInitials(dmTargetName),
+          });
+          setActiveTab("chat");
+          setActiveConvId(newConvId);
+          setShowMobileChat(true);
+        }
+      } catch (err) {
+        console.error("Failed to auto-open direct conversation:", err);
+      }
+    })();
+  }, [myUid, loadingConvos, conversations, myName]);
+
   // Activities: fetch from Firestore when calendar or activity tab is active
   const fetchActivities = useCallback(async (options?: { silent?: boolean }) => {
     const isSilent = options?.silent ?? (activities.length > 0);
@@ -3706,23 +3686,19 @@ export default function MessagingClient() {
     }
     try {
       const isContentAdminOrAdmin =
-        profile?.role === "admin" ||
+        profile?.isDepartmentAdmin ||
+        (profile?.departmentPermissions || []).includes("admin") ||
         profile?.department === "content-admin" ||
         profile?.department === "ceo" ||
         profile?.department === "operations" ||
         profile?.department === "hr";
 
       // 1. Fetch created activities
-      let userActivities: Activity[] = [];
-      try {
-        const actsSnap = await getDocs(collection(db, "activities"));
-        userActivities = actsSnap.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-        } as Activity));
-      } catch (e) {
-        console.warn("Could not fetch activities:", e);
-      }
+      const actsSnap = await getDocs(collection(db, "activities"));
+      const userActivities: Activity[] = actsSnap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+      } as Activity));
 
       // 2. Fetch assigned tasks
       let tasksList: Activity[] = [];
@@ -3846,44 +3822,20 @@ export default function MessagingClient() {
         return;
       }
 
-      // Collect unique sender IDs
-      const senderIds = Array.from(new Set(rawMsgs.map(m => m.senderId)));
-      const validUserIds = new Set<string>();
-
-      // Verify senders safely without client-side message deletion
-      for (const senderId of senderIds) {
-        try {
-          const userSnap = await getDocs(query(collection(db, "users"), where("__name__", "==", senderId)));
-          if (!userSnap.empty) {
-            validUserIds.add(senderId);
-          } else {
-            // Keep message in UI safely rather than permanently deleting from client
-            validUserIds.add(senderId);
-          }
-        } catch (e) {
-          validUserIds.add(senderId);
-        }
-      }
-
       if (isCancelled) return;
 
-      const validMsgs = rawMsgs.filter(m => validUserIds.has(m.senderId));
-      setMessages(validMsgs);
+      setMessages(rawMsgs);
       setLoadingMessages(false);
 
-      if (!auth.currentUser || !myUid) return;
-
+      // Mark unread messages as read (only if there are actual unread messages from others)
       const updates: Record<string, boolean> = {};
-      validMsgs.forEach((d) => {
-        if (d.senderId !== myUid && !d.readBy?.[myUid])
-          updates[`${d.id}/readBy/${myUid}`] = true;
+      rawMsgs.forEach((d) => {
+        if (d.senderId !== myUid && !d.readBy?.[myUid]) {
+          updates[`messages/${activeConvId}/${d.id}/readBy/${myUid}`] = true;
+        }
       });
-      if (Object.keys(updates).length) {
-        update(ref(rtdb, `messages/${activeConvId}`), updates).catch(() => {});
-      }
-
-      const activeConvoData = conversations.find(c => c.id === activeConvId);
-      if (activeConvoData?.unreadCount?.[myUid] && activeConvoData.unreadCount[myUid] > 0) {
+      if (Object.keys(updates).length > 0) {
+        update(ref(rtdb), updates).catch(() => {});
         update(ref(rtdb, `conversations/${activeConvId}/unreadCount`), { [myUid]: 0 }).catch(() => {});
       }
     });
@@ -3894,7 +3846,70 @@ export default function MessagingClient() {
     };
   }, [activeConvId, myUid]);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  // Reset initial load and bottom tracking when active conversation changes
+  useEffect(() => {
+    isAtBottomRef.current = true;
+    isInitialLoadRef.current = true;
+    setShowScrollBottomButton(false);
+    prevMessagesLengthRef.current = 0;
+  }, [activeConvId]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    // Hysteresis threshold to prevent jitter:
+    // When within 40px, user is at bottom -> hide arrow button
+    // When scrolled up > 100px, user is scrolled up -> show arrow button
+    if (distanceFromBottom <= 40) {
+      isAtBottomRef.current = true;
+      setShowScrollBottomButton(prev => (prev ? false : prev));
+    } else if (distanceFromBottom > 100) {
+      isAtBottomRef.current = false;
+      setShowScrollBottomButton(prev => (!prev ? true : prev));
+    }
+  }, []);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    if (smooth) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
+    isAtBottomRef.current = true;
+    setShowScrollBottomButton(false);
+  }, []);
+
+  // Auto-scroll ONLY on initial conversation load.
+  // NEVER auto-scroll when user is reading or scrolling up.
+  useEffect(() => {
+    if (!messages.length) {
+      prevMessagesLengthRef.current = 0;
+      return;
+    }
+
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    prevMessagesLengthRef.current = messages.length;
+
+    if (isInitialLoadRef.current) {
+      // Direct instant scroll on load without smooth animation
+      container.scrollTop = container.scrollHeight;
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      });
+      isInitialLoadRef.current = false;
+      isAtBottomRef.current = true;
+      setShowScrollBottomButton(false);
+    }
+    // No automatic downward scrolling thereafter!
+    // All downward scrolling when scrolled up is user-controlled via the Arrow button or sending a message.
+  }, [messages, myUid]);
 
   const handleSend = async () => {
     const targetConvId = activeConvId;
@@ -3933,6 +3948,7 @@ export default function MessagingClient() {
           batch[`conversations/${targetConvId}/unreadCount/${uid}`] = (convo?.unreadCount?.[uid] || 0) + 1;
       });
       await update(ref(rtdb), batch);
+      scrollToBottom(true);
     } catch (err: any) {
       console.error("Send failed:", err);
       const code = err?.code || "";
@@ -3994,7 +4010,26 @@ export default function MessagingClient() {
     if (activeTab === "communities") return c.type === "community";
     if (activeTab === "chat") return c.type === "direct" || c.type === "group" || !c.type;
     return false;
-  }).filter(c => (c.name || "").toLowerCase().includes(searchConvo.toLowerCase()));
+  }).filter(c => {
+    // If it's a direct chat, verify the peer is not deleted/inactive
+    if (c.type === "direct") {
+      const otherUid = Object.keys(c.memberIds || {}).find(uid => uid !== myUid);
+      if (!otherUid) return false;
+      const peer = memberProfiles[otherUid];
+      if (peer) {
+        const st = ((peer as any).status || "").toLowerCase();
+        const ast = ((peer as any).accountStatus || "").toLowerCase();
+        if (st === "inactive" || st === "fired" || ast === "fired" || ast === "inactive" || (peer as any).isDeleted) {
+          return false;
+        }
+      }
+    }
+    const isDirect = c.type === "direct";
+    const otherUid = isDirect ? Object.keys(c.memberIds || {}).find(uid => uid !== myUid) || "" : "";
+    const peerProfile = otherUid ? memberProfiles[otherUid] : null;
+    const name = isDirect ? peerProfile?.displayName || peerProfile?.email || c.name || "Direct Message" : c.name || "Chat";
+    return (name || "").toLowerCase().includes(searchConvo.toLowerCase());
+  });
 
   // Group messages by date
   const grouped = messages.reduce<{ date: number; msgs: Message[] }[]>((acc, msg) => {
@@ -4112,6 +4147,7 @@ export default function MessagingClient() {
               onJoinMeeting={handleJoinLiveKitMeeting}
               joiningMeeting={joiningMeeting}
               onEditInvitees={act => setEditingInviteesActivity(act)}
+              approvedLeaves={approvedLeaves}
             />
           )}
 
@@ -4370,7 +4406,12 @@ export default function MessagingClient() {
                 )}
 
                 {/* Messages */}
-                <div aria-live="polite" className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-gray-50/40 dark:bg-zinc-950/20">
+                <div className="relative flex-1 flex flex-col min-h-0">
+                  <div
+                    ref={messagesContainerRef}
+                    onScroll={handleMessagesScroll}
+                    className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-1 bg-gray-50/40 dark:bg-zinc-950/20"
+                  >
                   {/* Skeleton message bubbles while messages are loading */}
                   {loadingMessages && messages.length === 0 && (
                     <div className="flex flex-col gap-4 py-4 animate-pulse">
@@ -4684,6 +4725,21 @@ export default function MessagingClient() {
                   <div ref={messagesEndRef} />
                 </div>
 
+                {/* Scroll to Bottom Arrow Button */}
+                {showScrollBottomButton && (
+                  <button
+                    type="button"
+                    onClick={() => scrollToBottom(true)}
+                    className="absolute bottom-4 right-6 z-30 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-xl shadow-amber-500/30 border border-amber-400/40 hover:scale-105 active:scale-95 transition-all text-xs font-bold group"
+                    title="Scroll to bottom"
+                    aria-label="Scroll to bottom"
+                  >
+                    <ArrowDown className="w-4 h-4 text-white group-hover:translate-y-0.5 transition-transform" />
+                    <span>Latest</span>
+                  </button>
+                )}
+              </div>
+
                 {/* Input */}
                 <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 relative">
                   {/* Tabbed Emoji / Sticker Picker Popover */}
@@ -4781,6 +4837,7 @@ export default function MessagingClient() {
                                           batch[`conversations/${activeConvId}/unreadCount/${uid}`] = (convo?.unreadCount?.[uid] || 0) + 1;
                                       });
                                       await update(ref(rtdb), batch);
+                                      scrollToBottom(true);
 
                                       setShowEmojiPicker(false);
                                       toast.success("Sticker sent!");
@@ -5025,7 +5082,7 @@ export default function MessagingClient() {
         convo={activeConvo || null} myUid={myUid} myName={myName} myDept={profile?.department} />
 
       <AssignTaskModal isOpen={isAssignTaskOpen} onClose={() => setIsAssignTaskOpen(false)}
-        convo={activeConvo || null} myUid={myUid} myName={myName} />
+        convo={activeConvo || null} myUid={myUid} myName={myName} approvedLeaves={approvedLeaves} />
 
       <ShareActivityModal
         isOpen={!!shareActivityPrompt}
@@ -5045,6 +5102,8 @@ export default function MessagingClient() {
         myUid={myUid}
         myName={myName}
         onRefresh={fetchActivities}
+        approvedLeaves={approvedLeaves}
+        activities={activities}
       />
 
       <LiveKitMeetingModal

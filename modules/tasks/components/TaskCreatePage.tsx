@@ -11,12 +11,18 @@ interface ProjectOption {
   id: string;
   name: string;
   departments: Array<{ id: string; name: string }>;
+  assignees: Assignee[];
 }
 
 interface Assignee {
   id: string;
   name: string;
   department: string;
+}
+
+interface DepartmentOption {
+  id: string;
+  name: string;
 }
 
 interface Draft {
@@ -61,10 +67,13 @@ export default function TaskCreatePage({ kind }: { kind: CreationKind }) {
   const content = PAGE_CONTENT[kind];
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
+  const [enterpriseDepartments, setEnterpriseDepartments] = useState<DepartmentOption[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [assigneesLoading, setAssigneesLoading] = useState(kind !== 'todo');
+  const [departmentsLoading, setDepartmentsLoading] = useState(kind !== 'todo');
   const [projectError, setProjectError] = useState<string | null>(null);
   const [assigneeError, setAssigneeError] = useState<string | null>(null);
+  const [departmentError, setDepartmentError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Draft>({
@@ -100,6 +109,24 @@ export default function TaskCreatePage({ kind }: { kind: CreationKind }) {
       });
 
     if (kind !== 'todo') {
+      fetch('/api/ceo/tasks?mode=departments')
+        .then(async response => {
+          if (!response.ok) {
+            const result = await response.json().catch(() => null);
+            throw new Error(result?.error || `Unable to load departments (${response.status}).`);
+          }
+          return response.json() as Promise<DepartmentOption[]>;
+        })
+        .then(data => {
+          if (!cancelled) setEnterpriseDepartments(data);
+        })
+        .catch(error => {
+          if (!cancelled) setDepartmentError(error instanceof Error ? error.message : 'Unable to load Enterprise departments.');
+        })
+        .finally(() => {
+          if (!cancelled) setDepartmentsLoading(false);
+        });
+
       fetch('/api/ceo/tasks?mode=assignees')
         .then(async response => {
           if (!response.ok) {
@@ -125,13 +152,23 @@ export default function TaskCreatePage({ kind }: { kind: CreationKind }) {
   }, [kind]);
 
   const selectedProject = projects.find(project => project.id === draft.projectId);
+  const availableDepartments = selectedProject?.departments ?? enterpriseDepartments;
+  const assigneeOptions = selectedProject?.assignees ?? assignees;
+  const selectedDepartment = availableDepartments.find(department => department.id === draft.departmentId);
+  const currentAssigneesLoading = selectedProject ? projectsLoading : assigneesLoading;
+  const currentAssigneeError = selectedProject ? null : assigneeError;
+  const availableAssignees = assigneeOptions.filter(assignee =>
+    !selectedDepartment ||
+    !assignee.department ||
+    assignee.department.toLowerCase() === selectedDepartment.name.toLowerCase(),
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setSubmitError(null);
 
-    const selectedAssignee = assignees.find(assignee => assignee.id === draft.assigneeUid);
+    const selectedAssignee = availableAssignees.find(assignee => assignee.id === draft.assigneeUid);
     const sprintTasks = subTasks
       .filter(subTask => subTask.title.trim())
       .map(subTask => ({ ...subTask, title: subTask.title.trim(), date: subTask.date || draft.dueDate }));
@@ -141,7 +178,7 @@ export default function TaskCreatePage({ kind }: { kind: CreationKind }) {
           kind,
           title: draft.title.trim(),
           description: draft.description.trim(),
-          projectId: draft.projectId,
+          projectId: draft.projectId || undefined,
           departmentId: draft.departmentId,
           priority: draft.priority,
           dueDate: draft.dueDate,
@@ -150,7 +187,7 @@ export default function TaskCreatePage({ kind }: { kind: CreationKind }) {
           kind,
           title: draft.title.trim(),
           description: draft.description.trim(),
-          projectId: draft.projectId,
+          projectId: draft.projectId || undefined,
           departmentId: draft.departmentId,
           assigneeUid: draft.assigneeUid || undefined,
           assigneeName: selectedAssignee?.name,
@@ -215,28 +252,33 @@ export default function TaskCreatePage({ kind }: { kind: CreationKind }) {
             </label>
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-400">Project</span>
-              <select required disabled={projectsLoading || projects.length === 0} value={draft.projectId} onChange={event => setDraft(current => ({ ...current, projectId: event.target.value, departmentId: '' }))} className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs text-gray-900 outline-none transition focus:border-[#f5bd02] disabled:opacity-60 dark:border-white/10 dark:bg-[#282828] dark:text-white">
-                <option value="">{projectsLoading ? 'Loading projects…' : 'Select project'}</option>
+              <select required={kind === 'todo'} disabled={projectsLoading && kind === 'todo'} value={draft.projectId} onChange={event => setDraft(current => ({ ...current, projectId: event.target.value, departmentId: '', assigneeUid: '' }))} className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs text-gray-900 outline-none transition focus:border-[#f5bd02] disabled:opacity-60 dark:border-white/10 dark:bg-[#282828] dark:text-white">
+                {kind !== 'todo'
+                  ? <option value="">Enterprise (no project)</option>
+                  : <option value="">{projectsLoading ? 'Loading projects…' : 'Select project'}</option>}
                 {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
               </select>
-              {!projectsLoading && projects.length === 0 && !projectError && <span className="mt-1 block text-[10px] text-rose-600">No configured projects are available.</span>}
+              {kind !== 'todo' && <span className="mt-1 block text-[10px] text-gray-500">Tasks without a project are saved in Enterprise.</span>}
+              {!projectsLoading && projects.length === 0 && !projectError && kind === 'todo' && <span className="mt-1 block text-[10px] text-rose-600">No configured projects are available.</span>}
             </label>
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-400">Department</span>
-              <select required disabled={!selectedProject || selectedProject.departments.length === 0} value={draft.departmentId} onChange={event => setDraft(current => ({ ...current, departmentId: event.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs text-gray-900 outline-none transition focus:border-[#f5bd02] disabled:opacity-60 dark:border-white/10 dark:bg-[#282828] dark:text-white">
-                <option value="">{selectedProject ? 'Select department' : 'Select a project first'}</option>
-                {selectedProject?.departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}
+              <select required disabled={departmentsLoading || availableDepartments.length === 0} value={draft.departmentId} onChange={event => setDraft(current => ({ ...current, departmentId: event.target.value, assigneeUid: '' }))} className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs text-gray-900 outline-none transition focus:border-[#f5bd02] disabled:opacity-60 dark:border-white/10 dark:bg-[#282828] dark:text-white">
+                <option value="">{departmentsLoading ? 'Loading departments…' : 'Select department'}</option>
+                {availableDepartments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}
               </select>
-              {selectedProject && selectedProject.departments.length === 0 && <span className="mt-1 block text-[10px] text-rose-600">This project has no departments in its live endpoint.</span>}
+              {!departmentsLoading && availableDepartments.length === 0 && <span className="mt-1 block text-[10px] text-rose-600">{selectedProject ? 'This project has no departments in its live endpoint.' : 'No Enterprise departments are available.'}</span>}
             </label>
             {kind !== 'todo' && (
               <label className="block sm:col-span-2">
                 <span className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-400">Assignee <span className="font-normal text-gray-400">(optional)</span></span>
-                <select value={draft.assigneeUid} onChange={event => setDraft(current => ({ ...current, assigneeUid: event.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs text-gray-900 outline-none transition focus:border-[#f5bd02] dark:border-white/10 dark:bg-[#282828] dark:text-white">
-                  <option value="">{assigneesLoading ? 'Loading staff directory…' : 'Unassigned'}</option>
-                  {assignees.map(assignee => <option key={assignee.id} value={assignee.id}>{assignee.name} — {assignee.department}</option>)}
+                <select value={draft.assigneeUid} onChange={event => setDraft(current => ({ ...current, assigneeUid: event.target.value }))} disabled={currentAssigneesLoading || !draft.departmentId || availableAssignees.length === 0} className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs text-gray-900 outline-none transition focus:border-[#f5bd02] disabled:opacity-60 dark:border-white/10 dark:bg-[#282828] dark:text-white">
+                  <option value="">{currentAssigneesLoading ? 'Loading staff directory…' : 'Unassigned'}</option>
+                  {availableAssignees.map(assignee => <option key={assignee.id} value={assignee.id}>{assignee.name}{assignee.department ? ` — ${assignee.department}` : ''}</option>)}
                 </select>
-                {assigneeError && <span role="alert" className="mt-1 block text-[10px] text-rose-600">{assigneeError} You can still save this task unassigned.</span>}
+                {currentAssigneeError && <span role="alert" className="mt-1 block text-[10px] text-rose-600">{currentAssigneeError} You can still save this task unassigned.</span>}
+                {!currentAssigneesLoading && !currentAssigneeError && draft.departmentId && availableAssignees.length === 0 && <span className="mt-1 block text-[10px] text-amber-600">{selectedProject ? 'No active staff in this project department.' : 'No active Enterprise staff in this department.'}</span>}
+                {departmentError && !selectedProject && <span role="alert" className="mt-1 block text-[10px] text-rose-600">{departmentError}</span>}
               </label>
             )}
           </div>

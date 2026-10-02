@@ -7,17 +7,14 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 import Link from 'next/link';
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   CEO EXECUTIVE DASHBOARD — AE WORKSTATION
-   All data is fetched from real API endpoints — no hardcoded values.
-═══════════════════════════════════════════════════════════════════════════ */
+/* CEO executive dashboard — project metrics come from each configured project endpoint. */
 
 // ── API response types ────────────────────────────────────────────────────────
 
 interface OverviewStats {
   totalStaff:         number | null;
   activeStaff:        number | null;
-  clockedInStaff?:    number | null;
+  clockedInStaff:     number | null;
   tasksTotal:         number | null;
   tasksDone:          number | null;
   pendingApprovals:   number | null;
@@ -42,14 +39,11 @@ interface LiveApprovalItem {
   type:             'leave' | 'payment' | 'task' | 'staff';
   sourceCollection: string;
   createdAt:        string | null;
+  adminUrl?:        string | null;
 }
 
 interface RevenueMonth {
   month:    string;
-  aeHub?:   number | null;
-  mcs?:     number | null;
-  awa?:     number | null;
-  trendora?: number | null;
   [projectId: string]: number | string | null | undefined;
 }
 
@@ -60,15 +54,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date | null>(null);
 
-  // API state — all sections
-  const [overview,    setOverview]    = useState<OverviewStats | null>(null);
   const [apiProjects, setApiProjects] = useState<ApiProject[]  | null>(null);
-  const [feedItems,   setFeedItems]   = useState<FeedEntry[]   | null>(null);
-  const [liveApprovals, setLiveApprovals] = useState<LiveApprovalItem[] | null>(null);
-  const [revenueData,   setRevenueData]   = useState<RevenueMonth[]     | null>(null);
-
-  // Approval local actions (optimistic approved state)
-  const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
+  const [projectsError, setProjectsError] = useState<string | null>(null);
 
   // Modal state
   const [showExecReport,  setShowExecReport]  = useState(false);
@@ -85,12 +72,14 @@ export default function DashboardPage() {
   async function reloadProjects() {
     try {
       const res = await fetch('/api/ceo/projects/overview');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.projects) setApiProjects(data.projects);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Could not load projects (${res.status}).`);
+      if (!Array.isArray(data.projects)) throw new Error('Projects response is invalid.');
+      setApiProjects(data.projects);
+      setProjectsError(null);
     } catch (err) {
       console.error('Failed to reload projects:', err);
+      setProjectsError(err instanceof Error ? err.message : 'Could not load projects.');
     }
   }
 
@@ -118,32 +107,30 @@ export default function DashboardPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Fetch all CEO dashboard data in parallel
+  // Project endpoint responses are the sole dashboard metrics source.
   useEffect(() => {
     let cancelled = false;
 
     async function loadAll() {
-      const [overviewRes, projectsRes, feedRes, approvalsRes, revenueRes] =
-        await Promise.allSettled([
-          fetch('/api/ceo/overview').then(r => r.ok ? r.json() : null),
-          fetch('/api/ceo/projects/overview').then(r => r.ok ? r.json() : null),
-          fetch('/api/ceo/activity-feed?limit=8').then(r => r.ok ? r.json() : null),
-          fetch('/api/ceo/approvals?limit=10').then(r => r.ok ? r.json() : null),
-          fetch('/api/ceo/revenue').then(r => r.ok ? r.json() : null),
-        ]);
-
-      if (cancelled) return;
-
-      if (overviewRes.status   === 'fulfilled' && overviewRes.value)   setOverview(overviewRes.value);
-      if (projectsRes.status   === 'fulfilled' && projectsRes.value?.projects) setApiProjects(projectsRes.value.projects);
-      if (feedRes.status       === 'fulfilled' && feedRes.value?.feed)         setFeedItems(feedRes.value.feed);
-      if (approvalsRes.status  === 'fulfilled' && approvalsRes.value?.approvals) setLiveApprovals(approvalsRes.value.approvals);
-      if (revenueRes.status    === 'fulfilled' && revenueRes.value?.months)    setRevenueData(revenueRes.value.months);
-
-      setLoading(false);
+      try {
+        const response = await fetch('/api/ceo/projects/overview');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `Could not load projects (${response.status}).`);
+        if (!Array.isArray(data.projects)) throw new Error('Projects response is invalid.');
+        if (!cancelled) {
+          setApiProjects(data.projects);
+          setProjectsError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setProjectsError(error instanceof Error ? error.message : 'Could not load project metrics.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
 
-    loadAll().catch(() => setLoading(false));
+    void loadAll();
     return () => { cancelled = true; };
   }, []);
 
@@ -159,105 +146,85 @@ export default function DashboardPage() {
   // Helper: format a nullable number as a string or '—'
   const fmt = (n: number | null | undefined): string => n != null ? n.toLocaleString() : '—';
 
-  // Derive pending approvals count
-  const pendingCount = liveApprovals != null
-    ? liveApprovals.length - approvedIds.size
-    : (overview?.pendingApprovals ?? null);
-
-  async function handleApprove(id: string, sourceCollection?: string) {
-    setApprovedIds(prev => new Set(prev).add(id));
-    try {
-      await fetch('/api/ceo/approvals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, sourceCollection: sourceCollection || 'leaveRequests' }),
-      });
-    } catch (e) {
-      console.warn('Could not persist approval:', e);
+  const metricNumber = (project: ApiProject, pattern: RegExp): number | null => {
+    const metric = project.metrics.find(item => pattern.test(item.label));
+    if (!metric || metric.value == null || metric.value === '—') return null;
+    const parsed = Number(metric.value.replace(/[^\d.-]/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const sumAvailable = (values: Array<number | null | undefined>): number | null => {
+    const known = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    return known.length ? known.reduce((total, value) => total + value, 0) : null;
+  };
+  const projectStaffCount = (project: ApiProject): number | null =>
+    project.staff ? project.staff.length :
+      project.departments?.some(department => department.headcount != null)
+        ? project.departments.reduce((total, department) => total + (department.headcount ?? 0), 0)
+        : metricNumber(project, /^(total\s*)?(staff|employees|team members)$/i);
+  const projectActiveStaffCount = (project: ApiProject): number | null => {
+    const metric = metricNumber(project, /active\s*(staff|employees)/i);
+    if (metric != null) return metric;
+    if (!project.staff?.some(staff => staff.status)) return null;
+    return project.staff.filter(staff => ['active', 'clocked in', 'on shift', 'onshift'].includes(String(staff.status).toLowerCase())).length;
+  };
+  const projectClockedInCount = (project: ApiProject): number | null => {
+    const metric = metricNumber(project, /clocked[\s-]*in/i);
+    if (metric != null) return metric;
+    if (!project.staff?.some(staff => staff.status)) return null;
+    return project.staff.filter(staff => ['clocked in', 'on shift', 'onshift'].includes(String(staff.status).toLowerCase())).length;
+  };
+  const projectPendingApprovals = (project: ApiProject): number | null => {
+    if (project.approvals && project.approvals.length > 0) return project.approvals.length;
+    const reportedCount = metricNumber(project, /pending\s*approvals/i);
+    return reportedCount ?? (project.approvals ? project.approvals.length : null);
+  };
+  const overview: OverviewStats = {
+    totalStaff: sumAvailable((apiProjects ?? []).map(projectStaffCount)),
+    activeStaff: sumAvailable((apiProjects ?? []).map(projectActiveStaffCount)),
+    clockedInStaff: sumAvailable((apiProjects ?? []).map(projectClockedInCount)),
+    tasksTotal: sumAvailable((apiProjects ?? []).map(project =>
+      project.tasks?.total ?? metricNumber(project, /tasks?\s*(total|assigned)/i),
+    )),
+    tasksDone: sumAvailable((apiProjects ?? []).map(project =>
+      project.tasks?.completed ?? metricNumber(project, /tasks?\s*(completed|done)|completed\s*tasks/i),
+    )),
+    pendingApprovals: sumAvailable((apiProjects ?? []).map(projectPendingApprovals)),
+    announcementsCount: sumAvailable((apiProjects ?? []).map(project => metricNumber(project, /announcements?/i))),
+  };
+  const liveApprovals = apiProjects?.flatMap(project =>
+    (project.approvals ?? []).map(approval => ({ ...approval, project: project.name, adminUrl: project.adminUrl })),
+  ) ?? null;
+  const feedItems = apiProjects?.flatMap(project =>
+    (project.activity ?? []).map(activity => ({
+      ...activity,
+      project: project.name,
+      time: activity.time ? new Date(activity.time).toLocaleString() : 'Time unavailable',
+    })),
+  ) ?? null;
+  const revenueData: RevenueMonth[] = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - (5 - index), 1);
+    const month = date.toLocaleString('en-US', { month: 'short' });
+    const values: RevenueMonth = { month };
+    for (const project of apiProjects ?? []) {
+      const trend = project.revenueTrend?.find(item =>
+        item.month.toLowerCase() === month.toLowerCase() ||
+        item.month.toLowerCase().startsWith(month.toLowerCase()),
+      );
+      if (trend) values[project.id] = trend.revenue;
     }
-  }
+    return values;
+  });
+  const pendingCount = liveApprovals && liveApprovals.length > 0
+    ? liveApprovals.length
+    : overview.pendingApprovals;
 
-  // ── 1. Total Employees & Active Staff across Enterprise & Projects ─────────
-  // Active staff = employed staff whose accounts are NOT disabled or fired.
-  // Clocked-in staff is tracked separately as attendance.
-  const { totalEmployees, activeStaffCount, clockedInCount } = (() => {
-    let total = overview?.totalStaff ?? 0;
-    let active = overview?.activeStaff ?? 0;
-    const clocked = overview?.clockedInStaff ?? 0;
-
-    if (apiProjects) {
-      for (const p of apiProjects) {
-        if (p.id === 'ae-hub') continue; // AE Hub already counted from Firestore overview
-        const empMetric = p.metrics?.find(m => {
-          const l = m.label.toLowerCase();
-          return l.includes('staff') || l.includes('employee') || l.includes('team');
-        });
-        if (empMetric?.value && empMetric.value !== '—') {
-          const num = parseInt(empMetric.value.replace(/[^0-9]/g, ''), 10);
-          if (!isNaN(num) && num > 0) {
-            total += num;
-            active += num;
-          }
-        }
-      }
-    }
-
-    return {
-      totalEmployees: total,
-      activeStaffCount: active,
-      clockedInCount: clocked,
-    };
-  })();
-
-  // ── 2. Tasks Done Today across Enterprise & Projects ───────────────────────
-  const { totalTasksDone, totalTasksAssigned } = (() => {
-    let done = overview?.tasksDone ?? 0;
-    let assigned = overview?.tasksTotal ?? 0;
-
-    if (apiProjects) {
-      for (const p of apiProjects) {
-        if (p.id === 'ae-hub') continue;
-        const doneMetric = p.metrics?.find(m => {
-          const l = m.label.toLowerCase();
-          return l.includes('task') && (l.includes('done') || l.includes('comp'));
-        });
-        if (doneMetric?.value && doneMetric.value !== '—') {
-          const num = parseInt(doneMetric.value.replace(/[^0-9]/g, ''), 10);
-          if (!isNaN(num)) done += num;
-        }
-
-        const totalMetric = p.metrics?.find(m => {
-          const l = m.label.toLowerCase();
-          return l.includes('task') && (l.includes('total') || l.includes('all'));
-        });
-        if (totalMetric?.value && totalMetric.value !== '—') {
-          const num = parseInt(totalMetric.value.replace(/[^0-9]/g, ''), 10);
-          if (!isNaN(num)) assigned += num;
-        }
-      }
-    }
-
-    return { totalTasksDone: done, totalTasksAssigned: assigned };
-  })();
-
-  // ── 3. Pending Approvals across all ventures ───────────────────────────────
-  const totalPendingApprovals = (() => {
-    let count = pendingCount ?? 0;
-    if (apiProjects) {
-      for (const p of apiProjects) {
-        if (p.id === 'ae-hub') continue;
-        const appMetric = p.metrics?.find(m => {
-          const l = m.label.toLowerCase();
-          return l.includes('approval') || l.includes('pending');
-        });
-        if (appMetric?.value && appMetric.value !== '—') {
-          const num = parseInt(appMetric.value.replace(/[^0-9]/g, ''), 10);
-          if (!isNaN(num)) count += num;
-        }
-      }
-    }
-    return count;
-  })();
+  const totalEmployees = overview.totalStaff;
+  const activeStaffCount = overview.activeStaff;
+  const clockedInCount = overview.clockedInStaff;
+  const totalTasksDone = overview.tasksDone;
+  const totalTasksAssigned = overview.tasksTotal;
+  const totalPendingApprovals = pendingCount;
 
   // ── 4. Combined Monthly Revenue calculated on the Client ───────────────────
   const calculatedCombinedRevenue = (() => {
@@ -348,11 +315,13 @@ export default function DashboardPage() {
       const isSingleProject = apiProjects.length === 1;
       const displayVal = isSingleProject
         ? (failed.health !== null && failed.health > 0 ? `${failed.health}%` : 'Offline')
-        : (averageExplicitHealth !== null ? `${Math.round(averageExplicitHealth / 2)}%` : 'Degraded');
+        : 'Degraded';
 
       return {
         value: displayVal,
-        subtext: `Alert: ${failed.name} offline`,
+        subtext: failed.status === 'error'
+          ? `Alert: ${failed.name} metrics endpoint failed`
+          : `Alert: ${failed.name} reported low health`,
         trend: 'alert' as const,
         iconColor: '#ef4444',
       };
@@ -371,12 +340,16 @@ export default function DashboardPage() {
     }
 
     // Case D: All active systems are operational
-    // Never fall back to a fake 100% if explicit health is not provided
+    const projectsWithoutHealth = apiProjects.filter(project => project.health == null).length;
     return {
-      value: averageExplicitHealth !== null ? `${averageExplicitHealth}%` : 'Operational',
-      subtext: apiProjects.length === 1 ? `${apiProjects[0].name} operational` : 'All systems operational',
-      trend: 'up' as const,
-      iconColor: '#10b981',
+      value: averageExplicitHealth !== null ? `${averageExplicitHealth}%` : '—',
+      subtext: averageExplicitHealth === null
+        ? 'Health scores not reported by project endpoints'
+        : projectsWithoutHealth > 0
+          ? `Average of reporting projects · ${projectsWithoutHealth} without a score`
+          : apiProjects.length === 1 ? `${apiProjects[0].name} reported health` : 'Average reported project health',
+      trend: averageExplicitHealth === null ? 'neutral' as const : 'up' as const,
+      iconColor: averageExplicitHealth === null ? '#94a3b8' : '#10b981',
     };
   })();
 
@@ -425,11 +398,11 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Card 1: Active Projects */}
         <MetricCard
-          label="Active Projects"
+          label="Configured Projects"
           value={apiProjects ? String(apiProjects.length) : '—'}
           subtext={
             apiProjects
-              ? `${apiProjects.length} Venture${apiProjects.length === 1 ? '' : 's'} Live`
+              ? `${apiProjects.filter(project => project.status === 'online').length} reporting endpoints`
               : 'Loading ventures'
           }
           trend="up"
@@ -439,11 +412,11 @@ export default function DashboardPage() {
         {/* Card 2: Total Employees (Consolidated across Enterprise & Projects) */}
         <MetricCard
           label="Total Employees"
-          value={totalEmployees > 0 ? totalEmployees.toLocaleString() : fmt(overview?.totalStaff)}
+          value={fmt(totalEmployees)}
           subtext={
-            activeStaffCount > 0
+            activeStaffCount != null
               ? `${activeStaffCount} Active (Accounts in Good Standing)`
-              : 'Active workforce'
+              : 'Active workforce data unavailable'
           }
           trend="up"
           topIcon={<UsersIcon color="#3b82f6" />}
@@ -452,24 +425,24 @@ export default function DashboardPage() {
         {/* Card 3: Staff Clocked In (Attendance on duty today) */}
         <MetricCard
           label="Staff Clocked In"
-          value={String(clockedInCount)}
+          value={fmt(clockedInCount)}
           subtext={
-            totalEmployees > 0
+            totalEmployees != null && totalEmployees > 0 && clockedInCount != null
               ? `${Math.round((clockedInCount / totalEmployees) * 100)}% on duty today`
-              : 'Attendance today'
+              : 'Attendance data unavailable'
           }
           trend="neutral"
           topIcon={<ClockCircleIcon color="#10b981" />}
         />
 
-        {/* Card 4: Tasks Done Today */}
+        {/* Card 4: Tasks Completed */}
         <MetricCard
-          label="Tasks Done Today"
-          value={String(totalTasksDone)}
+          label="Tasks Completed"
+          value={fmt(totalTasksDone)}
           subtext={
-            totalTasksAssigned > 0
-              ? `of ${totalTasksAssigned} assigned today`
-              : 'Across all operations'
+            totalTasksAssigned != null
+              ? `of ${totalTasksAssigned} total tasks`
+              : 'Task data unavailable'
           }
           trend="up"
           topIcon={<SparklineIcon color="#eab308" />}
@@ -478,17 +451,17 @@ export default function DashboardPage() {
         {/* Card 5: Pending Approvals */}
         <MetricCard
           label="Pending Approvals"
-          value={String(totalPendingApprovals)}
-          subtext={totalPendingApprovals > 0 ? 'Requires executive review' : 'All cleared · 0 pending'}
-          trend={totalPendingApprovals > 0 ? 'alert' : 'neutral'}
-          topIcon={<AlertCircleIcon color={totalPendingApprovals > 0 ? '#ef4444' : '#10b981'} />}
+          value={fmt(totalPendingApprovals)}
+          subtext={totalPendingApprovals == null ? 'Approval data unavailable' : `${totalPendingApprovals} reported across project endpoints`}
+          trend={totalPendingApprovals == null ? 'neutral' : totalPendingApprovals > 0 ? 'alert' : 'neutral'}
+          topIcon={<AlertCircleIcon color={totalPendingApprovals != null && totalPendingApprovals > 0 ? '#ef4444' : '#94a3b8'} />}
         />
 
         {/* Card 6: Combined Monthly Revenue (Client Calculated) */}
         <MetricCard
           label="Combined Revenue"
           value={calculatedCombinedRevenue}
-          subtext={apiProjects ? `Consolidated (${apiProjects.length} ventures)` : 'Monthly total'}
+          subtext={apiProjects ? `${apiProjects.length} configured projects` : 'Monthly total'}
           trend="up"
           topIcon={<DollarSignIcon color="#10b981" />}
         />
@@ -497,14 +470,14 @@ export default function DashboardPage() {
         <MetricCard
           label="Announcements"
           value={fmt(overview?.announcementsCount)}
-          subtext="Published across AE"
+          subtext={overview?.announcementsCount == null ? 'No data available' : 'Enterprise announcements'}
           trend="up"
           topIcon={<ClientIcon color="#8b5cf6" />}
         />
 
         {/* Card 8: System Health (Pinpoints failing system or multiple failures) */}
         <MetricCard
-          label="System Health"
+          label="Project Health Score"
           value={systemHealthStat.value}
           subtext={systemHealthStat.subtext}
           trend={systemHealthStat.trend}
@@ -520,7 +493,11 @@ export default function DashboardPage() {
               Projects Overview
             </h2>
             <span className="text-[12px] font-medium text-gray-400 dark:text-gray-500">
-              {apiProjects ? `${apiProjects.length} Core Venture${apiProjects.length === 1 ? '' : 's'} Configured` : 'Loading ventures…'}
+              {projectsError
+                ? 'Project data unavailable'
+                : apiProjects
+                  ? `${apiProjects.length} Project${apiProjects.length === 1 ? '' : 's'} Configured`
+                  : 'Loading ventures…'}
             </span>
           </div>
 
@@ -536,7 +513,17 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {apiProjects === null ? (
+        {projectsError ? (
+          <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-[12px] text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
+            Could not load project metrics: {projectsError}
+            <button
+              onClick={() => void reloadProjects()}
+              className="ml-2 font-semibold underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : apiProjects === null ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map(n => (
               <div key={n} className="h-56 animate-pulse rounded-2xl border border-gray-100 bg-gray-50/50 p-4 dark:border-white/6 dark:bg-white/3" />
@@ -549,7 +536,7 @@ export default function DashboardPage() {
             </div>
             <h3 className="mt-3 text-[15px] font-bold text-gray-900 dark:text-white">No Projects Registered</h3>
             <p className="mt-1 max-w-sm text-[12px] text-gray-500 dark:text-gray-400">
-              Add your enterprise ventures and specify their data API endpoints and hosted links to begin tracking live metrics.
+              Add enterprise projects and configure each project&rsquo;s metrics endpoint to report dashboard data.
             </p>
             <button
               onClick={() => setProjectModal({ open: true, mode: 'create', project: null })}
@@ -586,7 +573,9 @@ export default function DashboardPage() {
 
           <div className="divide-y divide-gray-50 dark:divide-white/4">
             {feedItems === null ? (
-              <p className="py-4 text-[12px] text-gray-400">Loading activity…</p>
+              <p className="py-4 text-[12px] text-gray-400">
+                {projectsError ? 'Activity unavailable because project data could not be loaded.' : 'Loading activity…'}
+              </p>
             ) : feedItems.length === 0 ? (
               <p className="py-4 text-[12px] text-gray-400">No recent activity found.</p>
             ) : (
@@ -619,16 +608,23 @@ export default function DashboardPage() {
             <AlertCircleIcon color="#ef4444" />
             <h3 className="text-[16px] font-bold text-gray-900 dark:text-white">Pending Approvals</h3>
           </div>
-          <p className="text-[12px] text-gray-500 dark:text-gray-400 mb-4">Items awaiting your decision</p>
+          <p className="text-[12px] text-gray-500 dark:text-gray-400 mb-4">Read-only status reported by project metrics endpoints</p>
 
           <div className="divide-y divide-gray-50 dark:divide-white/4">
             {liveApprovals === null ? (
-              <p className="py-4 text-[12px] text-gray-400">Loading approvals…</p>
-            ) : liveApprovals.length === 0 ? (
+              <p className="py-4 text-[12px] text-gray-400">
+                {projectsError ? 'Approvals unavailable because project data could not be loaded.' : 'Loading approvals…'}
+              </p>
+            ) : liveApprovals.length === 0 && overview.pendingApprovals == null ? (
+              <p className="py-4 text-[12px] text-gray-400">Approval data unavailable.</p>
+            ) : liveApprovals.length === 0 && overview.pendingApprovals === 0 ? (
               <p className="py-4 text-[12px] text-gray-400">No pending approvals.</p>
+            ) : liveApprovals.length === 0 ? (
+              <p className="py-4 text-[12px] text-gray-400">
+                {overview.pendingApprovals} pending approval{overview.pendingApprovals === 1 ? '' : 's'} reported; request details are not included by the project metrics endpoint.
+              </p>
             ) : (
               liveApprovals.map(item => {
-                const isApproved = approvedIds.has(item.id);
                 return (
                   <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5 first:pt-0 last:pb-0">
                     <div className="min-w-0 flex-1">
@@ -644,9 +640,11 @@ export default function DashboardPage() {
                             ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
                             : item.type === 'payment'
                             ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-                            : 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300'
+                              : item.type === 'task'
+                              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
+                              : 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300'
                         }`}>
-                          {item.type === 'staff' ? 'Staff Request' : item.type === 'leave' ? 'Leave' : item.type === 'payment' ? 'Disbursement' : 'Request'}
+                            {item.type === 'staff' ? 'Staff Request' : item.type === 'leave' ? 'Leave' : item.type === 'payment' ? 'Disbursement' : item.type === 'task' ? 'Task Approval' : 'Request'}
                         </span>
                         <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300">
                           {item.project}
@@ -656,22 +654,21 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
                       <button
-                        onClick={() => handleApprove(item.id, item.sourceCollection)}
-                        disabled={isApproved}
-                        className={`rounded-lg px-3.5 py-1.5 text-[11px] font-bold shadow-sm transition ${
-                          isApproved
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 cursor-default'
-                            : 'bg-[#E5A800] text-gray-950 hover:brightness-95 active:scale-[0.98]'
-                        }`}
-                      >
-                        {isApproved ? 'Approved ✓' : 'Approve'}
-                      </button>
-                      <button
                         onClick={() => setSelectedApproval(item)}
                         className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"
                       >
                         View
                       </button>
+                      {item.adminUrl && (
+                        <a
+                          href={item.adminUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg bg-[#E5A800] px-3.5 py-1.5 text-[11px] font-bold text-gray-950 shadow-sm transition hover:brightness-95"
+                        >
+                          Review in project
+                        </a>
+                      )}
                     </div>
                   </div>
                 );
@@ -735,11 +732,6 @@ export default function DashboardPage() {
       {selectedApproval && (
         <LiveApprovalDetailModal
           item={selectedApproval}
-          isApproved={approvedIds.has(selectedApproval.id)}
-          onApprove={() => {
-            handleApprove(selectedApproval.id, selectedApproval.sourceCollection);
-            setSelectedApproval(null);
-          }}
           onClose={() => setSelectedApproval(null)}
         />
       )}
@@ -808,13 +800,42 @@ export interface ApiProject {
   lead?: string;
   adminUrl: string | null;
   apiEndpoint: string | null;
-  feedEndpoint?: string | null;
-  revenueEndpoint?: string | null;
-  healthEndpoint?: string | null;
+  hasApiToken?: boolean;
   color?: string;
   metrics: { label: string; value: string | null }[];
   health: number | null;
+  endpointError?: string;
   revenueTrend?: { month: string; revenue: number }[];
+  approvals?: LiveApprovalItem[];
+  activity?: Array<{
+    id: string;
+    text: string;
+    time: string | null;
+    type: FeedEntry['type'];
+  }>;
+  staff?: Array<{ id: string; name: string; department?: string; role?: string; status?: string }>;
+  departments?: Array<{
+    id: string;
+    name: string;
+    headcount: number;
+    staff?: ApiProject['staff'];
+    tasksTotal?: number;
+    tasksCompleted?: number;
+  }>;
+  tasks?: {
+    total: number;
+    completed: number;
+    inProgress?: number;
+    items?: Array<{
+      id: string;
+      task: string;
+      assignee?: string;
+      department?: string;
+      dueDate?: string;
+      status: string;
+      priority: string;
+    }>;
+  };
   status?: 'online' | 'pending' | 'error';
 }
 
@@ -859,21 +880,15 @@ function ProjectCard({
                 <h3 className="text-[15px] font-bold text-gray-900 dark:text-white leading-tight truncate">
                   {project.name}
                 </h3>
-                {project.apiEndpoint ? (
-                  <span
-                    className={`inline-flex items-center rounded-full px-1.5 py-0.2 text-[9px] font-bold ${
-                      project.status === 'error'
-                        ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400'
-                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
-                    }`}
-                  >
-                    {project.status === 'error' ? 'API Offline' : 'API Live'}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.2 text-[9px] font-medium text-gray-600 dark:bg-white/10 dark:text-gray-400">
-                    No Endpoint
-                  </span>
-                )}
+                <span className="inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.2 text-[9px] font-medium text-gray-600 dark:bg-white/10 dark:text-gray-400">
+                  {project.status === 'error'
+                    ? 'Endpoint error'
+                    : project.status === 'online'
+                      ? 'Metrics live'
+                      : project.apiEndpoint
+                        ? 'Awaiting metrics'
+                        : 'Endpoint not configured'}
+                </span>
               </div>
               <p className="truncate text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                 {project.subtitle}
@@ -916,6 +931,12 @@ function ProjectCard({
 
       {/* Body Stats */}
       <div className="p-4 space-y-4">
+        {project.endpointError && (
+          <p role="status" className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700 dark:bg-red-950/30 dark:text-red-300">
+            Metrics endpoint failed: {project.endpointError}
+          </p>
+        )}
+
         {/* Metric Columns */}
         <div className="grid grid-cols-3 gap-2 text-center">
           {project.metrics && project.metrics.length > 0 ? (
@@ -1018,12 +1039,8 @@ function ProjectConfigModal({
   const [subtitle, setSubtitle] = useState(project?.subtitle || '');
   const [adminUrl, setAdminUrl] = useState(project?.adminUrl || '');
   const [apiEndpoint, setApiEndpoint] = useState(project?.apiEndpoint || '');
-  const [feedEndpoint, setFeedEndpoint] = useState(project?.feedEndpoint || '');
-  const [revenueEndpoint, setRevenueEndpoint] = useState(project?.revenueEndpoint || '');
-  const [healthEndpoint, setHealthEndpoint] = useState(project?.healthEndpoint || '');
-  const [showAdvancedOverrides, setShowAdvancedOverrides] = useState(
-    Boolean(project?.revenueEndpoint || project?.healthEndpoint || project?.feedEndpoint)
-  );
+  const [apiToken, setApiToken] = useState('');
+  const [clearApiToken, setClearApiToken] = useState(false);
   const [lead, setLead] = useState(project?.lead || '');
   const [description, setDescription] = useState(project?.description || '');
   const [color, setColor] = useState(project?.color || '#d97706');
@@ -1050,9 +1067,7 @@ function ProjectConfigModal({
             subtitle: subtitle.trim(),
             adminUrl: adminUrl.trim() || null,
             apiEndpoint: apiEndpoint.trim() || null,
-            feedEndpoint: feedEndpoint.trim() || null,
-            revenueEndpoint: revenueEndpoint.trim() || null,
-            healthEndpoint: healthEndpoint.trim() || null,
+            apiToken: apiToken.trim() || undefined,
             lead: lead.trim() || '',
             description: description.trim() || '',
             color,
@@ -1072,9 +1087,8 @@ function ProjectConfigModal({
             subtitle: subtitle.trim(),
             adminUrl: adminUrl.trim() || null,
             apiEndpoint: apiEndpoint.trim() || null,
-            feedEndpoint: feedEndpoint.trim() || null,
-            revenueEndpoint: revenueEndpoint.trim() || null,
-            healthEndpoint: healthEndpoint.trim() || null,
+            apiToken: apiToken.trim() || undefined,
+            clearApiToken,
             lead: lead.trim() || '',
             description: description.trim() || '',
             color,
@@ -1088,8 +1102,8 @@ function ProjectConfigModal({
 
       onSaved();
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while saving.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while saving.');
     } finally {
       setSaving(false);
     }
@@ -1113,7 +1127,7 @@ function ProjectConfigModal({
               {mode === 'create' ? 'Add Enterprise Project' : `Edit ${project?.name || 'Project'}`}
             </h2>
             <p className="text-[12px] text-gray-500 dark:text-gray-400">
-              Enter project details, hosted portal link, and data/feed endpoints for live tracking.
+              Add the project metrics endpoint to populate its dashboard data.
             </p>
           </div>
           <button
@@ -1178,97 +1192,50 @@ function ProjectConfigModal({
             </p>
           </div>
 
-          {/* Row 3: Primary Unified Data API Endpoint */}
-          <div className="rounded-xl border border-amber-500/20 bg-amber-50/30 p-3.5 dark:border-amber-500/10 dark:bg-amber-950/10">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <label className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 text-[12px]">
-                <span>Primary Live Data API Endpoint</span>
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
-                  Unified Endpoint
-                </span>
-              </label>
-            </div>
+          <div>
+            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
+              Project Metrics Endpoint
+            </label>
             <input
-              type="text"
+              type="url"
               value={apiEndpoint}
-              onChange={e => setApiEndpoint(e.target.value)}
-              placeholder="https://api.yourventure.com/v1/metrics"
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white font-mono text-[11px]"
+              onChange={event => setApiEndpoint(event.target.value)}
+              placeholder="https://your-project.example.com/api/enterprise/metrics"
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
             />
-            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400 leading-normal">
-              Main endpoint returning JSON <code className="rounded bg-white px-1 dark:bg-white/10 text-gray-800 dark:text-gray-200">&#123; metrics: [...], health: 95, revenueTrend: [...], activity: [...] &#125;</code>.
-              Powers live metrics, health score, 6-month revenue chart, and feed simultaneously.
+            <p className="mt-1 text-[11px] text-gray-400">
+              Returns JSON metrics for this project. The endpoint is fetched by the Enterprise server when the dashboard loads.
             </p>
           </div>
 
-          {/* Advanced Specific Overrides Accordion */}
-          <div className="rounded-xl border border-gray-100 dark:border-white/8 bg-gray-50/50 dark:bg-white/2 p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-gray-700 dark:text-gray-300 text-[11.5px]">
-                Specialized Endpoint Overrides (Optional)
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowAdvancedOverrides(!showAdvancedOverrides)}
-                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
-              >
-                <span>{showAdvancedOverrides ? 'Hide Overrides ▲' : 'Configure Overrides (Health, Revenue, Feed) ▼'}</span>
-              </button>
-            </div>
-
-            {showAdvancedOverrides && (
-              <div className="space-y-3 pt-2 border-t border-gray-200/50 dark:border-white/6 animate-in fade-in duration-150">
-                {/* Override 1: Health Status Endpoint */}
-                <div>
-                  <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                    Health Status Endpoint (Override)
-                  </label>
-                  <input
-                    type="text"
-                    value={healthEndpoint}
-                    onChange={e => setHealthEndpoint(e.target.value)}
-                    placeholder="https://api.yourventure.com/v1/health"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white font-mono text-[11px]"
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-400">
-                    Returns <code className="rounded bg-gray-100 px-1 dark:bg-white/10">&#123; health: 96 &#125;</code> (0-100 score). Directly drives Project Health Scores and System Health pinpoints.
-                  </p>
-                </div>
-
-                {/* Override 2: 6-Month Revenue Trend Endpoint */}
-                <div>
-                  <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                    Revenue Trend Endpoint (Override)
-                  </label>
-                  <input
-                    type="text"
-                    value={revenueEndpoint}
-                    onChange={e => setRevenueEndpoint(e.target.value)}
-                    placeholder="https://api.yourventure.com/v1/revenue-trend"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white font-mono text-[11px]"
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-400">
-                    Returns <code className="rounded bg-gray-100 px-1 dark:bg-white/10">&#123; revenueTrend: [&#123; month: &apos;May&apos;, revenue: 450000 &#125;] &#125;</code> to dynamically plot on the 6-Month Trend chart.
-                  </p>
-                </div>
-
-                {/* Override 3: Executive Activity Feed Endpoint */}
-                <div>
-                  <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                    Executive Activity Feed Endpoint (Override)
-                  </label>
-                  <input
-                    type="text"
-                    value={feedEndpoint}
-                    onChange={e => setFeedEndpoint(e.target.value)}
-                    placeholder="https://api.yourventure.com/v1/activity"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white font-mono text-[11px]"
-                  />
-                  <p className="mt-1 text-[10.5px] text-gray-400">
-                    Returns recent venture activities <code className="rounded bg-gray-100 px-1 dark:bg-white/10">&#123; feed: [&#123; text, time, type &#125;] &#125;</code> for the executive feed.
-                  </p>
-                </div>
-              </div>
+          <div>
+            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
+              Metrics Endpoint Bearer Token (Optional)
+            </label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={apiToken}
+              onChange={event => {
+                setApiToken(event.target.value);
+                if (event.target.value) setClearApiToken(false);
+              }}
+              placeholder={project?.hasApiToken ? 'Saved token — leave blank to keep it' : 'Enter the endpoint bearer token'}
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">
+              Must match the endpoint&rsquo;s configured bearer token. It is sent only by the Enterprise server, encrypted before storage, and never returned to the browser.
+            </p>
+            {project?.hasApiToken && (
+              <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={clearApiToken}
+                  onChange={event => setClearApiToken(event.target.checked)}
+                  disabled={Boolean(apiToken)}
+                />
+                Remove saved token
+              </label>
             )}
           </div>
 
@@ -1364,6 +1331,11 @@ function RevenueTrendCard({
   const innerH = chartHeight - padTop - padBottom;
 
   const activeProjects = projects || [];
+  const hasRevenueData =
+    activeProjects.some(project => project.revenueTrend?.some(item => item.revenue > 0)) ||
+    Boolean(months?.some(month =>
+      Object.entries(month).some(([key, value]) => key !== 'month' && typeof value === 'number' && value > 0),
+    ));
 
   const monthLabels = months && months.length > 0
     ? months.map(m => m.month)
@@ -1390,8 +1362,6 @@ function RevenueTrendCard({
         val = item.revenue;
       } else if (monthObj && monthObj[p.id] != null) {
         val = Number(monthObj[p.id]) * 1000;
-      } else if (p.id === 'ae-hub' && monthObj?.aeHub != null) {
-        val = Number(monthObj.aeHub) * 1000;
       }
       if (val > maxRevenueFound) maxRevenueFound = val;
     }
@@ -1432,7 +1402,7 @@ function RevenueTrendCard({
             Revenue by Project — 6 Month Trend
           </h3>
           <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
-            Combined monthly revenue across all configured AE ventures
+            Revenue information reported by configured project records
           </p>
         </div>
         <span className="text-[11px] font-semibold text-gray-400">
@@ -1444,6 +1414,10 @@ function RevenueTrendCard({
         <p className="py-8 text-center text-[12px] text-gray-400">Loading revenue data…</p>
       ) : activeProjects.length === 0 ? (
         <p className="py-8 text-center text-[12px] text-gray-400">No enterprise projects configured yet.</p>
+      ) : !hasRevenueData ? (
+        <p className="py-8 text-center text-[12px] text-gray-400">
+          Revenue data is unavailable until a data source is connected.
+        </p>
       ) : (
         <div className="w-full overflow-x-auto">
           <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full min-w-[640px] select-none">
@@ -1489,8 +1463,6 @@ function RevenueTrendCard({
                       val = item.revenue;
                     } else if (monthObj && monthObj[p.id] != null) {
                       val = Number(monthObj[p.id]) * 1000;
-                    } else if (p.id === 'ae-hub' && monthObj?.aeHub != null) {
-                      val = Number(monthObj.aeHub) * 1000;
                     }
 
                     const h = ceiling > 0 && val > 0 ? (val / ceiling) * innerH : 0;
@@ -1591,8 +1563,10 @@ function ProjectHealthScoresCard({ projects }: { projects: ApiProject[] | null }
                       {p.health != null
                         ? `${p.health}%`
                         : p.status === 'error'
-                        ? 'Offline'
-                        : 'Pending'}
+                        ? 'Endpoint error'
+                        : p.status === 'online'
+                          ? 'Not reported'
+                          : 'Awaiting metrics'}
                     </span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
@@ -1600,7 +1574,7 @@ function ProjectHealthScoresCard({ projects }: { projects: ApiProject[] | null }
                       className="h-full rounded-full transition-all duration-500"
                       style={{
                         width: `${p.health ?? 0}%`,
-                        backgroundColor: p.health != null ? color : '#ef4444',
+                        backgroundColor: p.health != null ? color : 'transparent',
                       }}
                     />
                   </div>
@@ -1712,13 +1686,9 @@ function QuickNavigationCard({
 /* ── Approval Detail Modal ──────────────────────────────────────────────── */
 function LiveApprovalDetailModal({
   item,
-  isApproved,
-  onApprove,
   onClose,
 }: {
   item: LiveApprovalItem;
-  isApproved: boolean;
-  onApprove: () => void;
   onClose: () => void;
 }) {
   return (
@@ -1770,15 +1740,15 @@ function LiveApprovalDetailModal({
           <button onClick={onClose}
             className="rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300"
           >
-            Cancel
+            Close
           </button>
-          <button onClick={onApprove} disabled={isApproved}
-            className={`rounded-lg px-5 py-2 text-[12px] font-bold shadow-sm transition ${
-              isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-[#E5A800] text-gray-950 hover:brightness-95'
-            }`}
-          >
-            {isApproved ? 'Approved ✓' : 'Approve Decision'}
-          </button>
+          {item.adminUrl && (
+            <a href={item.adminUrl} target="_blank" rel="noopener noreferrer"
+              className="rounded-lg bg-[#E5A800] px-5 py-2 text-[12px] font-bold text-gray-950 shadow-sm transition hover:brightness-95"
+            >
+              Review in project
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -1813,8 +1783,6 @@ function ExecutiveReportModal({
     : dynamicSumK > 0
     ? `$${(dynamicSumK / 1000).toFixed(2)}M`
     : '—';
-  const aeHubProject = projects?.find(p => p.id === 'ae-hub');
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1a1a1a]">
@@ -1851,7 +1819,7 @@ function ExecutiveReportModal({
                 {overview?.totalStaff != null ? overview.totalStaff.toLocaleString() : '—'}
               </p>
               <span className="text-[10px] text-emerald-600 font-semibold">
-                {overview?.activeStaff != null ? `${overview.activeStaff} Active on Duty` : 'From database'}
+                {overview?.activeStaff != null ? `${overview.activeStaff} Active on Duty` : 'Data unavailable'}
               </span>
             </div>
             <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/4">
@@ -1860,15 +1828,15 @@ function ExecutiveReportModal({
                 {overview?.tasksDone != null ? overview.tasksDone.toLocaleString() : '—'}
               </p>
               <span className="text-[10px] text-emerald-600 font-semibold">
-                {overview?.tasksTotal != null ? `of ${overview.tasksTotal} Total Tasks` : 'From database'}
+                {overview?.tasksTotal != null ? `of ${overview.tasksTotal} Total Tasks` : 'Data unavailable'}
               </span>
             </div>
             <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/4">
-              <p className="text-[11px] text-gray-500">AE Hub Health</p>
+              <p className="text-[11px] text-gray-500">Configured Projects</p>
               <p className="text-[18px] font-bold text-gray-900 dark:text-white">
-                {aeHubProject?.health != null ? `${aeHubProject.health}%` : '—'}
+                {projects?.length ?? '—'}
               </p>
-              <span className="text-[10px] text-emerald-600 font-semibold">Operational Score</span>
+              <span className="text-[10px] text-gray-500 font-semibold">Enterprise project records</span>
             </div>
           </div>
 
@@ -1957,12 +1925,14 @@ function BroadcastModal({
   const [audience, setAudience] = useState('All Staff');
   const [publishing, setPublishing] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handlePublish(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
 
     setPublishing(true);
+    setError(null);
     try {
       await addDoc(collection(db, 'announcements'), {
         title: title.trim(),
@@ -1977,11 +1947,8 @@ function BroadcastModal({
       setTimeout(() => {
         onClose();
       }, 1400);
-    } catch {
-      setSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 1400);
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : 'Could not publish the announcement.');
     } finally {
       setPublishing(false);
     }
@@ -1996,7 +1963,7 @@ function BroadcastModal({
               Broadcast Executive Announcement
             </h2>
             <p className="text-[11px] text-gray-500">
-              Transmit an official notification to the entire enterprise workstation.
+              Send an official update to the enterprise team.
             </p>
           </div>
           <button
@@ -2006,6 +1973,12 @@ function BroadcastModal({
             <CloseIcon />
           </button>
         </div>
+
+        {error && (
+          <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
+            {error}
+          </p>
+        )}
 
         {success ? (
           <div className="py-10 text-center">
@@ -2066,10 +2039,7 @@ function BroadcastModal({
                     All Staff {overview?.totalStaff != null ? `(${overview.totalStaff} Employees)` : ''}
                   </option>
                   <option value="Directors">Department Heads &amp; Directors</option>
-                  <option value="AE Hub">AE Hub Team</option>
-                  <option value="MCS">MCS Team</option>
-                  <option value="AWA">AWA Team</option>
-                  <option value="Trendora">Trendora Team</option>
+                  <option value="Enterprise">Enterprise Team</option>
                 </select>
               </div>
             </div>
@@ -2190,10 +2160,10 @@ function ProjectDetailModal({
             </div>
           </div>
 
-          {/* Endpoints & Links */}
+          {/* Project Link */}
           <div className="rounded-xl border border-gray-100 p-3.5 space-y-2 dark:border-white/8 bg-gray-50/50 dark:bg-white/2">
             <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-              Integrations &amp; URLs
+              Project URL
             </h4>
             <div className="space-y-1.5 text-[11px]">
               <div className="flex items-center justify-between gap-2">
@@ -2212,43 +2182,96 @@ function ProjectDetailModal({
                 )}
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-gray-500 shrink-0">Data API:</span>
+                <span className="text-gray-500 shrink-0">Metrics Endpoint:</span>
                 {project.apiEndpoint ? (
-                  <span className="font-mono text-gray-800 dark:text-gray-200 truncate">
+                  <a
+                    href={project.apiEndpoint}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-amber-600 dark:text-amber-400 truncate hover:underline"
+                  >
                     {project.apiEndpoint}
-                  </span>
+                  </a>
                 ) : (
-                  <span className="text-gray-400">None</span>
-                )}
-              </div>
-              {project.healthEndpoint && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-gray-500 shrink-0">Health API:</span>
-                  <span className="font-mono text-gray-800 dark:text-gray-200 truncate">
-                    {project.healthEndpoint}
-                  </span>
-                </div>
-              )}
-              {project.revenueEndpoint && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-gray-500 shrink-0">Revenue API:</span>
-                  <span className="font-mono text-gray-800 dark:text-gray-200 truncate">
-                    {project.revenueEndpoint}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-gray-500 shrink-0">Activity Feed:</span>
-                {project.feedEndpoint ? (
-                  <span className="font-mono text-gray-800 dark:text-gray-200 truncate">
-                    {project.feedEndpoint}
-                  </span>
-                ) : (
-                  <span className="text-gray-400">None</span>
+                  <span className="text-gray-400">Not configured</span>
                 )}
               </div>
             </div>
           </div>
+
+          {(project.tasks || project.departments || project.staff) && (
+            <div className="space-y-3">
+              {project.tasks && (
+                <section>
+                  <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    Tasks · {project.tasks.completed}/{project.tasks.total} completed
+                  </h4>
+                  {project.tasks.items?.length ? (
+                    <div className="space-y-1.5">
+                      {project.tasks.items.slice(0, 8).map(task => (
+                        <div key={task.id} className="flex items-start justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/4">
+                          <div className="min-w-0">
+                            <p className="truncate text-[12px] font-medium text-gray-800 dark:text-gray-200">{task.task}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {[task.assignee, task.department, task.dueDate].filter(Boolean).join(' · ') || 'No assignment details'}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-[10px] text-gray-500">{task.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-500">Task totals are reported; individual tasks were not included.</p>
+                  )}
+                </section>
+              )}
+
+              {project.departments && (
+                <section>
+                  <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    Departments
+                  </h4>
+                  {project.departments.length ? (
+                    <div className="space-y-1.5">
+                      {project.departments.map(department => (
+                        <div key={department.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/4">
+                          <span className="text-[12px] font-medium text-gray-800 dark:text-gray-200">{department.name}</span>
+                          <span className="shrink-0 text-[10px] text-gray-500">
+                            {department.headcount} staff
+                            {department.tasksTotal != null ? ` · ${department.tasksCompleted ?? 0}/${department.tasksTotal} tasks` : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-500">No departments reported.</p>
+                  )}
+                </section>
+              )}
+
+              {project.staff && (
+                <section>
+                  <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    Project Staff · {project.staff.length}
+                  </h4>
+                  {project.staff.length ? (
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      {project.staff.slice(0, 12).map(staff => (
+                        <div key={staff.id} className="rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/4">
+                          <p className="truncate text-[12px] font-medium text-gray-800 dark:text-gray-200">{staff.name}</p>
+                          <p className="truncate text-[10px] text-gray-500">
+                            {[staff.role, staff.department, staff.status].filter(Boolean).join(' · ') || 'No profile details'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-500">No staff reported.</p>
+                  )}
+                </section>
+              )}
+            </div>
+          )}
 
           {/* Revenue 6-Month Breakdown if available */}
           {project.revenueTrend && project.revenueTrend.length > 0 && (

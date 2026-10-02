@@ -9,19 +9,18 @@ import type { ProjectCardMetric, ProjectCardData } from '../projects/projects.ty
 export type { ProjectCardMetric, ProjectCardData };
 
 export interface OverviewStats {
-  totalStaff:         number;
-  activeStaff:        number;
-  clockedInStaff?:    number;
-  tasksTotal:         number;
-  tasksDone:          number;
-  pendingApprovals:   number;
-  announcementsCount: number;
-  aeHubHealth:        number;
+  totalStaff:         number | null;
+  activeStaff:        number | null;
+  clockedInStaff:     number | null;
+  tasksTotal:         number | null;
+  tasksDone:          number | null;
+  pendingApprovals:   number | null;
+  announcementsCount: number | null;
 }
 
 export interface FeedItem {
   id: string;
-  project: 'AE Hub' | 'MCS' | 'AWA' | 'Trendora' | 'Enterprise';
+  project: string;
   time: string;
   text: string;
   type: 'announcement' | 'task' | 'leave' | 'payment' | 'course';
@@ -44,10 +43,6 @@ export interface ApprovalItem {
 
 export interface RevenueMonth {
   month: string;
-  aeHub?: number | null;
-  mcs?: number | null;
-  awa?: number | null;
-  trendora?: number | null;
   [projectId: string]: number | string | null | undefined;
 }
 
