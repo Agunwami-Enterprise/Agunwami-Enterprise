@@ -7,7 +7,7 @@
 const projectId = process.env.ENTERPRISE_FIREBASE_PROJECT_ID
   || process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_PROJECT_ID
   || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  || 'agunwami';
+  || 'agunwami-enterprise';
 
 export const FIREBASE_CONFIG = {
   projectId,

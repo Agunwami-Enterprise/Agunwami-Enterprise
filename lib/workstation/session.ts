@@ -7,8 +7,9 @@ import { normalizeWorkstationRole } from './roles';
 
 const SESSION_COOKIE = 'ae_session';
 const SESSION_DURATION_S = 14 * 24 * 60 * 60;
-// Auth + /users live in the workstation Firebase project — see lib/workstation/firebase-auth.ts.
-const PROJECT_ID = process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_PROJECT_ID!;
+// Auth + /users live in the workstation Firebase project — see lib/workstation/firebase.ts.
+const PROJECT_ID = process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_PROJECT_ID || 'aehub-eafa6';
+const DEFAULT_SESSION_SECRET = 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
 
 const FIREBASE_JWKS = createRemoteJWKSet(
   new URL(
@@ -39,7 +40,7 @@ async function getUserRole(uid: string, idToken: string): Promise<string> {
   return normalizeWorkstationRole(role, department);
 }
 
-const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET!);
+const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET);
 
 export type SessionPayload = { uid: string; email: string; role: string };
 

@@ -104,6 +104,8 @@ function LoginForm() {
         setError('Please enter a valid email address.');
       } else if (code === 'auth/operation-not-allowed') {
         setError('Email/Password sign-in is not enabled.');
+      } else if (code.includes('api-key-not-valid') || msg.includes('api-key-not-valid')) {
+        setError('Authentication service configuration error. Please contact the administrator.');
       } else if (msg) {
         setError(msg);
       } else {

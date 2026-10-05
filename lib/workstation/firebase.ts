@@ -7,29 +7,73 @@ import { initBackend } from 'agunwami-backend';
 
 const AUTH_APP_NAME = 'ae-workstation';
 const DATA_APP_NAME = 'ae-enterprise-data';
+const DEFAULT_WORKSTATION_CONFIG = {
+  apiKey: 'AIzaSyDCgDKKuLjCQE2V9O2uJ-2-MTjdONnoeM0',
+  authDomain: 'aehub-eafa6.firebaseapp.com',
+  projectId: 'aehub-eafa6',
+  storageBucket: 'aehub-eafa6.firebasestorage.app',
+  messagingSenderId: '511641141289',
+  appId: '1:511641141289:web:a44d561dc1f9ab8e50dc38',
+  databaseURL: 'https://aehub-eafa6-default-rtdb.firebaseio.com/',
+};
+
+const DEFAULT_ENTERPRISE_CONFIG = {
+  apiKey: 'AIzaSyBinzrMIqO16uxZrBToc-JO5spxAz6_E04',
+  authDomain: 'agunwami-enterprise.firebaseapp.com',
+  projectId: 'agunwami-enterprise',
+  storageBucket: 'agunwami-enterprise.firebasestorage.app',
+  messagingSenderId: '838884099596',
+  appId: '1:838884099596:web:f4ccc1e79555bd1ee45029',
+  databaseURL: 'https://agunwami-enterprise-default-rtdb.firebaseio.com',
+};
+
 const ENTERPRISE_PROJECT_ID = process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_PROJECT_ID
   || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  || 'agunwami';
+  || DEFAULT_ENTERPRISE_CONFIG.projectId;
 
 const authConfig = {
-  apiKey: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'dummy-api-key',
-  authDomain: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_AUTH_DOMAIN || process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'agunwami.firebaseapp.com',
-  projectId: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'agunwami',
-  storageBucket: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'agunwami.appspot.com',
-  messagingSenderId: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_MESSAGING_SENDER_ID || process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '000000000000',
-  appId: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_APP_ID || process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:000000000000:web:0000000000000000000000',
-  databaseURL: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_DATABASE_URL || `https://${process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'agunwami'}-default-rtdb.firebaseio.com`,
+  apiKey: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_API_KEY
+    || process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+    || DEFAULT_WORKSTATION_CONFIG.apiKey,
+  authDomain: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_AUTH_DOMAIN
+    || process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    || DEFAULT_WORKSTATION_CONFIG.authDomain,
+  projectId: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_PROJECT_ID
+    || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    || DEFAULT_WORKSTATION_CONFIG.projectId,
+  storageBucket: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_STORAGE_BUCKET
+    || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    || DEFAULT_WORKSTATION_CONFIG.storageBucket,
+  messagingSenderId: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_MESSAGING_SENDER_ID
+    || process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    || DEFAULT_WORKSTATION_CONFIG.messagingSenderId,
+  appId: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_APP_ID
+    || process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+    || DEFAULT_WORKSTATION_CONFIG.appId,
+  databaseURL: process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_DATABASE_URL
+    || `https://${process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_PROJECT_ID || DEFAULT_WORKSTATION_CONFIG.projectId}-default-rtdb.firebaseio.com`,
 };
 
 const dataConfig = {
-  apiKey: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_AUTH_DOMAIN,
+  apiKey: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_API_KEY
+    || process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+    || DEFAULT_ENTERPRISE_CONFIG.apiKey,
+  authDomain: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_AUTH_DOMAIN
+    || process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    || DEFAULT_ENTERPRISE_CONFIG.authDomain,
   projectId: ENTERPRISE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_APP_ID,
+  storageBucket: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_STORAGE_BUCKET
+    || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    || DEFAULT_ENTERPRISE_CONFIG.storageBucket,
+  messagingSenderId: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_MESSAGING_SENDER_ID
+    || process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    || DEFAULT_ENTERPRISE_CONFIG.messagingSenderId,
+  appId: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_APP_ID
+    || process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+    || DEFAULT_ENTERPRISE_CONFIG.appId,
   databaseURL: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_DATABASE_URL
-    || `https://${ENTERPRISE_PROJECT_ID}-default-rtdb.firebaseio.com`,
+    || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
+    || DEFAULT_ENTERPRISE_CONFIG.databaseURL,
 };
 
 const authApp = getApps().some(app => app.name === AUTH_APP_NAME)

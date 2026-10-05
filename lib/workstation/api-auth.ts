@@ -8,7 +8,8 @@ import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { NextResponse } from 'next/server';
 
-const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET!);
+const DEFAULT_SESSION_SECRET = 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
+const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET);
 
 export interface ApiSession {
   uid: string;
