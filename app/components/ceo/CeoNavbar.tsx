@@ -49,7 +49,11 @@ export default function CeoNavbar({ onMenuClick }: Props) {
 
   async function handleMarkAllRead() {
     const unreadIds = navNotifs.filter(n => !n.read).map(n => n.id);
-    await markAllNotifsRead(unreadIds);
+    try {
+      await markAllNotifsRead(unreadIds);
+    } catch (error) {
+      console.error('[CeoNavbar] Failed to mark notifications as read:', error);
+    }
   }
 
   const displayName  = profile?.displayName  || user?.displayName || 'Agunwami';
@@ -67,12 +71,12 @@ export default function CeoNavbar({ onMenuClick }: Props) {
       </button>
 
       {/* Search */}
-      <div className="flex max-w-xs flex-1 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-white/8 dark:bg-[#2a2a2a]">
+      <div className="flex max-w-sm flex-1 items-center gap-2.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 shadow-sm dark:border-white/10 dark:bg-[#252525]">
         <SearchIcon />
         <input
           type="text"
           placeholder="Search tasks, staff, or documents..."
-          className="min-w-0 flex-1 bg-transparent text-[12px] text-gray-600 placeholder-gray-400 outline-none dark:text-gray-300 dark:placeholder-gray-500"
+          className="min-w-0 flex-1 bg-transparent text-[12px] text-gray-700 placeholder-gray-400 outline-none dark:text-gray-200 dark:placeholder-gray-500"
         />
       </div>
 
@@ -86,7 +90,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
         >
           <BellIcon />
           {navUnread > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-[#1a1a1a]">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-[#1a1a1a]">
               {navUnread > 9 ? '9+' : navUnread}
             </span>
           )}
@@ -163,8 +167,18 @@ export default function CeoNavbar({ onMenuClick }: Props) {
           onClick={() => { setShowUser(v => !v); setShowNotif(false); }}
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-white/6"
         >
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f5bd02] text-[11px] font-bold text-[#1a1a1a]">
-            {initials}
+          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-gray-200 dark:ring-white/10">
+            <img
+              src={profile?.photoURL || user?.photoURL || '/agunwami_ceo.jpg'}
+              alt={displayName}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-[#f5bd02] text-[11px] font-bold text-[#1a1a1a] -z-10">
+              {initials}
+            </div>
           </div>
           <div className="hidden text-left sm:block">
             <p className="text-[12px] font-semibold leading-tight text-gray-800 dark:text-white">{displayName}</p>

@@ -14,7 +14,7 @@ function mapStatus(s: string, dueDate: Date): TaskStatus {
 }
 
 function mapPriority(p: string): TaskPriority {
-  return p === 'high' ? 'High' : p === 'medium' ? 'Medium' : 'Low';
+  return p === 'critical' ? 'Critical' : p === 'high' ? 'High' : p === 'medium' ? 'Medium' : 'Low';
 }
 
 async function loadNameMap(): Promise<Map<string, string>> {
@@ -50,10 +50,15 @@ export function subscribeTasks(cb: (tasks: Task[]) => void): () => void {
           return {
             id:       d.id,
             title:    (data.title || data.task || 'Task') as string,
+            description: (data.description || '') as string,
             assignee: names.get(data.assignedTo as string) ?? (data.assignee as string) ?? 'Staff Member',
+            department: (data.department || data.dept || '') as string,
+            projectId: (data.projectId || '') as string,
+            project: (data.project || '') as string,
             dueDate:  due.toISOString().split('T')[0],
             status:   mapStatus(data.status as string, due),
             priority: mapPriority(data.priority as string),
+            kind: data.taskKind === 'sprint' || data.isSprint ? 'sprint' : 'task',
           } satisfies Task;
         }));
       },

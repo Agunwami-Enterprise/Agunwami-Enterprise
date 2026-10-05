@@ -28,7 +28,7 @@ function mapStatus(s, dueDate) {
     return dueDate < new Date() ? 'Overdue' : 'Pending';
 }
 function mapPriority(p) {
-    return p === 'high' ? 'High' : p === 'medium' ? 'Medium' : 'Low';
+    return p === 'critical' ? 'Critical' : p === 'high' ? 'High' : p === 'medium' ? 'Medium' : 'Low';
 }
 async function loadNameMap() {
     const m = new Map();
@@ -61,10 +61,15 @@ function subscribeTasks(cb) {
                 return {
                     id: d.id,
                     title: (data.title || data.task || 'Task'),
+                    description: (data.description || ''),
                     assignee: names.get(data.assignedTo) ?? data.assignee ?? 'Staff Member',
+                    department: (data.department || data.dept || ''),
+                    projectId: (data.projectId || ''),
+                    project: (data.project || ''),
                     dueDate: due.toISOString().split('T')[0],
                     status: mapStatus(data.status, due),
                     priority: mapPriority(data.priority),
+                    kind: data.taskKind === 'sprint' || data.isSprint ? 'sprint' : 'task',
                 };
             }));
         }, (err) => {

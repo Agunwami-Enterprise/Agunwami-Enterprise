@@ -34,6 +34,6 @@ export const defaultTeam: TeamMember[] = [
     bio: "Pioneering technological exploration and architectural roadmaps for sustainable, next-generation digital ecosystems.",
     image: "/chris_hayes.jpg",
     linkedin: "https://www.linkedin.com/company/agunwami-enterprises/",
-  },
+  }
 
 ];

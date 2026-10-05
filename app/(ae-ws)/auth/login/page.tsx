@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/workstation/firebase';
+import { auth, authDb } from '@/lib/workstation/firebase';
+import { normalizeWorkstationRole } from '@/lib/workstation/roles';
 import AuthPageShell from '@/app/components/ceo/AuthPageShell';
 
 /* ─── Inner component that reads search params (must be in Suspense) ─── */
@@ -40,12 +41,12 @@ function LoginForm() {
 
       // Verify Firestore user record
       try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(authDb, 'users', user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
           const accountStatus = userData.accountStatus ?? 'active';
-          const role = userData.role || 'staff';
-          const dept = userData.department || '';
+          const role = normalizeWorkstationRole(userData.role, userData.department ?? userData.dept);
+          const dept = String(userData.department ?? userData.dept ?? '').trim().toLowerCase();
 
           // Block fired users immediately at login
           if (accountStatus === 'fired') {
@@ -56,13 +57,13 @@ function LoginForm() {
             );
           }
 
-          if (role !== 'staff') {
+          if (role !== 'staff' && role !== 'ceo') {
             await signOut(auth);
             throw new Error('Unauthorized: Workstation access is restricted to staff members.');
           }
 
           const validDepts = ['ceo', 'operations', 'operation', 'opm', 'hr', 'content-admin', 'content-staff'];
-          if (dept && !validDepts.includes(dept)) {
+          if (role !== 'ceo' && dept && !validDepts.includes(dept)) {
             await signOut(auth);
             throw new Error('Unauthorized: Department not recognized.');
           }

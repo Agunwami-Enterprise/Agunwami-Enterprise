@@ -3,7 +3,7 @@
 // Source: aehub-onboarding/models/task.ts
 
 export type TaskStatus   = 'In Progress' | 'Pending' | 'Completed' | 'Overdue';
-export type TaskPriority = 'High' | 'Medium' | 'Low';
+export type TaskPriority = 'High' | 'Medium' | 'Low' | 'Critical';
 export type Priority     = 'Low' | 'Medium' | 'High' | 'Critical';
 export type TaskStage    =
   | 'Created'
@@ -20,10 +20,15 @@ export type SprintStatus = 'Draft' | 'Pending Approval' | 'Unassigned' | 'Pendin
 export interface Task {
   id:       string;
   title:    string;
+  description?: string;
   assignee: string;
+  department?: string;
+  projectId?: string;
+  project?: string;
   dueDate:  string;
   status:   TaskStatus;
   priority: TaskPriority;
+  kind?:    'task' | 'sprint';
 }
 
 /** Onboarding platform task (XP/gamification) */

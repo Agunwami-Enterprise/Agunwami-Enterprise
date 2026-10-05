@@ -117,10 +117,6 @@ body {
   --ws-brand-success: #22c55e;
   --ws-brand-warning: #f59e0b;
 
-  /* Preloader */
-  --preloader-circle: #f5bd02;
-  --preloader-dot: #1a1a1a;
-  --preloader-text: #656565;
 }
 
 .dark {

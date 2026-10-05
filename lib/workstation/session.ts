@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { SignJWT, jwtVerify, createRemoteJWKSet } from 'jose';
+import { normalizeWorkstationRole } from './roles';
 
 const SESSION_COOKIE = 'ae_session';
 const SESSION_DURATION_S = 14 * 24 * 60 * 60;
@@ -31,7 +32,11 @@ async function getUserRole(uid: string, idToken: string): Promise<string> {
   });
   if (!res.ok) throw new Error(`No user profile found — create users/${uid} in Firestore.`);
   const doc = await res.json();
-  return (doc.fields?.role?.stringValue as string) ?? 'staff';
+  const role = doc.fields?.role?.stringValue ?? 'staff';
+  const department = String(
+    doc.fields?.department?.stringValue ?? doc.fields?.dept?.stringValue ?? '',
+  );
+  return normalizeWorkstationRole(role, department);
 }
 
 const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET!);

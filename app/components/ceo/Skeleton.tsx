@@ -56,33 +56,51 @@ function ListRows({ rows = 5 }: { rows?: number }) {
 /* ── Dashboard ─────────────────────────────────────────────────────────── */
 export function SkeletonDashboard() {
   return (
-    <div className="space-y-4 p-4">
-      {/* Hero banner */}
-      <Skel className="h-24 w-full rounded-2xl" />
-
-      {/* 4 stat cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => <StatCard key={i} />)}
+    <div className="min-h-full space-y-6 p-4 sm:p-6 lg:p-8">
+      {/* Header & clock */}
+      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+        <div className="space-y-3">
+          <Skel className="h-7 w-64 rounded-lg" />
+          <Skel className="h-4 w-48 rounded-md" />
+          <div className="pt-2 space-y-1">
+            <Skel className="h-8 w-40 rounded-lg" />
+            <Skel className="h-3.5 w-28 rounded-md" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Skel className="h-10 w-36 rounded-lg" />
+          <Skel className="h-10 w-48 rounded-lg" />
+        </div>
       </div>
 
-      {/* Middle row */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Skel className="h-44 rounded-2xl" />
-        <Skel className="h-44 rounded-2xl" />
-        <Skel className="h-44 rounded-2xl" />
+      {/* 8 stat cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => <StatCard key={i} />)}
       </div>
 
-      {/* Bottom row */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Skel className="h-52 rounded-2xl" />
-        <Skel className="h-52 rounded-2xl" />
-        <Skel className="h-52 rounded-2xl" />
-      </div>
-
-      {/* Recent activity */}
-      <div className="rounded-2xl bg-white p-4 dark:bg-[#1e1e1e]">
-        <Skel className="mb-4 h-4 w-36" />
-        <ListRows rows={4} />
+      {/* Projects Overview */}
+      <div className="space-y-4">
+        <Skel className="h-6 w-40 rounded-lg" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 space-y-4 shadow-sm dark:border-white/6 dark:bg-[#1e1e1e]">
+              <div className="flex items-center gap-3">
+                <Skel className="h-10 w-10 rounded-xl" />
+                <div className="space-y-1.5 flex-1">
+                  <Skel className="h-4 w-20 rounded" />
+                  <Skel className="h-3 w-32 rounded" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <Skel className="h-8 rounded-lg" />
+                <Skel className="h-8 rounded-lg" />
+                <Skel className="h-8 rounded-lg" />
+              </div>
+              <Skel className="h-2 w-full rounded-full" />
+              <Skel className="h-6 w-full rounded-md" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
