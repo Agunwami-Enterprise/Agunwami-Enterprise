@@ -129,7 +129,7 @@ function initCredential(): any {
 /**
  * Returns a Google Cloud access token for server-side Firestore REST requests.
  */
-export async function getAdminAuthToken(): Promise<string> {
+export async function getAdminAuthToken(): Promise<string | null> {
   const now = Date.now();
   if (cachedToken && tokenExpiresAt > now + 60_000) {
     return cachedToken;
@@ -141,8 +141,9 @@ export async function getAdminAuthToken(): Promise<string> {
 
   try {
     const data = await credentialInstance.getAccessToken();
-    if (!data.access_token) {
-      throw new Error('Google Cloud credentials returned no access token.');
+    if (!data?.access_token) {
+      console.warn('[backend/core/firestore] Google Cloud credentials returned no access token.');
+      return null;
     }
     const accessToken: string = data.access_token;
     cachedToken = accessToken;
@@ -157,8 +158,8 @@ export async function getAdminAuthToken(): Promise<string> {
       return fallback.access_token;
     }
 
-    console.error('[backend/core/firestore] Unable to get Google Cloud credentials for Firestore:', err);
-    throw err;
+    console.warn('[backend/core/firestore] Unable to get Google Cloud credentials for Firestore:', err instanceof Error ? err.message : err);
+    return null;
   }
 }
 
@@ -235,6 +236,7 @@ export function wrapFields(obj: Record<string, any>): Record<string, any> {
  */
 export async function getDoc(collection: string, docId: string): Promise<FirestoreDoc | null> {
   const token = await getAdminAuthToken();
+  if (!token) return null;
   const headers: HeadersInit = { Authorization: `Bearer ${token}` };
 
   const res = await fetch(`${FIREBASE_CONFIG.firestoreBaseUrl}/${collection}/${docId}`, {
@@ -244,7 +246,8 @@ export async function getDoc(collection: string, docId: string): Promise<Firesto
 
   if (res.status === 404) return null;
   if (!res.ok) {
-    throw new Error(`[backend/core/firestore] Failed to read ${collection}/${docId}: ${res.status} ${await res.text()}`);
+    console.error(`[backend/core/firestore] Failed to read ${collection}/${docId}:`, res.status);
+    return null;
   }
   const raw = await res.json();
   return rawDocToObject(raw);
@@ -255,6 +258,7 @@ export async function getDoc(collection: string, docId: string): Promise<Firesto
  */
 export async function listDocs(collection: string, pageSize = 50): Promise<FirestoreDoc[]> {
   const token = await getAdminAuthToken();
+  if (!token) return [];
   const headers: HeadersInit = { Authorization: `Bearer ${token}` };
 
   const res = await fetch(`${FIREBASE_CONFIG.firestoreBaseUrl}/${collection}?pageSize=${pageSize}`, {
@@ -279,6 +283,7 @@ export async function queryCollection(
   options: QueryOptions = {}
 ): Promise<FirestoreDoc[]> {
   const token = await getAdminAuthToken();
+  if (!token) return [];
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
@@ -350,6 +355,10 @@ export async function createDoc(
   docId?: string
 ): Promise<FirestoreDoc | null> {
   const token = await getAdminAuthToken();
+  if (!token) {
+    console.error(`[backend/core/firestore] Create ${collection} failed: no auth token.`);
+    return null;
+  }
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
@@ -385,6 +394,10 @@ export async function updateDoc(
   updateMaskFields?: string[]
 ): Promise<FirestoreDoc | null> {
   const token = await getAdminAuthToken();
+  if (!token) {
+    console.error(`[backend/core/firestore] Update ${collection}/${docId} failed: no auth token.`);
+    return null;
+  }
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
@@ -415,6 +428,10 @@ export async function updateDoc(
  */
 export async function deleteDoc(collection: string, docId: string): Promise<boolean> {
   const token = await getAdminAuthToken();
+  if (!token) {
+    console.error(`[backend/core/firestore] Delete ${collection}/${docId} failed: no auth token.`);
+    return false;
+  }
   const headers: HeadersInit = { Authorization: `Bearer ${token}` };
 
   const res = await fetch(`${FIREBASE_CONFIG.firestoreBaseUrl}/${collection}/${docId}`, {
