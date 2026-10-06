@@ -745,6 +745,15 @@ export class ProjectsService {
   }
 
   static async createProject(dto: CreateProjectDto): Promise<ProjectCardData> {
+    const endpoint = dto.apiEndpoint?.trim();
+    if (!endpoint) {
+      throw new Error('Project metrics endpoint URL is required.');
+    }
+    const token = dto.apiToken?.trim();
+    if (!token) {
+      throw new Error('Project endpoint Bearer Token is required.');
+    }
+
     const slug = dto.name
       .toLowerCase()
       .trim()
@@ -768,8 +777,8 @@ export class ProjectsService {
       description: dto.description?.trim() || '',
       lead: dto.lead?.trim() || '',
       adminUrl: dto.adminUrl?.trim() || null,
-      apiEndpoint: dto.apiEndpoint?.trim() || null,
-      apiTokenEncrypted: dto.apiToken?.trim() ? encryptApiToken(dto.apiToken.trim()) : null,
+      apiEndpoint: endpoint,
+      apiTokenEncrypted: encryptApiToken(token),
       color: dto.color || '#3b82f6',
       createdAt: now,
       updatedAt: now,

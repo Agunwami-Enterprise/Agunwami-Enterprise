@@ -201,8 +201,8 @@ export interface CreateProjectDto {
   description?: string;
   lead?: string;
   adminUrl?: string;
-  apiEndpoint?: string;
-  apiToken?: string;
+  apiEndpoint: string;
+  apiToken: string;
   color?: string;
 }
 

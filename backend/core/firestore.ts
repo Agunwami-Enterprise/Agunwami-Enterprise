@@ -123,7 +123,12 @@ function initCredential(): any {
   ensureLocalAdcFromFirebaseCli();
 
   // 4. Standard Application Default Credentials (ADC)
-  return applicationDefault();
+  try {
+    return applicationDefault();
+  } catch (e) {
+    console.warn('[backend/core/firestore] applicationDefault() credentials not available:', e);
+    return null;
+  }
 }
 
 /**
@@ -135,11 +140,20 @@ export async function getAdminAuthToken(): Promise<string | null> {
     return cachedToken;
   }
 
-  if (!credentialInstance) {
-    credentialInstance = initCredential();
-  }
-
   try {
+    if (!credentialInstance) {
+      credentialInstance = initCredential();
+    }
+    if (!credentialInstance) {
+      const fallback = await fetchTokenFromFirebaseCli();
+      if (fallback) {
+        cachedToken = fallback.access_token;
+        tokenExpiresAt = now + fallback.expires_in * 1000;
+        return fallback.access_token;
+      }
+      return null;
+    }
+
     const data = await credentialInstance.getAccessToken();
     if (!data?.access_token) {
       console.warn('[backend/core/firestore] Google Cloud credentials returned no access token.');

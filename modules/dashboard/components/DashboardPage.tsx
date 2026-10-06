@@ -1053,6 +1053,14 @@ function ProjectConfigModal({
       setError('Please provide project name and category.');
       return;
     }
+    if (!apiEndpoint.trim()) {
+      setError('Please provide the project metrics endpoint URL.');
+      return;
+    }
+    if (mode === 'create' && !apiToken.trim()) {
+      setError('Bearer Token is required to authenticate with this endpoint.');
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -1066,8 +1074,8 @@ function ProjectConfigModal({
             name: name.trim(),
             subtitle: subtitle.trim(),
             adminUrl: adminUrl.trim() || null,
-            apiEndpoint: apiEndpoint.trim() || null,
-            apiToken: apiToken.trim() || undefined,
+            apiEndpoint: apiEndpoint.trim(),
+            apiToken: apiToken.trim(),
             lead: lead.trim() || '',
             description: description.trim() || '',
             color,
@@ -1210,21 +1218,22 @@ function ProjectConfigModal({
 
           <div>
             <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Metrics Endpoint Bearer Token (Optional)
+              Metrics Endpoint Bearer Token <span className="text-amber-500 font-bold">*</span> (Required)
             </label>
             <input
               type="password"
               autoComplete="new-password"
+              required={mode === 'create'}
               value={apiToken}
               onChange={event => {
                 setApiToken(event.target.value);
                 if (event.target.value) setClearApiToken(false);
               }}
-              placeholder={project?.hasApiToken ? 'Saved token — leave blank to keep it' : 'Enter the endpoint bearer token'}
+              placeholder={project?.hasApiToken ? 'Saved token — enter new token to update' : 'Enter the endpoint bearer token (required)'}
               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
             />
             <p className="mt-1 text-[11px] text-gray-400">
-              Must match the endpoint&rsquo;s configured bearer token. It is sent only by the Enterprise server, encrypted before storage, and never returned to the browser.
+              Required to authenticate with this endpoint. Sent as a Bearer token by the Enterprise server, encrypted before storage, and never returned to the browser.
             </p>
             {project?.hasApiToken && (
               <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-400">

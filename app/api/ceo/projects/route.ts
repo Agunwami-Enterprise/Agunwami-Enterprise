@@ -32,10 +32,22 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     if (!body.name || !body.subtitle) {
-      return NextResponse.json({ error: 'Project name and subtitle are required' }, { status: 400 });
+      return NextResponse.json({ error: 'Project name and category are required' }, { status: 400 });
+    }
+    if (!body.apiEndpoint || !String(body.apiEndpoint).trim()) {
+      return NextResponse.json({ error: 'Project metrics endpoint URL is required' }, { status: 400 });
+    }
+    if (!body.apiToken || !String(body.apiToken).trim()) {
+      return NextResponse.json({ error: 'Metrics endpoint Bearer Token is required' }, { status: 400 });
     }
 
-    const created = await ProjectsService.createProject(body);
+    const created = await ProjectsService.createProject({
+      ...body,
+      name: String(body.name).trim(),
+      subtitle: String(body.subtitle).trim(),
+      apiEndpoint: String(body.apiEndpoint).trim(),
+      apiToken: String(body.apiToken).trim(),
+    });
     if (!created) {
       return NextResponse.json({ error: 'Failed to create project' }, { status: 500 });
     }
