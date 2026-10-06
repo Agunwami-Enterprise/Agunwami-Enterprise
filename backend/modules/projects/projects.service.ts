@@ -39,6 +39,12 @@ type StoredProject = Record<string, unknown> & {
 type DataRecord = Record<string, unknown>;
 
 interface ProjectMetricsData {
+  name?: string;
+  subtitle?: string;
+  description?: string;
+  lead?: string;
+  adminUrl?: string | null;
+  color?: string;
   metrics: ProjectCardMetric[];
   health: number | null;
   revenueTrend: ProjectMonthlyRevenue[];
@@ -100,42 +106,30 @@ function decryptApiToken(encrypted: string): string {
 }
 
 function getLocalProjectsFilePath(): string {
-  return path.join(process.cwd(), 'data', 'enterprise_projects.json');
+  return path.join(process.cwd(), 'data', 'configured_endpoints.json');
 }
-
-const DEFAULT_PROJECTS: StoredProject[] = [
-  {
-    _id: 'aehub',
-    id: 'aehub',
-    name: 'AEHUB',
-    subtitle: 'Education',
-    description: 'Agunwami Enterprise Education & Professional Workspace Solution',
-    lead: '',
-    adminUrl: null,
-    apiEndpoint: 'https://aehub-eafa6.web.app/api/enterprise/metrics',
-    color: '#d97706',
-    createdAt: '2026-10-02T12:48:44.905Z',
-    updatedAt: '2026-10-02T12:48:44.905Z',
-  },
-];
 
 function readLocalProjects(): StoredProject[] {
   try {
     const filePath = getLocalProjectsFilePath();
-    if (!fs.existsSync(filePath)) return DEFAULT_PROJECTS;
+    if (!fs.existsSync(filePath)) return [];
     const parsed: unknown = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_PROJECTS;
+    if (!Array.isArray(parsed)) return [];
     return parsed as StoredProject[];
   } catch (err) {
-    console.warn('[backend/modules/projects] Failed to read local enterprise_projects.json:', err);
-    return DEFAULT_PROJECTS;
+    console.warn('[backend/modules/projects] Failed to read local configured_endpoints.json:', err);
+    return [];
   }
 }
 
 function writeLocalProjects(projects: StoredProject[]): void {
-  const filePath = getLocalProjectsFilePath();
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(projects, null, 2), 'utf-8');
+  try {
+    const filePath = getLocalProjectsFilePath();
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(projects, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[backend/modules/projects] Failed to write local configured_endpoints.json:', err);
+  }
 }
 
 async function loadStoredProjects(): Promise<StoredProject[]> {
@@ -147,22 +141,39 @@ async function loadStoredProjects(): Promise<StoredProject[]> {
   }
 
   const localProjects = readLocalProjects();
-  if (localProjects.length === 0 && firestoreProjects.length === 0) {
-    return DEFAULT_PROJECTS;
-  }
 
   const merged = new Map<string, StoredProject>();
   for (const project of firestoreProjects) {
-    const id = project._id || project.id;
+    const id = (project._id || project.id) as string;
     if (typeof id === 'string' && id) merged.set(id, project as StoredProject);
   }
   for (const project of localProjects) {
-    const id = project._id || project.id;
+    const id = (project._id || project.id) as string;
     if (typeof id === 'string' && id) {
       const firestoreProject = merged.get(id);
       merged.set(id, firestoreProject ? { ...firestoreProject, ...project } : project);
     }
   }
+
+  // Also support PROJECT_METRICS_ENDPOINTS env variable if configured
+  if (process.env.PROJECT_METRICS_ENDPOINTS) {
+    const envEndpoints = process.env.PROJECT_METRICS_ENDPOINTS.split(',')
+      .map(url => url.trim())
+      .filter(Boolean);
+    for (const url of envEndpoints) {
+      const id = url.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 32);
+      if (!merged.has(id)) {
+        merged.set(id, {
+          _id: id,
+          id,
+          apiEndpoint: url,
+          name: 'Connected Project',
+          subtitle: 'Venture',
+        });
+      }
+    }
+  }
+
   return Array.from(merged.values());
 }
 
@@ -447,6 +458,13 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   if (!outer) throw new Error('Metrics endpoint response must be a JSON object.');
   const data = asRecord(outer.data) ?? outer;
 
+  const endpointName = stringValue(data.projectName ?? data.name ?? data.title);
+  const endpointSubtitle = stringValue(data.subtitle ?? data.category ?? data.type);
+  const endpointDescription = stringValue(data.description ?? data.summary);
+  const endpointColor = stringValue(data.color ?? data.themeColor);
+  const endpointLead = stringValue(data.lead ?? data.projectLead ?? data.manager);
+  const endpointAdminUrl = stringValue(data.adminUrl ?? data.dashboardUrl);
+
   const rawRevenue = data.revenueTrend ?? data.monthlyRevenue ?? data.revenueSeries ?? data.trend ?? data.series;
   const revenueTrend = Array.isArray(rawRevenue)
     ? rawRevenue.flatMap(item => {
@@ -460,9 +478,9 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const departments = parseDepartments(data.departments);
   const staff = parseStaff(data.staff) ?? departments?.flatMap(department => department.staff ?? []);
   const tasks = parseTasks(data.tasks);
-  const leaveRequests = parseLeaveRequests(data.leaveRequests, '', stringValue(data.projectName ?? data.name) ?? 'Project');
+  const leaveRequests = parseLeaveRequests(data.leaveRequests, '', endpointName ?? 'Project');
   const rawApprovals = data.approvals ?? (Array.isArray(data.pendingApprovals) ? data.pendingApprovals : undefined);
-  const approvals = parseApprovals(rawApprovals, stringValue(data.projectName ?? data.name) ?? 'Project');
+  const approvals = parseApprovals(rawApprovals, endpointName ?? 'Project');
   const activity = parseActivity(data.activity ?? data.activities ?? data.feed ?? data.events);
   const metrics = parseMetrics(data);
   const pendingApprovals = Array.isArray(data.pendingApprovals)
@@ -490,6 +508,12 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   }
 
   return {
+    ...(endpointName ? { name: endpointName } : {}),
+    ...(endpointSubtitle ? { subtitle: endpointSubtitle } : {}),
+    ...(endpointDescription ? { description: endpointDescription } : {}),
+    ...(endpointColor ? { color: endpointColor } : {}),
+    ...(endpointLead ? { lead: endpointLead } : {}),
+    ...(endpointAdminUrl ? { adminUrl: endpointAdminUrl } : {}),
     metrics,
     health,
     revenueTrend,
@@ -565,13 +589,26 @@ async function loadProject(project: StoredProject): Promise<ProjectCardData | nu
       ? decryptApiToken(project.apiTokenEncrypted)
       : undefined;
     const metrics = await fetchProjectMetrics(card.apiEndpoint, apiToken);
+    const resolvedName = metrics.name || card.name;
+    const resolvedSubtitle = metrics.subtitle || card.subtitle;
+    const resolvedDescription = metrics.description ?? card.description;
+    const resolvedLead = metrics.lead ?? card.lead;
+    const resolvedAdminUrl = metrics.adminUrl !== undefined ? metrics.adminUrl : card.adminUrl;
+    const resolvedColor = metrics.color || card.color;
+
     return {
       ...card,
       ...metrics,
+      name: resolvedName,
+      subtitle: resolvedSubtitle,
+      description: resolvedDescription,
+      lead: resolvedLead,
+      adminUrl: resolvedAdminUrl,
+      color: resolvedColor,
       leaveRequests: metrics.leaveRequests?.map(request => ({
         ...request,
         projectId: card.id,
-        project: card.name,
+        project: resolvedName,
       })),
       status: 'online',
       lastSyncedAt: new Date().toISOString(),
@@ -587,7 +624,11 @@ async function loadProject(project: StoredProject): Promise<ProjectCardData | nu
 
 export class ProjectsService {
   static async getProjectsOverview(): Promise<ProjectCardData[]> {
-    return Promise.all((await loadStoredProjects()).map(loadProject))
+    const stored = await loadStoredProjects();
+    if (stored.length === 0) {
+      return [];
+    }
+    return Promise.all(stored.map(loadProject))
       .then(projects => projects.filter((project): project is ProjectCardData => project !== null));
   }
 
@@ -709,9 +750,15 @@ export class ProjectsService {
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '') || `proj-${Date.now()}`;
-    if (await getDoc('enterprise_projects', slug)) {
-      throw new ProjectAlreadyExistsError();
+
+    try {
+      if (await getDoc('enterprise_projects', slug)) {
+        throw new ProjectAlreadyExistsError();
+      }
+    } catch (err) {
+      if (err instanceof ProjectAlreadyExistsError) throw err;
     }
+
     const now = new Date().toISOString();
     const project: StoredProject = {
       _id: slug,
@@ -728,8 +775,12 @@ export class ProjectsService {
       updatedAt: now,
     };
 
-    const created = await createDoc('enterprise_projects', project, slug);
-    if (!created) throw new Error('Could not save the project record.');
+    try {
+      await createDoc('enterprise_projects', project, slug);
+    } catch (err) {
+      console.warn('[backend/modules/projects] Could not save project to Firestore:', err);
+    }
+
     const existing = readLocalProjects().filter(item => (item.id || item._id) !== slug);
     writeLocalProjects([...existing, project]);
 
@@ -750,8 +801,13 @@ export class ProjectsService {
     else if (dto.clearApiToken) allowedUpdates.apiTokenEncrypted = null;
     if (dto.color !== undefined) allowedUpdates.color = dto.color;
     const updatedAt = new Date().toISOString();
-    const updated = await updateDoc('enterprise_projects', id, { ...allowedUpdates, updatedAt });
-    if (!updated) throw new Error('Could not save the project update.');
+
+    try {
+      await updateDoc('enterprise_projects', id, { ...allowedUpdates, updatedAt });
+    } catch (err) {
+      console.warn('[backend/modules/projects] Could not update project in Firestore:', err);
+    }
+
     const existing = readLocalProjects();
     const index = existing.findIndex(project => (project.id || project._id) === id);
     if (index !== -1) {
@@ -762,8 +818,11 @@ export class ProjectsService {
   }
 
   static async deleteProject(id: string): Promise<boolean> {
-    const deleted = await deleteDoc('enterprise_projects', id);
-    if (!deleted) throw new Error('Could not delete the project record.');
+    try {
+      await deleteDoc('enterprise_projects', id);
+    } catch (err) {
+      console.warn('[backend/modules/projects] Could not delete project in Firestore:', err);
+    }
     writeLocalProjects(readLocalProjects().filter(project => (project.id || project._id) !== id));
     return true;
   }
