@@ -55,32 +55,40 @@ jobs:
           mkdir -p tmp
           echo "Deployed at $(date)" > tmp/restart.txt
 
-      - name: 🔑 Prepare Firestore Service Account Key
+      - name: 🔑 Prepare Server Runtime Settings
+        # Server-only values must exist when the app runs, not just at build
+        # time. They are written to .env.production.local on the server, which
+        # Next.js loads at startup.
         env:
-          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          PROJECT_TOKEN_ENCRYPTION_KEY: ${{ secrets.PROJECT_TOKEN_ENCRYPTION_KEY }}
+          FIRESTORE_SERVICE_USER_EMAIL: ${{ secrets.FIRESTORE_SERVICE_USER_EMAIL }}
+          FIRESTORE_SERVICE_USER_PASSWORD: ${{ secrets.FIRESTORE_SERVICE_USER_PASSWORD }}
         run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT_KEY" ]; then
-            echo "FIREBASE_SERVICE_ACCOUNT_KEY secret is not set; leaving the server's Firestore credentials unchanged."
-            exit 0
-          fi
-          # The secret may hold the key JSON as downloaded, or that JSON base64-encoded.
-          if printf '%s' "$FIREBASE_SERVICE_ACCOUNT_KEY" | node -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' 2>/dev/null; then
-            KEY_B64=$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT_KEY" | base64 -w0)
-          else
-            KEY_B64=$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT_KEY" | tr -d ' \r\n')
-          fi
-          echo "::add-mask::$KEY_B64"
-          # Fail before deploying a key the server could not use; print only the project id.
-          printf '%s' "$KEY_B64" | base64 -d | node -e '
-            let key;
-            try { key = JSON.parse(require("fs").readFileSync(0, "utf8")); } catch { key = null; }
-            if (!key || key.type !== "service_account" || !key.private_key || !key.client_email) {
-              console.error("::error::FIREBASE_SERVICE_ACCOUNT_KEY is not a Firebase service account key (JSON or base64 JSON).");
+          node -e '
+            const names = ["SESSION_SECRET", "PROJECT_TOKEN_ENCRYPTION_KEY", "FIRESTORE_SERVICE_USER_EMAIL", "FIRESTORE_SERVICE_USER_PASSWORD"];
+            const set = names.filter(name => process.env[name]);
+            if (set.length === 0) {
+              console.log("No runtime secrets set; leaving the server settings unchanged.");
+              process.exit(0);
+            }
+            if (set.includes("FIRESTORE_SERVICE_USER_EMAIL") !== set.includes("FIRESTORE_SERVICE_USER_PASSWORD")) {
+              console.error("::error::Set both FIRESTORE_SERVICE_USER_EMAIL and FIRESTORE_SERVICE_USER_PASSWORD, or neither.");
               process.exit(1);
             }
-            console.log(`Service account key for project: ${key.project_id}`);
+            // .env files expand $ and escapes, so only allow characters that need neither.
+            const bad = set.filter(name => !/^[A-Za-z0-9@._+=/-]+$/.test(process.env[name]));
+            if (bad.length) {
+              console.error("::error::Use only letters, digits and @ . _ + = / - in: " + bad.join(", "));
+              process.exit(1);
+            }
+            const file = ["# Managed by .github/workflows/deploy.yml; edit the GitHub secrets instead."]
+              .concat(set.map(name => name + "=" + process.env[name])).join("\n") + "\n";
+            const b64 = Buffer.from(file).toString("base64");
+            console.log("::add-mask::" + b64);
+            require("fs").appendFileSync(process.env.GITHUB_ENV, "RUNTIME_ENV_B64=" + b64 + "\n");
+            console.log("Runtime settings to deploy: " + set.join(", "));
           '
-          echo "FIRESTORE_KEY_B64=$KEY_B64" >> "$GITHUB_ENV"
 
       - name: 🚀 Sync Files to Namecheap via SFTP
         uses: appleboy/scp-action@v1.0.0
@@ -98,14 +106,14 @@ jobs:
       - name: 📦 Install Server Dependencies & Restart
         uses: appleboy/ssh-action@v1.2.0
         env:
-          FIRESTORE_KEY_B64: ${{ env.FIRESTORE_KEY_B64 }}
+          RUNTIME_ENV_B64: ${{ env.RUNTIME_ENV_B64 }}
         with:
           host: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: 21098
-          envs: FIRESTORE_KEY_B64
+          envs: RUNTIME_ENV_B64
           script: |
             set -e
             cd "$HOME/agunwami-app"
@@ -121,11 +129,14 @@ jobs:
             echo "Using $(node --version) from $ACTIVATE"
             npm install --omit=dev --no-audit --no-fund
 
-            # Read by backend/core/firestore.ts from the app root.
-            if [ -n "$FIRESTORE_KEY_B64" ]; then
-              (umask 077 && printf '%s' "$FIRESTORE_KEY_B64" | base64 -d > serviceAccountKey.json.tmp)
-              mv serviceAccountKey.json.tmp serviceAccountKey.json
-              echo "Installed serviceAccountKey.json"
+            if [ -n "$RUNTIME_ENV_B64" ]; then
+              # Keep a hand-made file instead of overwriting it.
+              if [ -f .env.production.local ] && ! head -n 1 .env.production.local | grep -q "Managed by .github/workflows/deploy.yml"; then
+                mv .env.production.local ".env.production.local.bak-$(date +%Y%m%d%H%M%S)"
+              fi
+              (umask 077 && printf '%s' "$RUNTIME_ENV_B64" | base64 -d > .env.production.local.tmp)
+              mv .env.production.local.tmp .env.production.local
+              echo "Updated .env.production.local"
             fi
 
             # Restart once dependencies are in place (the synced restart.txt

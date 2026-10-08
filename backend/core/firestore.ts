@@ -18,6 +18,7 @@ import type { FirestoreDoc, QueryOptions } from './types';
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
 let credentialInstance: any = null;
+let serviceUserRetryAt = 0;
 
 const FIREBASE_CLI_CLIENT_ID = '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com';
 const FIREBASE_CLI_CLIENT_SECRET = 'j9iVZfS8kkCEFUPaAeJV0sAi';
@@ -96,6 +97,38 @@ async function fetchTokenFromFirebaseCli(): Promise<{ access_token: string; expi
 }
 
 /**
+ * Keyless credential for hosts where service account keys are not allowed:
+ * sign in as a dedicated Firebase Auth user and use its ID token. Firestore
+ * then applies firestore.rules, which grant this user access via isBackend().
+ */
+async function fetchTokenAsServiceUser(): Promise<{ access_token: string; expires_in: number } | null> {
+  const email = process.env.FIRESTORE_SERVICE_USER_EMAIL?.trim();
+  const password = process.env.FIRESTORE_SERVICE_USER_PASSWORD;
+  if (!email || !password || !FIREBASE_CONFIG.apiKey) return null;
+
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(FIREBASE_CONFIG.apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, returnSecureToken: true }),
+        cache: 'no-store',
+      }
+    );
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.idToken) {
+      console.warn('[backend/core/firestore] Firestore service user sign-in failed:', data?.error?.message || res.status);
+      return null;
+    }
+    return { access_token: data.idToken, expires_in: Number(data.expiresIn) || 3600 };
+  } catch (err) {
+    console.warn('[backend/core/firestore] Firestore service user sign-in failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
  * Loads firebase-admin on first use. Next.js keeps it external, so it is
  * resolved from the host's node_modules at runtime; a static import would
  * fail every route that touches Firestore if the package is missing there.
@@ -155,6 +188,22 @@ export async function getAdminAuthToken(): Promise<string | null> {
   const now = Date.now();
   if (cachedToken && tokenExpiresAt > now + 60_000) {
     return cachedToken;
+  }
+
+  // An explicitly configured service user wins over the admin credential
+  // lookup, whose ADC probe can stall on hosts outside Google Cloud.
+  if (process.env.FIRESTORE_SERVICE_USER_EMAIL) {
+    // Back off after a failed sign-in so a wrong password does not trip
+    // Firebase Auth's rate limit on every request.
+    if (now < serviceUserRetryAt) return null;
+    const serviceUser = await fetchTokenAsServiceUser();
+    if (!serviceUser) {
+      serviceUserRetryAt = now + 60_000;
+      return null;
+    }
+    cachedToken = serviceUser.access_token;
+    tokenExpiresAt = now + serviceUser.expires_in * 1000;
+    return serviceUser.access_token;
   }
 
   try {
