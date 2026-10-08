@@ -9,7 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { requireCeoSession } from '@/lib/workstation/api-auth';
-import { ProjectAlreadyExistsError, ProjectsService } from '@/backend/modules/projects';
+import { ProjectAlreadyExistsError, ProjectValidationError, ProjectsService } from '@/backend/modules/projects';
 
 export async function GET() {
   const auth = await requireCeoSession();
@@ -57,6 +57,9 @@ export async function POST(request: Request) {
     if (err instanceof ProjectAlreadyExistsError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
+    if (err instanceof ProjectValidationError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error('[/api/ceo/projects POST] error:', message);
     return NextResponse.json({ error: message || 'Internal error' }, { status: 500 });
@@ -77,6 +80,9 @@ export async function PATCH(request: Request) {
     const success = await ProjectsService.updateProject(id, updates);
     return NextResponse.json({ success });
   } catch (err: unknown) {
+    if (err instanceof ProjectValidationError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error('[/api/ceo/projects PATCH] error:', message);
     return NextResponse.json({ error: message || 'Internal error' }, { status: 500 });
