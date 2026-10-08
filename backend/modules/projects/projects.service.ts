@@ -64,9 +64,6 @@ const SNAPSHOT_COLLECTION = 'enterprise_project_snapshots';
 const API_TOKEN_ENCRYPTION_VERSION = 'v1';
 const DEV_ONLY_TOKEN_SECRET = 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-// The JSON file store only exists for local development without Firestore
-// credentials; hosted instances have an ephemeral, read-only filesystem.
-const LOCAL_STORE_ENABLED = !IS_PRODUCTION;
 
 export class ProjectAlreadyExistsError extends Error {
   constructor() {
@@ -147,7 +144,6 @@ function getLocalProjectsFilePath(): string {
 }
 
 function readLocalProjects(): StoredProject[] {
-  if (!LOCAL_STORE_ENABLED) return [];
   try {
     const filePath = getLocalProjectsFilePath();
     if (!fs.existsSync(filePath)) return [];
@@ -160,14 +156,20 @@ function readLocalProjects(): StoredProject[] {
   }
 }
 
-function writeLocalProjects(projects: StoredProject[]): void {
-  if (!LOCAL_STORE_ENABLED) return;
+/** Returns false when the file could not be written (e.g. read-only disk). */
+function writeLocalProjects(projects: StoredProject[]): boolean {
   try {
     const filePath = getLocalProjectsFilePath();
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(projects, null, 2), 'utf-8');
+    // Write then rename so a crash mid-write cannot leave truncated JSON,
+    // which readLocalProjects would treat as an empty store.
+    const tempPath = `${filePath}.${process.pid}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(projects, null, 2), 'utf-8');
+    fs.renameSync(tempPath, filePath);
+    return true;
   } catch (err) {
     console.warn('[backend/modules/projects] Failed to write local configured_endpoints.json:', err);
+    return false;
   }
 }
 
@@ -181,7 +183,8 @@ async function loadStoredProjects(): Promise<StoredProject[]> {
 
   const localProjects = readLocalProjects();
 
-  // Firestore is the source of truth; the dev-only local file fills gaps.
+  // Firestore wins where both stores have a project; the local file (used on
+  // hosts without Firestore credentials) fills the gaps.
   const merged = new Map<string, StoredProject>();
   for (const project of localProjects) {
     const id = (project._id || project.id) as string;
@@ -925,6 +928,11 @@ export class ProjectsService {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '') || `proj-${Date.now()}`;
 
+    // Check both stores: on a host without Firestore credentials getDoc
+    // returns null, and the local file would otherwise be silently overwritten.
+    if (readLocalProjects().some(item => (item.id || item._id) === slug)) {
+      throw new ProjectAlreadyExistsError();
+    }
     try {
       if (await getDoc('enterprise_projects', slug)) {
         throw new ProjectAlreadyExistsError();
@@ -949,16 +957,15 @@ export class ProjectsService {
       updatedAt: now,
     };
 
-    const saved = await createDoc('enterprise_projects', project, slug).catch(err => {
+    const savedToFirestore = await createDoc('enterprise_projects', project, slug).catch(err => {
       console.warn('[backend/modules/projects] Could not save project to Firestore:', err);
       return null;
     });
-    if (!saved && !LOCAL_STORE_ENABLED) {
-      throw new Error('Could not save the project to Firestore. Check the server credentials and try again.');
-    }
-
     const existing = readLocalProjects().filter(item => (item.id || item._id) !== slug);
-    writeLocalProjects([...existing, project]);
+    const savedLocally = writeLocalProjects([...existing, project]);
+    if (!savedToFirestore && !savedLocally) {
+      throw new Error('Could not save the project: Firestore is unavailable and the local data file is not writable.');
+    }
 
     const card = await loadProject(project, true);
     if (!card) throw new Error('Unable to create a project response.');
@@ -982,34 +989,50 @@ export class ProjectsService {
     if (dto.color !== undefined) allowedUpdates.color = dto.color;
     const updatedAt = new Date().toISOString();
 
-    const saved = await updateDoc('enterprise_projects', id, { ...allowedUpdates, updatedAt }).catch(err => {
-      console.warn('[backend/modules/projects] Could not update project in Firestore:', err);
-      return null;
-    });
-    if (!saved && !LOCAL_STORE_ENABLED) {
-      throw new Error('Could not save the project changes to Firestore. Check the server credentials and try again.');
-    }
+    // Firestore PATCH upserts, so only send it for a project Firestore already
+    // has; otherwise a local-only project would get a partial Firestore copy.
+    const inFirestore = await getDoc('enterprise_projects', id).catch(() => null);
+    const savedToFirestore = inFirestore
+      ? await updateDoc('enterprise_projects', id, { ...allowedUpdates, updatedAt }).catch(err => {
+          console.warn('[backend/modules/projects] Could not update project in Firestore:', err);
+          return null;
+        })
+      : null;
 
     const existing = readLocalProjects();
     const index = existing.findIndex(project => (project.id || project._id) === id);
+    if (!inFirestore && index === -1) {
+      throw new Error('Project not found, or Firestore is unavailable and the project is not in the local data file.');
+    }
+    let savedLocally = false;
     if (index !== -1) {
       existing[index] = { ...existing[index], ...allowedUpdates, updatedAt };
-      writeLocalProjects(existing);
+      savedLocally = writeLocalProjects(existing);
+    }
+    if (!savedToFirestore && !savedLocally) {
+      throw new Error('Could not save the project changes: the Firestore update failed and the local data file is not writable.');
     }
     invalidateProjectMetrics(id);
     return true;
   }
 
   static async deleteProject(id: string): Promise<boolean> {
-    const deleted = await deleteDoc('enterprise_projects', id).catch(err => {
+    const deletedInFirestore = await deleteDoc('enterprise_projects', id).catch(err => {
       console.warn('[backend/modules/projects] Could not delete project in Firestore:', err);
       return false;
     });
-    if (!deleted && !LOCAL_STORE_ENABLED) {
-      throw new Error('Could not delete the project from Firestore. Check the server credentials and try again.');
-    }
     await deleteDoc(SNAPSHOT_COLLECTION, id).catch(() => false);
-    writeLocalProjects(readLocalProjects().filter(project => (project.id || project._id) !== id));
+    const local = readLocalProjects();
+    const remaining = local.filter(project => (project.id || project._id) !== id);
+    const inLocalFile = remaining.length < local.length;
+    // A project left in the local file reappears on the next load, so the
+    // delete only counts if that write succeeds too.
+    if (inLocalFile && !writeLocalProjects(remaining)) {
+      throw new Error('Could not delete the project: the local data file is not writable.');
+    }
+    if (!deletedInFirestore && !inLocalFile) {
+      throw new Error('Could not delete the project: Firestore is unavailable and the project is not in the local data file.');
+    }
     invalidateProjectMetrics(id);
     return true;
   }
