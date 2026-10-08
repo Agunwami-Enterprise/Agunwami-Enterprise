@@ -10,7 +10,6 @@ if (typeof window !== 'undefined') {
   throw new Error('This module can only be loaded on the server.');
 }
 import { FIREBASE_CONFIG } from '../config/firebase.config';
-import { applicationDefault, cert } from 'firebase-admin/app';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -96,7 +95,25 @@ async function fetchTokenFromFirebaseCli(): Promise<{ access_token: string; expi
   }
 }
 
-function initCredential(): any {
+/**
+ * Loads firebase-admin on first use. Next.js keeps it external, so it is
+ * resolved from the host's node_modules at runtime; a static import would
+ * fail every route that touches Firestore if the package is missing there.
+ */
+async function loadFirebaseAdmin(): Promise<typeof import('firebase-admin/app') | null> {
+  try {
+    return await import('firebase-admin/app');
+  } catch (e) {
+    console.warn('[backend/core/firestore] firebase-admin could not be loaded; Firestore is unavailable:', e);
+    return null;
+  }
+}
+
+async function initCredential(): Promise<any> {
+  const admin = await loadFirebaseAdmin();
+  if (!admin) return null;
+  const { applicationDefault, cert } = admin;
+
   // 1. Service account JSON in environment variable (for production hosting e.g. Vercel, Railway, App Hosting)
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     try {
@@ -142,7 +159,7 @@ export async function getAdminAuthToken(): Promise<string | null> {
 
   try {
     if (!credentialInstance) {
-      credentialInstance = initCredential();
+      credentialInstance = await initCredential();
     }
     if (!credentialInstance) {
       const fallback = await fetchTokenFromFirebaseCli();
