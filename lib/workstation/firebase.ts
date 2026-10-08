@@ -24,7 +24,6 @@ const DEFAULT_ENTERPRISE_CONFIG = {
   storageBucket: 'agunwami-enterprise.firebasestorage.app',
   messagingSenderId: '838884099596',
   appId: '1:838884099596:web:f4ccc1e79555bd1ee45029',
-  databaseURL: 'https://agunwami-enterprise-default-rtdb.firebaseio.com',
 };
 
 const ENTERPRISE_PROJECT_ID = process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_PROJECT_ID
@@ -72,8 +71,7 @@ const dataConfig = {
     || process.env.NEXT_PUBLIC_FIREBASE_APP_ID
     || DEFAULT_ENTERPRISE_CONFIG.appId,
   databaseURL: process.env.NEXT_PUBLIC_ENTERPRISE_FIREBASE_DATABASE_URL
-    || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
-    || DEFAULT_ENTERPRISE_CONFIG.databaseURL,
+    || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
 };
 
 const authApp = getApps().some(app => app.name === AUTH_APP_NAME)
@@ -99,8 +97,13 @@ const db = getFirestore(dataApp);
 // Keep business data isolated from the workstation auth/profile Firebase project.
 initBackend(db);
 
-const storage = getStorage(dataApp);
-const rtdb = getDatabase(dataApp);
+const storage = getStorage(authApp);
+const rtdb = getDatabase(
+  authApp,
+  process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_DATABASE_URL
+    || authConfig.databaseURL
+    || DEFAULT_WORKSTATION_CONFIG.databaseURL
+);
 const googleProvider = new GoogleAuthProvider();
 
 export { authApp as app, auth, authDb, dataApp, db, storage, rtdb, googleProvider };
