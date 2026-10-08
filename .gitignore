@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Firebase service account key (read by backend/core/firestore.ts)
+serviceAccountKey.json
+
 # vercel
 .vercel
 

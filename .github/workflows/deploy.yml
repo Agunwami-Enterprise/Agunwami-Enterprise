@@ -55,6 +55,33 @@ jobs:
           mkdir -p tmp
           echo "Deployed at $(date)" > tmp/restart.txt
 
+      - name: 🔑 Prepare Firestore Service Account Key
+        env:
+          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_KEY" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT_KEY secret is not set; leaving the server's Firestore credentials unchanged."
+            exit 0
+          fi
+          # The secret may hold the key JSON as downloaded, or that JSON base64-encoded.
+          if printf '%s' "$FIREBASE_SERVICE_ACCOUNT_KEY" | node -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' 2>/dev/null; then
+            KEY_B64=$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT_KEY" | base64 -w0)
+          else
+            KEY_B64=$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT_KEY" | tr -d ' \r\n')
+          fi
+          echo "::add-mask::$KEY_B64"
+          # Fail before deploying a key the server could not use; print only the project id.
+          printf '%s' "$KEY_B64" | base64 -d | node -e '
+            let key;
+            try { key = JSON.parse(require("fs").readFileSync(0, "utf8")); } catch { key = null; }
+            if (!key || key.type !== "service_account" || !key.private_key || !key.client_email) {
+              console.error("::error::FIREBASE_SERVICE_ACCOUNT_KEY is not a Firebase service account key (JSON or base64 JSON).");
+              process.exit(1);
+            }
+            console.log(`Service account key for project: ${key.project_id}`);
+          '
+          echo "FIRESTORE_KEY_B64=$KEY_B64" >> "$GITHUB_ENV"
+
       - name: 🚀 Sync Files to Namecheap via SFTP
         uses: appleboy/scp-action@v1.0.0
         with:
@@ -63,5 +90,44 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: 21098
-          source: ".next/,public/,data/,package.json,server.js,next.config.ts,tmp/restart.txt"
+          # packages/agunwami-backend is bundled into .next, but npm needs it on
+          # disk to resolve the file: dependency when installing on the server.
+          source: ".next/,public/,data/,package.json,package-lock.json,packages/agunwami-backend/package.json,packages/agunwami-backend/dist/,server.js,next.config.ts,tmp/restart.txt"
           target: "./agunwami-app/"
+
+      - name: 📦 Install Server Dependencies & Restart
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          FIRESTORE_KEY_B64: ${{ env.FIRESTORE_KEY_B64 }}
+        with:
+          host: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: 21098
+          envs: FIRESTORE_KEY_B64
+          script: |
+            set -e
+            cd "$HOME/agunwami-app"
+
+            # Same as cPanel's "Run NPM Install": use the Node.js selector's
+            # virtualenv, which owns this app's node and node_modules.
+            ACTIVATE=$(ls -d "$HOME"/nodevenv/agunwami-app/*/bin/activate 2>/dev/null | sort -V | tail -n 1)
+            if [ -z "$ACTIVATE" ]; then
+              echo "No Node.js virtualenv under ~/nodevenv/agunwami-app; create the app in cPanel > Setup Node.js App."
+              exit 1
+            fi
+            . "$ACTIVATE"
+            echo "Using $(node --version) from $ACTIVATE"
+            npm install --omit=dev --no-audit --no-fund
+
+            # Read by backend/core/firestore.ts from the app root.
+            if [ -n "$FIRESTORE_KEY_B64" ]; then
+              (umask 077 && printf '%s' "$FIRESTORE_KEY_B64" | base64 -d > serviceAccountKey.json.tmp)
+              mv serviceAccountKey.json.tmp serviceAccountKey.json
+              echo "Installed serviceAccountKey.json"
+            fi
+
+            # Restart once dependencies are in place (the synced restart.txt
+            # can trigger a restart before the install finishes).
+            mkdir -p tmp && touch tmp/restart.txt
