@@ -388,9 +388,16 @@ service cloud.firestore {
       allow write: if isAuthorizedStaff();
     }
 
-    // Default deny
+    // The enterprise server signs in as this Firebase Auth user (see
+    // FIRESTORE_SERVICE_USER_* in backend/core/firestore.ts) because service
+    // account keys are blocked for this project. Replace with its UID.
+    function isBackend() {
+      return request.auth != null && request.auth.uid == 'REPLACE_WITH_SERVER_USER_UID';
+    }
+
+    // Default deny, except for the backend service user.
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isBackend();
     }
   }
 }
