@@ -50,6 +50,14 @@ jobs:
           NEXT_PUBLIC_ENTERPRISE_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_ENTERPRISE_FIREBASE_APP_ID || secrets.NEXT_PUBLIC_FIREBASE_APP_ID || '1:838884099596:web:f4ccc1e79555bd1ee45029' }}
           NEXT_PUBLIC_ENTERPRISE_FIREBASE_DATABASE_URL: ${{ secrets.NEXT_PUBLIC_ENTERPRISE_FIREBASE_DATABASE_URL || '' }}
 
+      - name: 🧹 Drop Build Cache From Upload
+        # .next/cache only speeds up later builds and is hundreds of MB; uploading
+        # it made the SFTP step run long enough for the connection to time out.
+        run: |
+          du -sh .next .next/cache 2>/dev/null || true
+          rm -rf .next/cache
+          du -sh .next
+
       - name: ♻️ Create Passenger Automatic Restart File
         run: |
           mkdir -p tmp
