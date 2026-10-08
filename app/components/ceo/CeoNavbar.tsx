@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { UserRound } from 'lucide-react';
 import { useTheme } from '@/lib/workstation/theme-context';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeUserProfile, type UserProfile } from '@/modules/settings/services';
@@ -12,6 +13,8 @@ interface Props { onMenuClick: () => void; }
 export default function CeoNavbar({ onMenuClick }: Props) {
   const [showNotif, setShowNotif] = useState(false);
   const [showUser, setShowUser]   = useState(false);
+  // The photo URL whose image failed to load, so we show the icon instead.
+  const [brokenPhoto, setBrokenPhoto] = useState<string | null>(null);
   const [profile, setProfile]     = useState<UserProfile | null>(null);
   const [navNotifs, setNavNotifs] = useState<NotifItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -58,7 +61,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
 
   const displayName  = profile?.displayName  || user?.displayName || 'Agunwami';
   const displayEmail = profile?.email || user?.email       || 'ceo@agunwami.com';
-  const initials     = displayName.charAt(0).toUpperCase();
+  const photoURL     = profile?.photoURL || user?.photoURL || '';
 
   return (
     <header className="relative z-10 flex h-14 flex-shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 dark:border-white/6 dark:bg-[#1a1a1a]">
@@ -168,17 +171,19 @@ export default function CeoNavbar({ onMenuClick }: Props) {
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-white/6"
         >
           <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-gray-200 dark:ring-white/10">
-            <img
-              src={profile?.photoURL || user?.photoURL || '/agunwami_ceo.jpg'}
-              alt={displayName}
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLElement).style.display = 'none';
-              }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-[#f5bd02] text-[11px] font-bold text-[#1a1a1a] -z-10">
-              {initials}
-            </div>
+            {/* The user's own photo, or an icon; never someone else's picture. */}
+            {photoURL && photoURL !== brokenPhoto ? (
+              <img
+                src={photoURL}
+                alt={displayName}
+                className="h-full w-full object-cover"
+                onError={() => setBrokenPhoto(photoURL)}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-[#f5bd02] text-[#1a1a1a]" aria-hidden="true">
+                <UserRound className="h-[18px] w-[18px]" />
+              </div>
+            )}
           </div>
           <div className="hidden text-left sm:block">
             <p className="text-[12px] font-semibold leading-tight text-gray-800 dark:text-white">{displayName}</p>

@@ -4109,7 +4109,7 @@ export default function MessagingClient() {
       {/* Page header */}
       <div className="mb-5">
         <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">Messages</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Stay connected with your team across AEHub and Agunwami Enterprise</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Stay connected with your team across the AE Workstation</p>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
