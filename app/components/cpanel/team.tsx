@@ -3,15 +3,70 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  ChevronLeft, ChevronRight, Crown, Eye, EyeOff, GripVertical, Pencil, Plus, Trash2, UserRound,
+  ChevronLeft, ChevronRight, Crown, Eye, EyeOff, GripVertical, Pencil, Plus, Search, Trash2, UserPlus, UserRound,
 } from 'lucide-react';
 import {
   AddButton, Button, Card, ConfirmDelete, ErrorNote, IconButton, ImageField, Modal, PageHeader, SaveButton,
   TextArea, TextInput, cpanelFetch, cx, useMutation,
 } from './ui';
 import type { SiteTeamMember } from '@/backend/modules/site-content/site-content.types';
+import type { MetricsPerson } from '@/backend/modules/site-content/site-content.service';
 
 type Draft = Omit<SiteTeamMember, 'id'>;
+export type MetricsPeople = { people: MetricsPerson[]; departments: string[]; unavailable: string[] } | null;
+
+/** Search the people listed in the connected projects' metrics and pick one. */
+function MetricsPicker({ metrics, team, onPick }: {
+  metrics: MetricsPeople; team: SiteTeamMember[]; onPick: (person: MetricsPerson) => void;
+}) {
+  const [query, setQuery] = useState('');
+  if (!metrics) {
+    return <p className="rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-800">Couldn&apos;t load people from project metrics right now. You can still fill in the member by hand.</p>;
+  }
+  if (metrics.people.length === 0) {
+    return (
+      <p className="rounded-lg bg-[#F7F5EF] px-3 py-2 text-[13px] text-[#8A8A8A]">
+        No people found in project metrics{metrics.unavailable.length ? ` (couldn't reach: ${metrics.unavailable.join(', ')})` : ''}. Fill in the member by hand.
+      </p>
+    );
+  }
+  const onTeam = new Set(team.map(m => m.name.toLowerCase()));
+  const q = query.trim().toLowerCase();
+  const matches = metrics.people
+    .filter(p => !q || `${p.name} ${p.role} ${p.department} ${p.project}`.toLowerCase().includes(q))
+    .slice(0, 8);
+  return (
+    <div className="space-y-2 rounded-xl border border-[#ECEAE3] bg-[#FBFAF6] p-3">
+      <div className="flex items-center gap-2">
+        <Search className="h-4 w-4 text-[#9A9A9A]" aria-hidden="true" />
+        <input value={query} onChange={e => setQuery(e.target.value)} aria-label="Search people from project metrics"
+          placeholder={`Pick from ${metrics.people.length} people in your projects…`}
+          className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#A3A3A3]" />
+      </div>
+      {metrics.unavailable.length > 0 && (
+        <p className="text-[12px] text-amber-700">Couldn&apos;t reach: {metrics.unavailable.join(', ')}.</p>
+      )}
+      <ul className="max-h-48 divide-y divide-[#F0EEE8] overflow-y-auto rounded-lg bg-white">
+        {matches.length === 0 && <li className="px-3 py-2 text-[13px] text-[#9A9A9A]">No one matches.</li>}
+        {matches.map(person => (
+          <li key={`${person.name}-${person.department}-${person.project}`}>
+            <button type="button" onClick={() => onPick(person)} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[#FDF8EC]">
+              <span className="min-w-0">
+                <span className="block truncate text-[14px] font-medium text-[#1A1A1A]">{person.name}</span>
+                <span className="block truncate text-[12px] text-[#8A8A8A]">
+                  {[person.role, person.department, person.project].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              {onTeam.has(person.name.toLowerCase())
+                ? <span className="shrink-0 text-[11px] text-[#9A9A9A]">On team</span>
+                : <UserPlus className="h-4 w-4 shrink-0 text-[#C89B3C]" aria-hidden="true" />}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function Toggle({ checked, onChange, label, description, children }: {
   checked: boolean; onChange: (checked: boolean) => void; label: string; description: string; children?: React.ReactNode;
@@ -33,15 +88,17 @@ function Toggle({ checked, onChange, label, description, children }: {
   );
 }
 
-function MemberForm({ member, team, onClose }: { member?: SiteTeamMember; team: SiteTeamMember[]; onClose: () => void }) {
+function MemberForm({ member, team, metrics, onClose }: {
+  member?: SiteTeamMember; team: SiteTeamMember[]; metrics: MetricsPeople; onClose: () => void;
+}) {
   const [draft, setDraft] = useState<Draft>({
     name: member?.name ?? '', role: member?.role ?? '', department: member?.department ?? '',
     isLead: member?.isLead ?? false, showOnWebsite: member?.showOnWebsite ?? true, bio: member?.bio ?? '', image: member?.image ?? '', linkedin: member?.linkedin ?? '',
   });
   const { busy, error, run } = useMutation();
   const set = <K extends keyof Draft>(key: K) => (value: Draft[K]) => setDraft(d => ({ ...d, [key]: value }));
-  // Departments the team already has; typing a new name adds one.
-  const departments = [...new Set(team.map(m => m.department).filter(Boolean))].sort();
+  // Departments the team and the project metrics already have; typing a new name adds one.
+  const departments = [...new Set([...team.map(m => m.department), ...(metrics?.departments ?? [])].filter(Boolean))].sort();
   const isNewDepartment = !!draft.department.trim()
     && !departments.some(d => d.toLowerCase() === draft.department.trim().toLowerCase());
   const currentLead = team.find(m => m.isLead && m.id !== member?.id && draft.department
@@ -62,6 +119,10 @@ function MemberForm({ member, team, onClose }: { member?: SiteTeamMember; team: 
           <SaveButton busy={busy} onClick={save}>{member ? 'Save Changes' : 'Add Member'}</SaveButton>
         </>
       )}>
+      {!member && (
+        <MetricsPicker metrics={metrics} team={team}
+          onPick={person => setDraft(d => ({ ...d, name: person.name, role: person.role || d.role, department: person.department || d.department }))} />
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <TextInput label="Full name *" value={draft.name} onChange={set('name')} placeholder="Jane Doe" />
         <TextInput label="Role / title *" value={draft.role} onChange={set('role')} placeholder="Chief Executive Officer" />
@@ -94,7 +155,7 @@ function MemberForm({ member, team, onClose }: { member?: SiteTeamMember; team: 
   );
 }
 
-export function TeamManager({ team }: { team: SiteTeamMember[] }) {
+export function TeamManager({ team, metrics }: { team: SiteTeamMember[]; metrics: MetricsPeople }) {
   const searchParams = useSearchParams();
   const [editing, setEditing] = useState<SiteTeamMember | 'new' | null>(searchParams.get('new') ? 'new' : null);
   const [deleting, setDeleting] = useState<SiteTeamMember | null>(null);
@@ -186,7 +247,7 @@ export function TeamManager({ team }: { team: SiteTeamMember[] }) {
           <Plus className="h-6 w-6" aria-hidden="true" /> <span className="text-[14px] font-medium">Add Member</span>
         </button>
       </div>
-      {editing && <MemberForm member={editing === 'new' ? undefined : editing} team={team} onClose={() => setEditing(null)} />}
+      {editing && <MemberForm member={editing === 'new' ? undefined : editing} team={team} metrics={metrics} onClose={() => setEditing(null)} />}
       <ConfirmDelete open={!!deleting} kind="Team Member" name={deleting?.name ?? ''}
         effect={deleting?.showOnWebsite ? 'They will be removed from the team and the About page.' : 'They will be removed from the team.'}
         busy={del.busy} error={del.error} onCancel={() => setDeleting(null)}

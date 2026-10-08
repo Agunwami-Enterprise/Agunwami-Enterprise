@@ -368,6 +368,44 @@ export async function saveTeamMember(input: Input, id?: string): Promise<SiteTea
   return saved!;
 }
 
+export interface MetricsPerson {
+  name: string;
+  role: string;
+  department: string;
+  /** The workstation project whose metrics list this person. */
+  project: string;
+}
+
+/**
+ * People and departments from the connected projects' metrics, for picking
+ * team members in the C-panel. Projects whose endpoint fails are listed in
+ * `unavailable` rather than silently skipped.
+ */
+export async function listMetricsPeople(): Promise<{ people: MetricsPerson[]; departments: string[]; unavailable: string[] }> {
+  const cards = await ProjectsService.getProjectsOverview();
+  const people = new Map<string, MetricsPerson>();
+  const departments = new Set<string>();
+  const unavailable: string[] = [];
+  for (const card of cards) {
+    if (card.apiEndpoint && card.status === 'error') unavailable.push(card.name);
+    const staff = [...(card.staff ?? []), ...(card.departments ?? []).flatMap(d => (d.staff ?? []).map(s => ({ ...s, department: s.department || d.name })))];
+    for (const department of card.departments ?? []) if (department.name) departments.add(department.name.trim());
+    for (const member of staff) {
+      const name = member.name?.trim();
+      if (!name) continue;
+      const department = member.department?.trim() ?? '';
+      if (department) departments.add(department);
+      const key = `${name.toLowerCase()}|${department.toLowerCase()}`;
+      if (!people.has(key)) people.set(key, { name, role: member.role?.trim() ?? '', department, project: card.name });
+    }
+  }
+  return {
+    people: [...people.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    departments: [...departments].sort(),
+    unavailable,
+  };
+}
+
 /** Saves a new order (ids, first to last); the website shows members in this order. */
 export async function reorderTeam(ids: unknown): Promise<SiteTeamMember[]> {
   if (!Array.isArray(ids)) throw new SiteContentValidationError('ids must be a list.');
