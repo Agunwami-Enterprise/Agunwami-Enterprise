@@ -7,11 +7,8 @@ import type { Metadata } from "next";
 import Section, {
   SectionWithHeading,
 } from "@/app/components/common/ui/Section";
-import {
-  projects,
-  partnershipCategories,
-  partnershipApproach,
-} from "@/lib/dummy";
+import { partnershipApproach } from "@/lib/dummy";
+import { getPartnershipCategories, getSiteProjects } from "@/lib/site/content";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
@@ -39,7 +36,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function PartnershipsPage() {
+// Rendered per request from C-panel content (cached briefly in lib/site/content).
+export const dynamic = "force-dynamic";
+
+export default async function PartnershipsPage() {
+  const [projects, partnershipCategories] = await Promise.all([getSiteProjects(), getPartnershipCategories()]);
   return (
     <main className="flex flex-col items-center w-full">
       <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-partnerships-hero dark:bg-partnerships-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-8 md:pb-12 space-y-0">

@@ -11,7 +11,7 @@ import { BsArrowRight } from "react-icons/bs";
 import { CiClock1 } from "react-icons/ci";
 import { BiChat } from "react-icons/bi";
 import ContactForm from "@/app/components/contact/ContactForm";
-import { contactDetails } from "@/lib/dummy";
+import { getContactDetails } from "@/lib/site/content";
 
 export const metadata: Metadata = {
   title: "Contact a Software Development Company | Agunwami",
@@ -35,7 +35,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ContactPage() {
+// Rendered per request from C-panel content (cached briefly in lib/site/content).
+export const dynamic = "force-dynamic";
+
+export default async function ContactPage() {
+  const contactDetails = await getContactDetails();
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}

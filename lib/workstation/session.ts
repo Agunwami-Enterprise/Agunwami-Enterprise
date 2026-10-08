@@ -25,7 +25,7 @@ async function verifyFirebaseToken(idToken: string) {
   return payload;
 }
 
-async function getUserRole(uid: string, idToken: string): Promise<string> {
+async function getUserProfile(uid: string, idToken: string): Promise<{ role: string; department: string }> {
   const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${idToken}` },
@@ -37,20 +37,21 @@ async function getUserRole(uid: string, idToken: string): Promise<string> {
   const department = String(
     doc.fields?.department?.stringValue ?? doc.fields?.dept?.stringValue ?? '',
   );
-  return normalizeWorkstationRole(role, department);
+  return { role: normalizeWorkstationRole(role, department), department: department.trim().toLowerCase() };
 }
 
 const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET);
 
-export type SessionPayload = { uid: string; email: string; role: string };
+// department is missing from sessions created before the C-panel existed.
+export type SessionPayload = { uid: string; email: string; role: string; department?: string };
 
 export async function createSession(idToken: string): Promise<SessionPayload> {
   const token = await verifyFirebaseToken(idToken);
   const uid = token.sub!;
   const email = (token['email'] as string) ?? '';
-  const role = await getUserRole(uid, idToken);
+  const { role, department } = await getUserProfile(uid, idToken);
 
-  const sessionToken = await new SignJWT({ uid, email, role })
+  const sessionToken = await new SignJWT({ uid, email, role, department })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DURATION_S}s`)
@@ -65,7 +66,7 @@ export async function createSession(idToken: string): Promise<SessionPayload> {
     path: '/',
   });
 
-  return { uid, email, role };
+  return { uid, email, role, department };
 }
 
 export async function deleteSession() {

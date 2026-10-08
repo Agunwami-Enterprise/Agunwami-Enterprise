@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
 import TeamSlider from "@/app/components/common/TeamSlider";
 import { coreValues, deliveryPhilosophy } from "@/lib/dummy";
+import { getSiteTeam } from "@/lib/site/content";
 
 export const metadata: Metadata = {
   title: "Software Development Company For Growing Businesses | About AE",
@@ -30,7 +31,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AboutPage() {
+// Rendered per request from C-panel content (cached briefly in lib/site/content).
+export const dynamic = "force-dynamic";
+
+export default async function AboutPage() {
+  const team = await getSiteTeam();
   return (
     <main className="flex flex-col items-center w-full">
       {/* ── Hero ── */}
@@ -194,6 +199,7 @@ export default function AboutPage() {
 
       {/* ── Our Leadership (Slider) ── */}
       <TeamSlider
+        members={team}
         variant="about"
         aboutHeading="Our Leadership"
         aboutDescription="The minds behind Agunwami Enterprise, experienced leaders passionate about building systems that create opportunity and drive impact."

@@ -1,10 +1,13 @@
 import type { MetadataRoute } from "next";
-import { ARTICLES } from "@/lib/data/insightsData";
-import { projects } from "@/lib/dummy";
+import { getPublishedArticles, getSiteProjects } from "@/lib/site/content";
 
 const BASE_URL = "https://agunwamienterprise.com";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+// Rendered per request from C-panel content (cached briefly in lib/site/content).
+export const dynamic = "force-dynamic";
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const [projects, articles] = await Promise.all([getSiteProjects(), getPublishedArticles()]);
   const staticRoutes: MetadataRoute.Sitemap = [
     {
       url: BASE_URL,
@@ -76,7 +79,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     });
 
   // Dynamically include all published insights articles
-  const insightRoutes: MetadataRoute.Sitemap = ARTICLES.map((article) => {
+  const insightRoutes: MetadataRoute.Sitemap = articles.map((article) => {
     const parsedDate = new Date(article.date);
     return {
       url: `${BASE_URL}/insights/${article.slug}`,

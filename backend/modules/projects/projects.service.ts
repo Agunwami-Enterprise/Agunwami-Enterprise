@@ -843,6 +843,25 @@ async function loadProject(project: StoredProject, forceRefresh = false): Promis
   }
 }
 
+/** A saved workstation project record. Holds the encrypted token, so keep it server-side. */
+export type ProjectRecord = StoredProject;
+
+/**
+ * Saved workstation projects (Firestore merged with the local file),
+ * without fetching metrics. Endpoints configured only through
+ * PROJECT_METRICS_ENDPOINTS have no saved record and are skipped.
+ */
+export async function listProjectRecords(): Promise<ProjectRecord[]> {
+  const configuredOnlyByEnv = new Set(
+    (process.env.PROJECT_METRICS_ENDPOINTS ?? '').split(',').map(url => url.trim()).filter(Boolean)
+      .map(url => url.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 32)),
+  );
+  return (await loadStoredProjects()).filter(project => {
+    const id = project._id || project.id;
+    return typeof id === 'string' && !!id && !(configuredOnlyByEnv.has(id) && project.name === 'Connected Project');
+  });
+}
+
 export class ProjectsService {
   /**
    * Project cards with endpoint data. Responses are cached for a minute;
@@ -911,14 +930,19 @@ export class ProjectsService {
     return { id };
   }
 
-  static async createProject(dto: CreateProjectDto): Promise<ProjectCardData> {
-    const endpoint = dto.apiEndpoint?.trim();
-    if (!endpoint) {
+  /**
+   * Creates a workstation project. The CEO dashboard requires a metrics
+   * endpoint and token; the website C-panel creates projects without them
+   * (`requireMetrics: false`) and adds them later from the dashboard.
+   */
+  static async createProject(dto: CreateProjectDto, { requireMetrics = true } = {}): Promise<ProjectCardData> {
+    const endpoint = dto.apiEndpoint?.trim() || null;
+    if (!endpoint && requireMetrics) {
       throw new ProjectValidationError('Project metrics endpoint URL is required.');
     }
-    normalizeMetricsUrl(endpoint);
-    const token = dto.apiToken?.trim();
-    if (!token) {
+    if (endpoint) normalizeMetricsUrl(endpoint);
+    const token = dto.apiToken?.trim() || null;
+    if (!token && (requireMetrics || endpoint)) {
       throw new ProjectValidationError('Project endpoint Bearer Token is required.');
     }
 
@@ -951,8 +975,9 @@ export class ProjectsService {
       lead: dto.lead?.trim() || '',
       adminUrl: dto.adminUrl?.trim() || null,
       apiEndpoint: endpoint,
-      apiTokenEncrypted: encryptApiToken(token),
+      apiTokenEncrypted: token ? encryptApiToken(token) : null,
       color: dto.color || '#3b82f6',
+      ...(dto.website ? { website: dto.website } : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -987,6 +1012,7 @@ export class ProjectsService {
     if (dto.apiToken?.trim()) allowedUpdates.apiTokenEncrypted = encryptApiToken(dto.apiToken.trim());
     else if (dto.clearApiToken) allowedUpdates.apiTokenEncrypted = null;
     if (dto.color !== undefined) allowedUpdates.color = dto.color;
+    if (dto.website !== undefined) allowedUpdates.website = dto.website;
     const updatedAt = new Date().toISOString();
 
     // Firestore PATCH upserts, so only send it for a project Firestore already

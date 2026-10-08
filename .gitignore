@@ -52,3 +52,5 @@ next-env.d.ts
 
 # local-only project endpoint store (dev fallback when Firestore is unavailable)
 /data/configured_endpoints.json
+/data/site_content.json
+/data/uploads/
