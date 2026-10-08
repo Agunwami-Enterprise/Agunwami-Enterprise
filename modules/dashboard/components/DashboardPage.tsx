@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/workstation/auth-context';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /* CEO executive dashboard — project metrics come from each configured project endpoint. */
 
@@ -51,6 +52,7 @@ interface RevenueMonth {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date | null>(null);
 
@@ -62,11 +64,6 @@ export default function DashboardPage() {
   const [showBroadcast,   setShowBroadcast]   = useState(false);
   const [selectedProject, setSelectedProject] = useState<ApiProject | null>(null);
   const [selectedApproval, setSelectedApproval] = useState<LiveApprovalItem | null>(null);
-  const [projectModal, setProjectModal] = useState<{
-    open: boolean;
-    mode: 'create' | 'edit';
-    project?: ApiProject | null;
-  }>({ open: false, mode: 'create', project: null });
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
 
   async function reloadProjects() {
@@ -502,7 +499,7 @@ export default function DashboardPage() {
           </div>
 
           <button
-            onClick={() => setProjectModal({ open: true, mode: 'create', project: null })}
+            onClick={() => router.push('/ceo/projects/new')}
             className="inline-flex items-center gap-2 rounded-xl bg-[#E5A800] px-4 py-2 text-[12px] font-bold text-gray-950 shadow-sm transition hover:brightness-105 active:scale-95"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -539,7 +536,7 @@ export default function DashboardPage() {
               Add enterprise projects and configure each project&rsquo;s metrics endpoint to report dashboard data.
             </p>
             <button
-              onClick={() => setProjectModal({ open: true, mode: 'create', project: null })}
+              onClick={() => router.push('/ceo/projects/new')}
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#E5A800] px-4 py-2 text-[12px] font-bold text-gray-950 shadow-sm transition hover:brightness-105"
             >
               + Add First Project
@@ -552,7 +549,7 @@ export default function DashboardPage() {
                 key={project.id}
                 project={project}
                 onView={() => setSelectedProject(project)}
-                onEdit={() => setProjectModal({ open: true, mode: 'edit', project })}
+                onEdit={() => router.push(`/ceo/projects/${encodeURIComponent(project.id)}`)}
                 onDelete={() => handleDeleteProject(project.id, project.name)}
                 isDeleting={deletingProjectId === project.id}
               />
@@ -708,24 +705,11 @@ export default function DashboardPage() {
         />
       )}
 
-      {projectModal.open && (
-        <ProjectConfigModal
-          mode={projectModal.mode}
-          project={projectModal.project}
-          onClose={() => setProjectModal({ open: false, mode: 'create', project: null })}
-          onSaved={reloadProjects}
-        />
-      )}
-
       {selectedProject && (
         <ProjectDetailModal
           project={selectedProject}
           onClose={() => setSelectedProject(null)}
-          onEdit={() => {
-            const p = selectedProject;
-            setSelectedProject(null);
-            setProjectModal({ open: true, mode: 'edit', project: p });
-          }}
+          onEdit={() => router.push(`/ceo/projects/${encodeURIComponent(selectedProject.id)}`)}
         />
       )}
 
@@ -1017,314 +1001,6 @@ function ProjectCard({
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
-      </div>
-    </div>
-  );
-}
-
-const PRESET_COLORS = [
-  { name: 'Amber', hex: '#d97706' },
-  { name: 'Blue', hex: '#2563eb' },
-  { name: 'Orange', hex: '#ea580c' },
-  { name: 'Emerald', hex: '#059669' },
-  { name: 'Purple', hex: '#8b5cf6' },
-  { name: 'Cyan', hex: '#06b6d4' },
-  { name: 'Rose', hex: '#e11d48' },
-];
-
-function ProjectConfigModal({
-  mode,
-  project,
-  onClose,
-  onSaved,
-}: {
-  mode: 'create' | 'edit';
-  project?: ApiProject | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState(project?.name || '');
-  const [subtitle, setSubtitle] = useState(project?.subtitle || '');
-  const [adminUrl, setAdminUrl] = useState(project?.adminUrl || '');
-  const [apiEndpoint, setApiEndpoint] = useState(project?.apiEndpoint || '');
-  const [apiToken, setApiToken] = useState('');
-  const [clearApiToken, setClearApiToken] = useState(false);
-  const [lead, setLead] = useState(project?.lead || '');
-  const [description, setDescription] = useState(project?.description || '');
-  const [color, setColor] = useState(project?.color || '#d97706');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim() || !subtitle.trim()) {
-      setError('Please provide project name and category.');
-      return;
-    }
-    if (!apiEndpoint.trim()) {
-      setError('Please provide the project metrics endpoint URL.');
-      return;
-    }
-    if (mode === 'create' && !apiToken.trim()) {
-      setError('Bearer Token is required to authenticate with this endpoint.');
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      if (mode === 'create') {
-        const res = await fetch('/api/ceo/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: name.trim(),
-            subtitle: subtitle.trim(),
-            adminUrl: adminUrl.trim() || null,
-            apiEndpoint: apiEndpoint.trim(),
-            apiToken: apiToken.trim(),
-            lead: lead.trim() || '',
-            description: description.trim() || '',
-            color,
-          }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || 'Failed to create project');
-        }
-      } else if (mode === 'edit' && project) {
-        const res = await fetch('/api/ceo/projects', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: project.id,
-            name: name.trim(),
-            subtitle: subtitle.trim(),
-            adminUrl: adminUrl.trim() || null,
-            apiEndpoint: apiEndpoint.trim() || null,
-            apiToken: apiToken.trim() || undefined,
-            clearApiToken,
-            lead: lead.trim() || '',
-            description: description.trim() || '',
-            color,
-          }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || 'Failed to update project');
-        }
-      }
-
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while saving.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1a1a1a]">
-        <div className="flex items-start justify-between border-b border-gray-100 pb-4 dark:border-white/8">
-          <div>
-            <div className="flex items-center gap-2">
-              <span
-                className="h-3 w-3 rounded-full"
-                style={{ backgroundColor: color }}
-              />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                {mode === 'create' ? 'New Venture Setup' : 'Configure Venture'}
-              </span>
-            </div>
-            <h2 className="mt-1 text-[18px] font-bold text-gray-900 dark:text-white">
-              {mode === 'create' ? 'Add Enterprise Project' : `Edit ${project?.name || 'Project'}`}
-            </h2>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400">
-              Add the project metrics endpoint to populate its dashboard data.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/6"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        {error && (
-          <div className="mt-4 rounded-xl bg-red-50 p-3 text-[12px] font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4 text-[12px]">
-          {/* Row 1: Name & Subtitle */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                Project Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g., Meridian Crest Solutions"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                Category / Subtitle *
-              </label>
-              <input
-                type="text"
-                required
-                value={subtitle}
-                onChange={e => setSubtitle(e.target.value)}
-                placeholder="e.g., Talent Recruitment & HR"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Hosted Admin URL */}
-          <div>
-            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Hosted Link / Web Admin URL
-            </label>
-            <input
-              type="url"
-              value={adminUrl}
-              onChange={e => setAdminUrl(e.target.value)}
-              placeholder="https://yourproject.web.app/staff/ or https://admin.yourventure.com"
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-            />
-            <p className="mt-1 text-[11px] text-gray-400">
-              The direct web link for the project admin. Clicking &ldquo;Project Admin&rdquo; on the card opens this link in a new tab.
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Project Metrics Endpoint
-            </label>
-            <input
-              type="url"
-              value={apiEndpoint}
-              onChange={event => setApiEndpoint(event.target.value)}
-              placeholder="https://your-project.example.com/api/enterprise/metrics"
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-            />
-            <p className="mt-1 text-[11px] text-gray-400">
-              Returns JSON metrics for this project. The endpoint is fetched by the Enterprise server when the dashboard loads.
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Metrics Endpoint Bearer Token <span className="text-amber-500 font-bold">*</span> (Required)
-            </label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              required={mode === 'create'}
-              value={apiToken}
-              onChange={event => {
-                setApiToken(event.target.value);
-                if (event.target.value) setClearApiToken(false);
-              }}
-              placeholder={project?.hasApiToken ? 'Saved token — enter new token to update' : 'Enter the endpoint bearer token (required)'}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-            />
-            <p className="mt-1 text-[11px] text-gray-400">
-              Required to authenticate with this endpoint. Sent as a Bearer token by the Enterprise server, encrypted before storage, and never returned to the browser.
-            </p>
-            {project?.hasApiToken && (
-              <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-400">
-                <input
-                  type="checkbox"
-                  checked={clearApiToken}
-                  onChange={event => setClearApiToken(event.target.checked)}
-                  disabled={Boolean(apiToken)}
-                />
-                Remove saved token
-              </label>
-            )}
-          </div>
-
-          {/* Row 5: Lead & Accent Color */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                Project Lead / Manager
-              </label>
-              <input
-                type="text"
-                value={lead}
-                onChange={e => setLead(e.target.value)}
-                placeholder="e.g., Marcus Adebayo"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                Accent Theme Color
-              </label>
-              <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                {PRESET_COLORS.map(c => (
-                  <button
-                    key={c.hex}
-                    type="button"
-                    onClick={() => setColor(c.hex)}
-                    style={{ backgroundColor: c.hex }}
-                    className={`h-6 w-6 rounded-full transition-transform ${
-                      color.toLowerCase() === c.hex.toLowerCase()
-                        ? 'ring-2 ring-offset-2 ring-gray-900 dark:ring-white scale-110'
-                        : 'hover:scale-105'
-                    }`}
-                    title={c.name}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 6: Description */}
-          <div>
-            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Venture Description
-            </label>
-            <textarea
-              rows={2}
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Brief description of operations, target market, or mission..."
-              className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-2.5 border-t border-gray-100 pt-4 dark:border-white/8">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-200 px-4 py-2 font-semibold text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-[#E5A800] px-5 py-2 font-bold text-gray-950 transition hover:brightness-105 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : mode === 'create' ? 'Create Project' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );

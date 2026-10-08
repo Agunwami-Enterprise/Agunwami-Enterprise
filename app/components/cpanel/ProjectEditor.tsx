@@ -14,6 +14,17 @@ import type {
 
 const CATEGORIES = ['E-Commerce', 'Non-Profit', 'Retail', 'Corporate', 'Education', 'Healthcare', 'Finance', 'Logistics', 'Operations', 'Government', 'Other'];
 const STATUSES = ['ACTIVE', 'IN DEVELOPMENT', 'COMPLETED'];
+/** Card colours on the CEO dashboard. */
+const PROJECT_COLORS = [
+  { name: 'Gold', hex: '#C89B3C' },
+  { name: 'Amber', hex: '#D97706' },
+  { name: 'Blue', hex: '#2563EB' },
+  { name: 'Orange', hex: '#EA580C' },
+  { name: 'Emerald', hex: '#059669' },
+  { name: 'Purple', hex: '#8B5CF6' },
+  { name: 'Cyan', hex: '#06B6D4' },
+  { name: 'Rose', hex: '#E11D48' },
+];
 
 type Draft = {
   name: string; kind: ProjectKind; published: boolean; category: string; subtitle: string; homeDescription: string;
@@ -21,6 +32,7 @@ type Draft = {
   websiteUrl: string; adminUrl: string; status: string; icon: SiteIconName; stats: SiteProjectStat[];
   deliverables: string[]; impact: string; ecosystemSummary: string; ecosystemDescription: string;
   ecosystemFeatures: string[]; apiEndpoint: string; apiToken: string; clearApiToken: boolean;
+  lead: string; color: string;
 };
 
 function toDraft(project?: SiteProject): Draft {
@@ -49,6 +61,8 @@ function toDraft(project?: SiteProject): Draft {
     apiEndpoint: project?.apiEndpoint ?? '',
     apiToken: '',
     clearApiToken: false,
+    lead: project?.lead ?? '',
+    color: project?.color ?? '#C89B3C',
   };
 }
 
@@ -126,7 +140,13 @@ function CardPreview({ draft }: { draft: Draft }) {
   );
 }
 
-export default function ProjectEditor({ project }: { project?: SiteProject }) {
+/**
+ * The one editor for workstation projects, used by the C-panel and the CEO
+ * dashboard. `basePath` is where the list/edit pages live in each.
+ */
+export default function ProjectEditor({ project, basePath = '/cpanel/projects', backHref = basePath, backLabel = 'All projects' }: {
+  project?: SiteProject; basePath?: string; backHref?: string; backLabel?: string;
+}) {
   const router = useRouter();
   const [draft, setDraft] = useState(() => toDraft(project));
   const [hasToken, setHasToken] = useState(project?.hasApiToken ?? false);
@@ -159,7 +179,7 @@ export default function ProjectEditor({ project }: { project?: SiteProject }) {
       setDraft(d => ({ ...d, apiToken: '', clearApiToken: false }));
       setDirty(false);
       setSavedAt(new Date());
-      if (!project) router.replace(`/cpanel/projects/${saved.id}`);
+      if (!project) router.replace(`${basePath}/${encodeURIComponent(saved.id)}`);
       else router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the project.');
@@ -167,7 +187,7 @@ export default function ProjectEditor({ project }: { project?: SiteProject }) {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [draft, project, router]);
+  }, [basePath, draft, project, router]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -191,8 +211,8 @@ export default function ProjectEditor({ project }: { project?: SiteProject }) {
     <div className="mx-auto max-w-[1180px] pb-10">
       {/* Top bar */}
       <div className="sticky top-0 z-20 -mx-5 mb-6 flex flex-wrap items-center gap-3 border-b border-[#ECEAE3] bg-[#FBFAF3]/95 px-5 py-3 backdrop-blur md:-mx-16 md:px-16">
-        <Link href="/cpanel/projects" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#6B6B6B] hover:text-[#1A1A1A]">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> All projects
+        <Link href={backHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#6B6B6B] hover:text-[#1A1A1A]">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {backLabel}
         </Link>
         <span className="text-[13px] text-[#9A9A9A]" aria-live="polite">{status}</span>
         <div className="ml-auto flex flex-wrap gap-2">
@@ -253,7 +273,20 @@ export default function ProjectEditor({ project }: { project?: SiteProject }) {
             )}
           </SectionCard>
 
-          <SectionCard step={++step} title="Metrics" description="Connects the project's live numbers to the CEO dashboard. Never shown on the website.">
+          <SectionCard step={++step} title="Workstation & metrics" description="How the project appears on the CEO dashboard and where its live numbers come from. Never shown on the website.">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <TextInput label="Project lead" value={draft.lead} onChange={set('lead')} placeholder="Who runs this project" />
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6B6B6B]">Dashboard colour</p>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Dashboard colour">
+                  {PROJECT_COLORS.map(({ name, hex }) => (
+                    <button key={hex} type="button" role="radio" aria-checked={draft.color.toUpperCase() === hex} aria-label={name} title={name}
+                      onClick={() => set('color')(hex)} style={{ backgroundColor: hex }}
+                      className={cx('h-8 w-8 rounded-full ring-offset-2 transition', draft.color.toUpperCase() === hex ? 'ring-2 ring-[#1A1A1A]' : 'hover:scale-110')} />
+                  ))}
+                </div>
+              </div>
+            </div>
             <TextInput label="Metrics endpoint URL" value={draft.apiEndpoint} onChange={set('apiEndpoint')} placeholder="https://project.com/api/ae/metrics" />
             <TextInput label="Bearer token" type="password" autoComplete="new-password" value={draft.apiToken} onChange={set('apiToken')}
               placeholder={hasToken && !draft.clearApiToken ? 'Saved — leave blank to keep it' : 'Paste the project’s token'} />

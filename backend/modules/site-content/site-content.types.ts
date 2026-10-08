@@ -64,6 +64,9 @@ export interface SiteProject {
   apiEndpoint: string;
   /** Whether a bearer token is saved. The token itself never leaves the server. */
   hasApiToken: boolean;
+  /** Workstation fields for the CEO dashboard card; never shown on the website. */
+  lead: string;
+  color: string;
   /** Tailwind background class for the detail hero (seeded projects only). */
   heroBgClass?: string;
   stats: SiteProjectStat[];
@@ -77,7 +80,7 @@ export interface SiteProject {
 }
 
 /** The part of a SiteProject kept in the workstation record's `website` map. */
-export type SiteProjectWebsite = Omit<SiteProject, 'id' | 'name' | 'adminUrl' | 'apiEndpoint' | 'hasApiToken'>;
+export type SiteProjectWebsite = Omit<SiteProject, 'id' | 'name' | 'adminUrl' | 'apiEndpoint' | 'hasApiToken' | 'lead' | 'color'>;
 
 /** A team member. Members chosen with showOnWebsite appear on the About and home pages. */
 export interface SiteTeamMember {

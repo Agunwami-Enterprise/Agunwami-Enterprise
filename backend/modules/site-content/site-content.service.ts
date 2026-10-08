@@ -141,6 +141,8 @@ function toSiteProject(record: ProjectRecord): SiteProject {
     adminUrl: asText(record.adminUrl),
     apiEndpoint: asText(record.apiEndpoint),
     hasApiToken: typeof record.apiTokenEncrypted === 'string' && record.apiTokenEncrypted.length > 0,
+    lead: asText(record.lead),
+    color: asText(record.color) || '#C89B3C',
     slug: web.slug || slugify(name) || id,
     kind: PROJECT_KINDS.includes(web.kind as ProjectKind) ? web.kind as ProjectKind : 'client',
     published: web.published === true,
@@ -234,8 +236,9 @@ function parseStats(input: Input): SiteProject['stats'] {
 }
 
 /**
- * Creates (no id) or updates a workstation project from the C-panel: name,
- * admin URL, metrics endpoint and token, and website content. A blank
+ * Creates (no id) or updates a workstation project from the shared project
+ * editor (C-panel and CEO dashboard): name, admin URL, lead, colour, metrics
+ * endpoint and token, and website content. A blank
  * token keeps the saved one; clearApiToken removes it.
  */
 export async function saveProject(input: Input, id?: string): Promise<SiteProject> {
@@ -275,6 +278,9 @@ export async function saveProject(input: Input, id?: string): Promise<SiteProjec
   };
   if (!website.heroBgClass) delete website.heroBgClass;
   const adminUrl = url(input, 'adminUrl', { label: 'Admin URL' });
+  const lead = text(input, 'lead', { max: 80, label: 'Project lead' });
+  const color = text(input, 'color', { max: 9, label: 'Colour' }) || existing?.color || '#C89B3C';
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new SiteContentValidationError('Colour must look like #C89B3C.');
   const apiEndpoint = text(input, 'apiEndpoint', { max: 500, label: 'Metrics endpoint' });
   const apiToken = text(input, 'apiToken', { max: 2000, label: 'Bearer token' });
   const clearApiToken = input.clearApiToken === true && !apiToken;
@@ -286,19 +292,19 @@ export async function saveProject(input: Input, id?: string): Promise<SiteProjec
   try {
     if (existing) {
       await ProjectsService.updateProject(existing.id, {
-        name, adminUrl, website: { ...website }, apiEndpoint,
+        name, adminUrl, lead, color, website: { ...website }, apiEndpoint,
         ...(apiToken ? { apiToken } : {}), clearApiToken,
       });
-      return { ...website, id: existing.id, name, adminUrl, apiEndpoint, hasApiToken: !!apiToken || keepsToken };
+      return { ...website, id: existing.id, name, adminUrl, lead, color, apiEndpoint, hasApiToken: !!apiToken || keepsToken };
     }
     const card = await ProjectsService.createProject(
       {
-        name, subtitle: category, description: website.homeDescription, adminUrl, color: '#C89B3C',
+        name, subtitle: category, description: website.homeDescription, adminUrl, lead, color,
         website: { ...website }, apiEndpoint: apiEndpoint || undefined, apiToken: apiToken || undefined,
       },
       { requireMetrics: false },
     );
-    return { ...website, id: card.id, name, adminUrl, apiEndpoint, hasApiToken: !!apiToken };
+    return { ...website, id: card.id, name, adminUrl, lead, color, apiEndpoint, hasApiToken: !!apiToken };
   } catch (err) {
     if (err instanceof ProjectAlreadyExistsError) {
       throw new SiteContentValidationError('A project with this name already exists. Open it from the list instead.');
@@ -314,7 +320,7 @@ export async function setProjectPublished(id: string, published: boolean): Promi
   if (!record) throw new SiteContentNotFoundError('Project');
   const website: Record<string, unknown> = { ...toSiteProject(record), published };
   // These live on the record itself (or are derived), not in its website map.
-  for (const key of ['id', 'name', 'adminUrl', 'apiEndpoint', 'hasApiToken']) delete website[key];
+  for (const key of ['id', 'name', 'adminUrl', 'apiEndpoint', 'hasApiToken', 'lead', 'color']) delete website[key];
   await ProjectsService.updateProject(id, { website });
 }
 
