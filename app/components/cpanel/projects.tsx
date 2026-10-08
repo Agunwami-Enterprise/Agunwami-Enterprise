@@ -1,123 +1,79 @@
 'use client';
 
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
-import {
-  AddButton, Button, Card, ConfirmDelete, EmptyState, ErrorNote, IconButton, IconPicker, ImageField, Modal,
-  PageHeader, SaveButton, Select, TextArea, TextInput, cpanelFetch, useMutation,
-} from './ui';
-import type { SiteIconName, SiteProject } from '@/backend/modules/site-content/site-content.types';
+import Link from 'next/link';
+import { Activity, ExternalLink, Eye, EyeOff, LayoutDashboard, Pencil, Plus } from 'lucide-react';
+import { Button, Card, EmptyState, ErrorNote, IconButton, Modal, PageHeader, cpanelFetch, cx, useMutation } from './ui';
+import type { ProjectKind, SiteProject } from '@/backend/modules/site-content/site-content.types';
 
-const CATEGORIES = ['E-Commerce', 'Non-Profit', 'Retail', 'Corporate', 'Education', 'Healthcare', 'Finance', 'Logistics', 'Government', 'Other'];
-
-type Draft = {
-  name: string; category: string; subtitle: string; homeDescription: string; description: string;
-  challenges: string; solution: string; technologyStack: string; image: string; websiteUrl: string;
-  status: string; icon: SiteIconName; stats: string; deliverables: string;
-};
-
-function toDraft(project?: SiteProject): Draft {
-  return {
-    name: project?.name ?? '',
-    category: project?.category ?? '',
-    subtitle: project?.subtitle ?? '',
-    homeDescription: project?.homeDescription ?? '',
-    description: project?.description ?? '',
-    challenges: project?.challenges ?? '',
-    solution: project?.solution ?? '',
-    technologyStack: project?.technologyStack.join(', ') ?? '',
-    image: project?.image ?? '',
-    websiteUrl: project?.websiteUrl ?? '',
-    status: project?.status ?? 'ACTIVE',
-    icon: project?.icon ?? 'Briefcase',
-    stats: project?.stats.map(stat => `${stat.value} | ${stat.label}`).join('\n') ?? '',
-    deliverables: project?.deliverables.join('\n') ?? '',
-  };
-}
-
-function ProjectForm({ project, onClose }: { project?: SiteProject; onClose: () => void }) {
-  const [draft, setDraft] = useState(() => toDraft(project));
-  const { busy, error, run } = useMutation();
-  const set = <K extends keyof Draft>(key: K) => (value: Draft[K]) => setDraft(d => ({ ...d, [key]: value }));
-  const categories = draft.category && !CATEGORIES.includes(draft.category) ? [draft.category, ...CATEGORIES] : CATEGORIES;
-
-  async function save() {
-    const json = { ...draft, technologyStack: draft.technologyStack.split(',').map(t => t.trim()).filter(Boolean) };
-    const ok = await run(() => project
-      ? cpanelFetch(`/api/cpanel/projects/${project.id}`, { method: 'PATCH', json })
-      : cpanelFetch('/api/cpanel/projects', { method: 'POST', json }));
-    if (ok) onClose();
-  }
-
-  return (
-    <Modal open title={project ? 'Edit Project' : 'Add Project'} onClose={onClose}
-      footer={(
-        <>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <SaveButton busy={busy} onClick={save}>{project ? 'Save Changes' : 'Add Project'}</SaveButton>
-        </>
-      )}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextInput label="Title *" value={draft.name} onChange={set('name')} placeholder="Project Name" />
-        <Select label="Category *" value={draft.category} onChange={set('category')} options={categories} placeholder="Select category" />
-      </div>
-      <TextInput label="Tagline" value={draft.subtitle} onChange={set('subtitle')} placeholder="Short tagline..." />
-      <TextArea label="Overview" value={draft.description} onChange={set('description')} rows={3} />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextArea label="Challenge" value={draft.challenges} onChange={set('challenges')} />
-        <TextArea label="Solution" value={draft.solution} onChange={set('solution')} />
-      </div>
-      <TextInput label="Card description" hint="shown on project cards" value={draft.homeDescription} onChange={set('homeDescription')} />
-      <TextInput label="Technologies" hint="comma separated" value={draft.technologyStack} onChange={set('technologyStack')} placeholder="React, Node.js, Stripe" />
-      <ImageField label="Project image" value={draft.image} onChange={set('image')} />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextInput label="Live website URL" value={draft.websiteUrl} onChange={set('websiteUrl')} placeholder="https://..." />
-        <Select label="Status" value={draft.status} onChange={set('status')} options={['ACTIVE', 'IN DEVELOPMENT', 'COMPLETED']} />
-      </div>
-      <IconPicker value={draft.icon} onChange={set('icon')} />
-      <TextArea label="Key results" hint="one per line: value | label" value={draft.stats} onChange={set('stats')} rows={3}
-        placeholder={'15+ | Vendors onboarded at launch\n2× | Monthly growth'} />
-      <TextArea label="Deliverables" hint="one per line" value={draft.deliverables} onChange={set('deliverables')} rows={4} />
-      <ErrorNote message={error} />
-    </Modal>
-  );
-}
+const TABS: { key: 'all' | ProjectKind; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'client', label: 'Client projects' },
+  { key: 'ecosystem', label: 'Ecosystem platforms' },
+];
 
 export function ProjectsManager({ projects }: { projects: SiteProject[] }) {
-  const searchParams = useSearchParams();
-  const [editing, setEditing] = useState<SiteProject | 'new' | null>(searchParams.get('new') ? 'new' : null);
-  const [deleting, setDeleting] = useState<SiteProject | null>(null);
-  const del = useMutation();
+  const [tab, setTab] = useState<'all' | ProjectKind>('all');
+  const [hiding, setHiding] = useState<SiteProject | null>(null);
+  const visibility = useMutation();
+  const visible = tab === 'all' ? projects : projects.filter(p => p.kind === tab);
+  const count = (kind: ProjectKind) => projects.filter(p => p.kind === kind).length;
+
+  const setPublished = (project: SiteProject, published: boolean) =>
+    visibility.run(() => cpanelFetch('/api/ceo/projects', { method: 'PATCH', json: { id: project.id, websitePublished: published } }));
 
   return (
     <div className="mx-auto max-w-[1075px]">
-      <PageHeader title="Projects" subtitle={`${projects.length} client project${projects.length === 1 ? '' : 's'}`}
-        action={<AddButton onClick={() => setEditing('new')}>Add Project</AddButton>} />
+      <PageHeader title="Projects"
+        subtitle={`${count('client')} client project${count('client') === 1 ? '' : 's'} · ${count('ecosystem')} ecosystem platform${count('ecosystem') === 1 ? '' : 's'} · shared with the AE workstation`}
+        action={(
+          <Link href="/cpanel/projects/new" className="inline-flex items-center gap-2 rounded-lg bg-[#1F1F1F] px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-black">
+            <Plus className="h-4 w-4" aria-hidden="true" /> Add Project
+          </Link>
+        )} />
+      <div className="mb-5 flex flex-wrap gap-2" role="tablist">
+        {TABS.map(({ key, label }) => (
+          <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
+            className={cx('rounded-lg border px-4 py-2 text-[14px] font-semibold transition-colors',
+              tab === key ? 'border-[#C89B3C] bg-[#C89B3C] text-white' : 'border-[#E5E2D9] bg-white text-[#5A5A5A] hover:bg-[#F7F5EF]')}>
+            {label} <span className="ml-1 text-[12px] font-normal opacity-70">({key === 'all' ? projects.length : count(key)})</span>
+          </button>
+        ))}
+      </div>
+      <ErrorNote message={hiding ? '' : visibility.error} />
       <Card className="overflow-hidden">
-        {projects.length === 0 ? <EmptyState>No projects yet.</EmptyState> : (
+        {visible.length === 0 ? <EmptyState>No projects here yet.</EmptyState> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left">
+            <table className="w-full min-w-[820px] text-left">
               <thead className="bg-[#F7F5EF] text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6B6B6B]">
                 <tr><th className="px-7 py-4">Project</th><th className="px-4 py-4">Category</th><th className="px-4 py-4">Technologies</th><th className="px-4 py-4"><span className="sr-only">Actions</span></th></tr>
               </thead>
               <tbody className="divide-y divide-[#F0EEE8]">
-                {projects.map(project => (
-                  <tr key={project.id} className="hover:bg-[#FBFAF6]">
+                {visible.map(project => (
+                  <tr key={project.id} className={cx('hover:bg-[#FBFAF6]', !project.published && 'bg-[#FCFBF8]')}>
                     <td className="px-4 py-5">
                       <div className="flex items-center gap-3">
                         {project.image
                           // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={project.image} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" />
+                          ? <img src={project.image} alt="" className={cx('h-10 w-10 shrink-0 rounded-md object-cover', !project.published && 'opacity-50')} />
                           : <span className="h-10 w-10 shrink-0 rounded-md bg-[#F3F1EA]" />}
                         <div className="min-w-0">
-                          <p className="text-[15px] font-semibold text-[#1A1A1A]">{project.name}</p>
-                          <p className="line-clamp-2 max-w-[260px] text-[13px] text-[#9A9A9A]">{project.subtitle || project.homeDescription}</p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Link href={`/cpanel/projects/${project.id}`} className="text-[15px] font-semibold text-[#1A1A1A] hover:underline">{project.name}</Link>
+                            {project.kind === 'ecosystem' && <span className="rounded bg-purple-50 px-1.5 py-0.5 text-[11px] font-semibold text-purple-700">Ecosystem</span>}
+                            {!project.published && <span className="rounded bg-[#F3F1EA] px-1.5 py-0.5 text-[11px] font-semibold text-[#8A8A8A]">Hidden</span>}
+                            {project.apiEndpoint && project.hasApiToken && (
+                              <span title="Metrics connected" className="inline-flex items-center gap-1 rounded bg-green-50 px-1.5 py-0.5 text-[11px] font-semibold text-green-700">
+                                <Activity className="h-3 w-3" aria-hidden="true" /> Metrics
+                              </span>
+                            )}
+                          </div>
+                          <p className="line-clamp-2 max-w-[300px] text-[13px] text-[#9A9A9A]">{project.subtitle || project.homeDescription}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-5">
-                      <span className="rounded-md bg-[#FBF3E1] px-2 py-1 text-[13px] font-semibold text-[#C89B3C]">{project.category}</span>
+                      {project.category && <span className="rounded-md bg-[#FBF3E1] px-2 py-1 text-[13px] font-semibold text-[#C89B3C]">{project.category}</span>}
                     </td>
                     <td className="px-4 py-5">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -129,9 +85,13 @@ export function ProjectsManager({ projects }: { projects: SiteProject[] }) {
                     </td>
                     <td className="px-4 py-5">
                       <div className="flex justify-end gap-1">
-                        <IconButton label="View on website" href={`/projects/${project.slug}`}><ExternalLink className="h-4 w-4" /></IconButton>
-                        <IconButton label="Edit" onClick={() => setEditing(project)}><Pencil className="h-4 w-4" /></IconButton>
-                        <IconButton label="Delete" onClick={() => { del.setError(''); setDeleting(project); }}><Trash2 className="h-4 w-4" /></IconButton>
+                        {project.adminUrl && <IconButton label="Open admin" href={project.adminUrl}><LayoutDashboard className="h-4 w-4" /></IconButton>}
+                        {project.published && <IconButton label="View on website" href={`/projects/${project.slug}`}><ExternalLink className="h-4 w-4" /></IconButton>}
+                        <Link href={`/cpanel/projects/${project.id}`} aria-label={`Edit ${project.name}`} title="Edit"
+                          className="rounded-md p-1.5 text-[#8A8A8A] hover:bg-[#F3F1EA] hover:text-[#1A1A1A]"><Pencil className="h-4 w-4" /></Link>
+                        {project.published
+                          ? <IconButton label="Remove from website" onClick={() => { visibility.setError(''); setHiding(project); }}><EyeOff className="h-4 w-4" /></IconButton>
+                          : <IconButton label="Show on website" onClick={() => setPublished(project, true)}><Eye className="h-4 w-4" /></IconButton>}
                       </div>
                     </td>
                   </tr>
@@ -141,12 +101,20 @@ export function ProjectsManager({ projects }: { projects: SiteProject[] }) {
           </div>
         )}
       </Card>
-      {editing && <ProjectForm project={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
-      <ConfirmDelete open={!!deleting} kind="Project" name={deleting?.name ?? ''} effect="This will remove it from the public projects page."
-        busy={del.busy} error={del.error} onCancel={() => setDeleting(null)}
-        onConfirm={async () => {
-          if (deleting && await del.run(() => cpanelFetch(`/api/cpanel/projects/${deleting.id}`, { method: 'DELETE' }))) setDeleting(null);
-        }} />
+      <Modal open={!!hiding} title="Remove from website" onClose={() => setHiding(null)} width="max-w-[480px]"
+        footer={(
+          <>
+            <Button variant="outline" onClick={() => setHiding(null)}>Cancel</Button>
+            <Button variant="danger" busy={visibility.busy}
+              onClick={async () => { if (hiding && await setPublished(hiding, false)) setHiding(null); }}>
+              <EyeOff className="h-4 w-4" aria-hidden="true" /> Remove
+            </Button>
+          </>
+        )}>
+        <p className="text-[15px] text-[#3A3A3A]">Remove <strong>{hiding?.name}</strong> from the website?</p>
+        <p className="text-[14px] text-[#9A9A9A]">It disappears from the public projects pages but stays in the AE workstation with its metrics. You can show it again any time.</p>
+        <ErrorNote message={visibility.error} />
+      </Modal>
     </div>
   );
 }

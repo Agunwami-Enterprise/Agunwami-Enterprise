@@ -10,10 +10,10 @@ const ICONS: Record<SiteIconName, LucideIcon> = {
 };
 
 /**
- * Icon chosen in the C-panel. Sized by font size (1em), so text-[34px]
- * classes work like they did for react-icons.
+ * Icon chosen in the C-panel. Sized by font size (1em) unless `size` is
+ * given, so text-[34px] classes work like they did for react-icons.
  */
-export default function SiteIcon({ name, className }: { name: SiteIconName; className?: string }) {
+export default function SiteIcon({ name, className, size = '1em' }: { name: SiteIconName; className?: string; size?: number | string }) {
   const Icon = ICONS[name] ?? Briefcase;
-  return <Icon size="1em" className={className} aria-hidden="true" />;
+  return <Icon size={size} className={className} aria-hidden="true" />;
 }

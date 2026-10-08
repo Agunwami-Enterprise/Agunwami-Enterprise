@@ -288,10 +288,10 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
         <div className="min-w-0 space-y-4">
           <textarea value={meta.title} onChange={e => set('title')(e.target.value)} rows={1} placeholder="Article title"
             aria-label="Title" onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; }}
-            className="w-full resize-none overflow-hidden bg-transparent font-primary text-[34px] leading-tight text-[#1A1A1A] outline-none placeholder:text-[#C9C4B6]" />
+            className="field-sizing-content w-full resize-none overflow-hidden bg-transparent font-primary text-[34px] leading-tight text-[#1A1A1A] outline-none placeholder:text-[#C9C4B6]" />
           <textarea value={meta.excerpt} onChange={e => set('excerpt')(e.target.value)} rows={2} maxLength={400}
             placeholder="A one or two sentence summary for cards and search results…" aria-label="Excerpt"
-            className="w-full resize-none bg-transparent text-[16px] leading-relaxed text-[#6B6B6B] outline-none placeholder:text-[#C9C4B6]" />
+            className="field-sizing-content w-full resize-none bg-transparent text-[16px] leading-relaxed text-[#6B6B6B] outline-none placeholder:text-[#C9C4B6]" />
           <Card className="overflow-visible">
             {editor && (
               <>

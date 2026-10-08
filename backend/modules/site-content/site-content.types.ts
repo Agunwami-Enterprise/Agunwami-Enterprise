@@ -26,15 +26,27 @@ export interface SiteProjectTestimonial {
   rating: number;
 }
 
-/** A client project shown on /projects and /projects/[slug]. */
+export const PROJECT_KINDS = ['client', 'ecosystem'] as const;
+/** Client work for organizations, or one of AE's own ecosystem platforms. */
+export type ProjectKind = (typeof PROJECT_KINDS)[number];
+
+/**
+ * A project as the website shows it. Stored on the AE workstation's project
+ * record (`enterprise_projects`): `name` and `adminUrl` are the record's
+ * own fields, the rest lives in its `website` map.
+ */
 export interface SiteProject {
+  /** The workstation project id. */
   id: string;
   /** URL segment: /projects/<slug>. */
   slug: string;
   name: string;
+  kind: ProjectKind;
+  /** Hidden projects stay in the workstation but not on the website. */
+  published: boolean;
   category: string;
   icon: SiteIconName;
-  /** Tagline under the name in the C-panel and on the project hero. */
+  /** Tagline under the name on the project hero. */
   subtitle: string;
   /** Short line on project cards. */
   homeDescription: string;
@@ -44,21 +56,39 @@ export interface SiteProject {
   technologyStack: string[];
   image: string;
   status: string;
-  /** Live site of the project, if any. */
+  /** Live site of the project; shown on its public page. */
   websiteUrl: string;
+  /** The project's admin dashboard (workstation field); only shown in the C-panel. */
+  adminUrl: string;
+  /** Workstation metrics endpoint; only shown in the C-panel. */
+  apiEndpoint: string;
+  /** Whether a bearer token is saved. The token itself never leaves the server. */
+  hasApiToken: boolean;
   /** Tailwind background class for the detail hero (seeded projects only). */
   heroBgClass?: string;
   stats: SiteProjectStat[];
   deliverables: string[];
   testimonials: SiteProjectTestimonial[];
-  impact?: string;
+  impact: string;
+  /** Ecosystem platforms only: the Ecosystem page card. */
+  ecosystemSummary: string;
+  ecosystemDescription: string;
+  ecosystemFeatures: string[];
 }
 
-/** A leader shown in the About page team slider. */
+/** The part of a SiteProject kept in the workstation record's `website` map. */
+export type SiteProjectWebsite = Omit<SiteProject, 'id' | 'name' | 'adminUrl' | 'apiEndpoint' | 'hasApiToken'>;
+
+/** A team member. Members chosen with showOnWebsite appear on the About and home pages. */
 export interface SiteTeamMember {
   id: string;
   name: string;
   role: string;
+  /** Free text; the C-panel suggests the departments other members already have. */
+  department: string;
+  /** Each department has at most one lead. */
+  isLead: boolean;
+  showOnWebsite: boolean;
   bio: string;
   image: string;
   linkedin: string;
@@ -181,8 +211,8 @@ export interface SiteSettings {
   };
 }
 
+/** Collections stored by site-content.store (projects live in the workstation). */
 export interface SiteContentCollections {
-  projects: SiteProject;
   team: SiteTeamMember;
   articles: SiteArticle;
   partnershipCategories: SitePartnershipCategory;

@@ -7,7 +7,8 @@ import type { Metadata } from "next";
 import Section, {
   SectionWithHeading,
 } from "@/app/components/common/ui/Section";
-import { projects, whyEcosystem } from "@/lib/dummy";
+import { whyEcosystem } from "@/lib/dummy";
+import { getSiteProjects } from "@/lib/site/content";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { BiCheckCircle } from "react-icons/bi";
@@ -34,7 +35,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function EcosystemPage() {
+// Rendered per request from C-panel content (cached briefly in lib/site/content).
+export const dynamic = "force-dynamic";
+
+export default async function EcosystemPage() {
+  const projects = await getSiteProjects();
   return (
     <main className="flex flex-col items-center w-full">
       <Section className="relative flex flex-col justify-between min-h-[100dvh] bg-eco-hero dark:bg-eco-hero-dark bg-cover bg-center bg-no-repeat pt-28 md:pt-32 pb-8 md:pb-12 space-y-0">

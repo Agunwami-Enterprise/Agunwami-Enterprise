@@ -244,6 +244,41 @@ export function ImageField({ label, value, onChange, className }: {
   );
 }
 
+/** Chips with an input: Enter or comma adds, × or Backspace on empty removes. */
+export function TagInput({ label, hint, values, onChange, placeholder }: {
+  label: string; hint?: string; values: string[]; onChange: (values: string[]) => void; placeholder?: string;
+}) {
+  const [text, setText] = useState('');
+  const add = (raw = text) => {
+    const fresh = raw.split(',').map(v => v.trim()).filter(v => v && !values.includes(v));
+    if (fresh.length) onChange([...values, ...new Set(fresh)]);
+    setText('');
+  };
+  return (
+    <Field label={label} hint={hint}>
+      {id => (
+        <div className="flex min-h-[44px] flex-wrap items-center gap-1.5 rounded-lg border border-transparent bg-[#F5F3EE] px-2 py-1.5 focus-within:border-[#C89B3C] focus-within:bg-white">
+          {values.map(value => (
+            <span key={value} className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[13px] text-[#3A3A3A] shadow-sm">
+              {value}
+              <button type="button" aria-label={`Remove ${value}`} onClick={() => onChange(values.filter(v => v !== value))}
+                className="text-[#9A9A9A] hover:text-[#1A1A1A]"><X className="h-3.5 w-3.5" /></button>
+            </span>
+          ))}
+          <input id={id} value={text} placeholder={values.length ? '' : placeholder}
+            onChange={e => (e.target.value.includes(',') ? add(e.target.value) : setText(e.target.value))}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); add(); }
+              if (e.key === 'Backspace' && !text && values.length) onChange(values.slice(0, -1));
+            }}
+            onBlur={() => add()}
+            className="min-w-[140px] flex-1 bg-transparent px-1.5 py-1 text-[14px] outline-none placeholder:text-[#A3A3A3]" />
+        </div>
+      )}
+    </Field>
+  );
+}
+
 export function IconPicker({ value, onChange }: { value: SiteIconName; onChange: (value: SiteIconName) => void }) {
   return (
     <div className="space-y-1.5">

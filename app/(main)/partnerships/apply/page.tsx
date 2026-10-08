@@ -976,6 +976,10 @@ export default function PartnershipApplyPage() {
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState<FormData>(INITIAL);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  // Hidden from people; bots that fill it are ignored by the server.
+  const [honeypot, setHoneypot] = useState("");
 
   const setField = (key: keyof FormData, value: string | string[]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -983,9 +987,34 @@ export default function PartnershipApplyPage() {
   const setStrField = (key: keyof FormData, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  const submit = async () => {
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const res = await fetch("/api/site/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, company: honeypot }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = (body as { error?: string }).error || "We could not send your application. Please try again.";
+        setSubmitError(message);
+        // Contact details are on the first step.
+        if (res.status === 400 && /name|email/i.test(message)) setStep(1);
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setSubmitError("We could not reach the server. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleNext = () => {
     if (step < STEPS.length) setStep((s) => s + 1);
-    else setSubmitted(true);
+    else void submit();
   };
 
   const handleBack = () => {
@@ -1162,6 +1191,7 @@ export default function PartnershipApplyPage() {
                     <button
                       type="button"
                       onClick={handleNext}
+                      disabled={submitting}
                       className={cn(
                         "inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-[14px] transition-all cursor-pointer shadow-sm",
                         step === STEPS.length
@@ -1169,12 +1199,28 @@ export default function PartnershipApplyPage() {
                           : "bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-primary hover:text-white dark:hover:bg-primary dark:hover:text-white",
                       )}
                     >
-                      {step < STEPS.length ? "Continue" : "Submit Application"}
+                      {step < STEPS.length ? "Continue" : submitting ? "Sending…" : "Submit Application"}
                       <RiArrowRightLine />
                     </button>
                   </div>
                 </div>
               </div>
+
+              {submitError && (
+                <p role="alert" className="mt-4 rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-3 text-center text-[14px] text-red-700 dark:text-red-300">
+                  {submitError}
+                </p>
+              )}
+              <input
+                type="text"
+                name="company"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="absolute -left-[9999px] h-0 w-0 opacity-0"
+              />
 
               {/* Security note */}
               <p className="mt-4 text-center text-[12px] text-gray-400 flex items-center justify-center gap-1.5">

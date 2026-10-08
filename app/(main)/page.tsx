@@ -11,8 +11,8 @@ import Section, { SectionWithHeading } from "../components/common/ui/Section";
 import CTA from "../components/common/CTA";
 import HeroMetrics from "../components/main/HeroMetrics";
 import TeamSection from "../components/main/TeamSection";
+import { getSiteProjects, getSiteTeam } from "@/lib/site/content";
 import {
-  projects,
   whatYouGain,
   whatWeDo,
   ourServices,
@@ -79,7 +79,11 @@ const homeSchema = {
   ],
 };
 
-export default function MainPage() {
+// Rendered per request from C-panel content (cached briefly in lib/site/content).
+export const dynamic = "force-dynamic";
+
+export default async function MainPage() {
+  const [projects, team] = await Promise.all([getSiteProjects(), getSiteTeam()]);
   return (
     <main className="flex flex-col items-center w-full">
       <script
@@ -211,7 +215,7 @@ export default function MainPage() {
       </Section>
 
       {/* ── The Team Behind AE ── */}
-      <TeamSection />
+      <TeamSection members={team} />
 
       {/* ── What We Do ── */}
       <Section className="bg-primary/10 dark:bg-primary/5">

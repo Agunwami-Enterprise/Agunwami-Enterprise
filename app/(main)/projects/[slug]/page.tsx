@@ -6,7 +6,7 @@ import ScrollReveal from "@/app/components/common/ScrollReveal";
 import HeroScrollIndicator from "@/app/components/common/HeroScrollIndicator";
 import Section from "@/app/components/common/ui/Section";
 import { cn } from "@/lib/utils";
-import { getProjectBySlug, projects } from "@/lib/dummy";
+import { getSiteProjectBySlug, getSiteProjects } from "@/lib/site/content";
 import {
   RiStarFill,
   RiArrowRightLine,
@@ -57,7 +57,7 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const project = getProjectBySlug(slug);
+  const project = (await getSiteProjectBySlug(slug))?.project;
   if (!project) return {};
 
   const custom = PROJECT_META[slug];
@@ -88,25 +88,27 @@ export async function generateMetadata({
   };
 }
 
-export function generateStaticParams() {
-  return projects
-    .filter((p) => p.link && p.link.startsWith("/projects/"))
-    .map((p) => ({
-      slug: p.link.replace(/^\/projects\//, ""),
-    }));
-}
+// Rendered per request from C-panel content (cached briefly in lib/site/content).
+export const dynamic = "force-dynamic";
+
 
 export default async function ProjectSinglePage({ params }: PageProps) {
   const { slug } = await params;
-  const project = getProjectBySlug(slug);
+  const found = await getSiteProjectBySlug(slug);
 
-  if (!project) {
+  if (!found) {
     notFound();
   }
+  const { project, websiteUrl } = found;
 
   const subtitle = project.subtitle || project.homeDescription;
+  // Projects added in the C-panel use their own image behind the hero.
+  const heroImageStyle =
+    !project.heroBgClass && project.image
+      ? { backgroundImage: `linear-gradient(rgba(10,10,10,0.78), rgba(10,10,10,0.88)), url("${project.image}")` }
+      : undefined;
   const heroBgClass =
-    project.heroBgClass || "bg-project-hero dark:bg-project-hero-dark";
+    project.heroBgClass || (heroImageStyle ? "" : "bg-project-hero dark:bg-project-hero-dark");
   const stats = project.stats || [];
   const technologies = project.technologyStack || [];
   const deliverables = project.deliverables || project.key || [];
@@ -149,6 +151,7 @@ export default async function ProjectSinglePage({ params }: PageProps) {
           "relative flex flex-col justify-between min-h-[540px] sm:min-h-[600px] md:min-h-[680px] lg:min-h-[760px] bg-cover bg-[position:center_top] md:bg-[position:center_20%] bg-no-repeat pt-28 md:pt-36 pb-8 md:pb-12 space-y-0",
           heroBgClass,
         )}
+        style={heroImageStyle}
       >
         {/* Subtle circuit pattern overlay */}
         <div className="absolute right-[50%] top-0 h-full overflow-hidden w-full md:flex hidden justify-start items-start opacity-30 pointer-events-none">
@@ -199,6 +202,19 @@ export default async function ProjectSinglePage({ params }: PageProps) {
               {subtitle}
             </p>
           </ScrollReveal>
+
+          {websiteUrl && (
+            <ScrollReveal direction="up" delay={260}>
+              <a
+                href={websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-fit items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-5 py-2.5 text-[15px] font-semibold text-white backdrop-blur transition-colors hover:bg-white hover:text-black"
+              >
+                Visit live site &rarr;
+              </a>
+            </ScrollReveal>
+          )}
         </div>
 
         {/* Explore Scroll indicator */}

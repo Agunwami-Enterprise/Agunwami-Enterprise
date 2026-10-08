@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ARTICLES } from "../insightsData";
+import { sanitizeArticleHtml } from "@/backend/modules/site-content";
+import { formatArticleDate, getPublishedArticles, outlineArticle } from "@/lib/site/content";
 import ShareButtons from "@/app/components/insights/ShareButtons";
 import NewsletterCard from "@/app/components/common/NewsletterCard";
 import {
@@ -13,10 +14,9 @@ import {
   RiSparklingLine,
 } from "react-icons/ri";
 
-/* ── Static params for SSG ── */
-export function generateStaticParams() {
-  return ARTICLES.map((a) => ({ slug: a.slug }));
-}
+// Rendered per request from C-panel content (cached briefly in lib/site/content).
+export const dynamic = "force-dynamic";
+
 
 /* ── Per-page SEO metadata ── */
 export async function generateMetadata({
@@ -25,7 +25,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const article = ARTICLES.find((a) => a.slug === slug);
+  const article = (await getPublishedArticles()).find((a) => a.slug === slug);
   if (!article) return {};
   const canonicalUrl = `/insights/${slug}`;
   const fullUrl = `https://agunwamienterprise.com${canonicalUrl}`;
@@ -72,11 +72,19 @@ export default async function BlogDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const article = ARTICLES.find((a) => a.slug === slug);
+  const articles = await getPublishedArticles();
+  const article = articles.find((a) => a.slug === slug);
   if (!article) notFound();
 
   /* Other articles for "Continue Reading" — excluding the current one */
-  const related = ARTICLES.filter((a) => a.slug !== slug).slice(0, 3);
+  const related = articles
+    .filter((a) => a.slug !== slug)
+    .slice(0, 3)
+    .map((a) => ({ ...a, date: formatArticleDate(a.date) }));
+  const displayDate = formatArticleDate(article.date);
+  const heroImage = article.heroImage || article.image;
+  // Sanitized again here in case stored content was edited outside the C-panel.
+  const { html: bodyHtml, headings } = outlineArticle(sanitizeArticleHtml(article.body));
 
   const articleSchema = {
     "@context": "https://schema.org",
@@ -109,7 +117,7 @@ export default async function BlogDetailPage({
         headline: article.title,
         description: article.excerpt,
         image: article.image
-          ? `https://agunwamienterprise.com${article.image}`
+          ? new URL(article.image, "https://agunwamienterprise.com").toString()
           : undefined,
         datePublished: article.date,
         author: {
@@ -144,7 +152,7 @@ export default async function BlogDetailPage({
         {/* Background image with dark gradient overlay */}
         <div className="absolute inset-0">
           <Image
-            src={article.image}
+            src={heroImage}
             alt={article.title}
             fill
             priority
@@ -207,7 +215,7 @@ export default async function BlogDetailPage({
             <div className="flex items-center gap-4 text-xs text-gray-400">
               <span className="flex items-center gap-1.5">
                 <RiCalendarLine className="text-primary" />
-                {article.date}
+                {displayDate}
               </span>
               <span className="flex items-center gap-1.5">
                 <RiTimeLine className="text-primary" />
@@ -232,41 +240,20 @@ export default async function BlogDetailPage({
               Back to all articles
             </Link>
 
-            {/* Intro paragraph */}
-            <p className="text-[17px] md:text-[18px] leading-[1.85] text-gray-700 dark:text-gray-200 font-medium mb-10">
-              {article.intro}
-            </p>
-
-            {/* Divider */}
-            <div className="w-full h-px bg-gray-200 dark:bg-white/10 mb-10" />
-
-            {/* Sections */}
-            <div className="space-y-10">
-              {article.sections.map((section, i) => (
-                <div key={i} id={`section-${i}`} className="scroll-mt-24">
-                  <h2 className="text-[20px] md:text-[22px] font-primary font-semibold text-gray-900 dark:text-white mb-4 leading-snug">
-                    {section.heading}
-                  </h2>
-                  <div className="space-y-4">
-                    {section.body.map((paragraph, j) => (
-                      <p
-                        key={j}
-                        className="text-[15.5px] md:text-[16px] leading-[1.85] text-gray-600 dark:text-gray-300"
-                      >
-                        {paragraph}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Article body (HTML from the C-panel editor) */}
+            <div
+              className="article-content text-[15.5px] md:text-[16px]"
+              dangerouslySetInnerHTML={{ __html: bodyHtml }}
+            />
 
             {/* Pull Quote */}
-            <blockquote className="my-12 pl-6 border-l-4 border-primary py-2">
-              <p className="text-[18px] md:text-[20px] font-primary font-normal italic text-gray-800 dark:text-gray-100 leading-relaxed">
-                &ldquo;{article.pullQuote}&rdquo;
-              </p>
-            </blockquote>
+            {article.pullQuote && (
+              <blockquote className="my-12 pl-6 border-l-4 border-primary py-2">
+                <p className="text-[18px] md:text-[20px] font-primary font-normal italic text-gray-800 dark:text-gray-100 leading-relaxed">
+                  &ldquo;{article.pullQuote}&rdquo;
+                </p>
+              </blockquote>
+            )}
 
             {/* What This Looks Like in Practice */}
             <div className="rounded-2xl bg-[#FBF7EE] dark:bg-[#161410] border border-[#E8DCC2] dark:border-primary/20 p-7 md:p-9 my-4">
@@ -318,7 +305,7 @@ export default async function BlogDetailPage({
                   <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
                     <div className="flex items-center justify-between">
                       <span>Published</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{article.date}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{displayDate}</span>
                     </div>
                     <div className="h-px bg-gray-100 dark:bg-white/5" />
                     <div className="flex items-center justify-between">
@@ -339,27 +326,29 @@ export default async function BlogDetailPage({
               </div>
 
               {/* Table of Contents */}
-              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#141414] overflow-hidden shadow-sm">
-                <div className="p-6 space-y-3">
-                  <h3 className="text-xs font-semibold tracking-widest uppercase text-gray-400">
-                    Contents
-                  </h3>
-                  <nav className="space-y-1.5">
-                    {article.sections.map((section, i) => (
-                      <a
-                        key={i}
-                        href={`#section-${i}`}
-                        className="flex items-start gap-2 text-[13px] text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors leading-snug group"
-                      >
-                        <span className="mt-0.5 text-[10px] font-bold text-primary opacity-60 flex-shrink-0 group-hover:opacity-100 transition-opacity">
-                          {String(i + 1).padStart(2, "0")}
-                        </span>
-                        <span>{section.heading}</span>
-                      </a>
-                    ))}
-                  </nav>
+              {headings.length > 0 && (
+                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#141414] overflow-hidden shadow-sm">
+                  <div className="p-6 space-y-3">
+                    <h3 className="text-xs font-semibold tracking-widest uppercase text-gray-400">
+                      Contents
+                    </h3>
+                    <nav className="space-y-1.5">
+                      {headings.map((heading, i) => (
+                        <a
+                          key={heading.id}
+                          href={`#${heading.id}`}
+                          className="flex items-start gap-2 text-[13px] text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors leading-snug group"
+                        >
+                          <span className="mt-0.5 text-[10px] font-bold text-primary opacity-60 flex-shrink-0 group-hover:opacity-100 transition-opacity">
+                            {String(i + 1).padStart(2, "0")}
+                          </span>
+                          <span>{heading.text}</span>
+                        </a>
+                      ))}
+                    </nav>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Share */}
               <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#141414] overflow-hidden shadow-sm">

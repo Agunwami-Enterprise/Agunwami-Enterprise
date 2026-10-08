@@ -6,6 +6,7 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { requireContentSession } from './api-auth';
+import { clearPublicContentCache } from '@/lib/site/content-cache';
 import { SiteContentNotFoundError, SiteContentValidationError } from '@/backend/modules/site-content';
 
 export type IdParams = { params: Promise<{ id: string }> };
@@ -29,8 +30,11 @@ export async function runContentAction<T>(
 ): Promise<NextResponse> {
   try {
     const result = await action();
-    // Public pages are prerendered; refresh them so edits show right away.
-    if (mutates) revalidatePath('/', 'layout');
+    // Show edits on the public site right away.
+    if (mutates) {
+      clearPublicContentCache();
+      revalidatePath('/', 'layout');
+    }
     return NextResponse.json(result ?? { success: true }, { status });
   } catch (err) {
     if (err instanceof SiteContentValidationError) {

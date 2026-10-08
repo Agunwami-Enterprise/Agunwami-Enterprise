@@ -203,9 +203,12 @@ export interface CreateProjectDto {
   description?: string;
   lead?: string;
   adminUrl?: string;
-  apiEndpoint: string;
-  apiToken: string;
+  /** Required from the CEO dashboard; optional for projects created in the website C-panel. */
+  apiEndpoint?: string;
+  apiToken?: string;
   color?: string;
+  /** Public website content, edited in the C-panel (see backend/modules/site-content). */
+  website?: Record<string, unknown>;
 }
 
 export interface UpdateProjectDto {
@@ -218,4 +221,5 @@ export interface UpdateProjectDto {
   apiToken?: string;
   clearApiToken?: boolean;
   color?: string;
+  website?: Record<string, unknown>;
 }

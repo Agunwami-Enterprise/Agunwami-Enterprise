@@ -4,13 +4,15 @@ export default function Section({
   children,
   className,
   id,
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
   id?: string;
+  style?: React.CSSProperties;
 }) {
   return (
-    <section id={id} className={cn("space-y-10 3xl:space-y-16 4xl:space-y-24 px-4 md:px-20 3xl:px-32 4xl:px-48 w-full py-20 3xl:py-32 4xl:py-48", className)}>
+    <section id={id} style={style} className={cn("space-y-10 3xl:space-y-16 4xl:space-y-24 px-4 md:px-20 3xl:px-32 4xl:px-48 w-full py-20 3xl:py-32 4xl:py-48", className)}>
       {children}
     </section>
   );

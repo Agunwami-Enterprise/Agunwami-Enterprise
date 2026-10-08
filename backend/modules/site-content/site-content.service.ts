@@ -10,15 +10,23 @@ import sanitizeHtml from 'sanitize-html';
 import {
   defaultArticles,
   defaultPartnershipCategories,
-  defaultProjects,
+  portfolioProjects,
   defaultSettings,
   defaultTeamMembers,
   slugify,
 } from './site-content.defaults';
 import { readCollection, readSettings, updateCollection, writeSettings } from './site-content.store';
 import {
+  ProjectAlreadyExistsError,
+  ProjectValidationError,
+  ProjectsService,
+  listProjectRecords,
+  type ProjectRecord,
+} from '../projects/projects.service';
+import {
   APPLICATION_STATUSES,
   ARTICLE_CATEGORIES,
+  PROJECT_KINDS,
   SITE_ICON_NAMES,
   type ApplicationStatus,
   type PartnershipApplication,
@@ -26,7 +34,9 @@ import {
   type SiteArticleCategory,
   type SiteIconName,
   type SitePartnershipCategory,
+  type ProjectKind,
   type SiteProject,
+  type SiteProjectWebsite,
   type SiteSettings,
   type SiteTeamMember,
 } from './site-content.types';
@@ -114,86 +124,261 @@ export function sanitizeArticleHtml(html: string): string {
   return sanitizeHtml(html, ARTICLE_HTML);
 }
 
-// ── Projects ────────────────────────────────────────────────────────────────
+// ── Projects (stored in the AE workstation's enterprise_projects) ──────────
 
-export async function listProjects(): Promise<SiteProject[]> {
-  return (await readCollection('projects')) ?? defaultProjects();
+const squash = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+const asText = (value: unknown) => (typeof value === 'string' ? value : '');
+const asList = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
+
+/** A workstation record as a website project; records never edited in the C-panel are hidden. */
+function toSiteProject(record: ProjectRecord): SiteProject {
+  const id = (record._id || record.id) as string;
+  const web = (record.website && typeof record.website === 'object' ? record.website : {}) as Partial<SiteProjectWebsite>;
+  const name = asText(record.name) || 'Untitled Project';
+  return {
+    id,
+    name,
+    adminUrl: asText(record.adminUrl),
+    apiEndpoint: asText(record.apiEndpoint),
+    hasApiToken: typeof record.apiTokenEncrypted === 'string' && record.apiTokenEncrypted.length > 0,
+    slug: web.slug || slugify(name) || id,
+    kind: PROJECT_KINDS.includes(web.kind as ProjectKind) ? web.kind as ProjectKind : 'client',
+    published: web.published === true,
+    category: web.category || asText(record.subtitle),
+    icon: SITE_ICON_NAMES.includes(web.icon as SiteIconName) ? web.icon as SiteIconName : 'Briefcase',
+    subtitle: asText(web.subtitle),
+    homeDescription: web.homeDescription ?? asText(record.description),
+    description: web.description ?? asText(record.description),
+    challenges: asText(web.challenges),
+    solution: asText(web.solution),
+    technologyStack: asList(web.technologyStack),
+    image: asText(web.image),
+    status: web.status || 'ACTIVE',
+    websiteUrl: asText(web.websiteUrl),
+    heroBgClass: web.heroBgClass || undefined,
+    stats: Array.isArray(web.stats) ? web.stats : [],
+    deliverables: asList(web.deliverables),
+    testimonials: Array.isArray(web.testimonials) ? web.testimonials : [],
+    impact: asText(web.impact),
+    ecosystemSummary: asText(web.ecosystemSummary),
+    ecosystemDescription: asText(web.ecosystemDescription),
+    ecosystemFeatures: asList(web.ecosystemFeatures),
+  };
 }
 
-export async function getProjectBySlug(slug: string): Promise<SiteProject | null> {
-  const clean = slug.toLowerCase();
-  return (await listProjects()).find(project => project.slug === clean || project.id === clean) ?? null;
+let seeding: Promise<void> | null = null;
+
+/**
+ * Copies the projects that used to be hard-coded on the portfolio into the
+ * workstation's project collection. Runs only while no workstation project
+ * has website content, so it happens once. A workstation project with the
+ * same name gets the content instead of a duplicate. Skipped while building
+ * in CI, which has no access to the store.
+ */
+function ensurePortfolioSeeded(): Promise<void> {
+  // `next build` sets NEXT_PHASE in its main process and NEXT_IS_EXPORT_WORKER
+  // in the workers that render pages. A build must never write: the deploy
+  // uploads data/ and would overwrite the server's project file.
+  if (process.env.NEXT_PHASE === 'phase-production-build' || process.env.NEXT_IS_EXPORT_WORKER === 'true') {
+    return Promise.resolve();
+  }
+  seeding ??= (async () => {
+    const records = await listProjectRecords();
+    if (records.some(record => record.website)) return;
+    for (const { name, website } of portfolioProjects()) {
+      const key = squash(name);
+      const match = records.find(record => {
+        const other = squash(asText(record.name));
+        return other && (other === key || other.startsWith(key) || key.startsWith(other));
+      });
+      if (match) {
+        await ProjectsService.updateProject((match._id || match.id) as string, { website: { ...website } });
+      } else {
+        await ProjectsService.createProject(
+          { name, subtitle: website.category, description: website.homeDescription, color: '#C89B3C', website: { ...website } },
+          { requireMetrics: false },
+        ).catch(err => { if (!(err instanceof ProjectAlreadyExistsError)) throw err; });
+      }
+    }
+  })().finally(() => { seeding = null; });
+  return seeding;
 }
 
+/** Workstation projects as website projects; publishedOnly for the public site. */
+export async function listProjects({ publishedOnly = false } = {}): Promise<SiteProject[]> {
+  await ensurePortfolioSeeded();
+  const projects = (await listProjectRecords()).map(toSiteProject);
+  return publishedOnly ? projects.filter(project => project.published) : projects;
+}
+
+export async function getProjectBySlug(slugOrId: string, { publishedOnly = false } = {}): Promise<SiteProject | null> {
+  const clean = slugOrId.toLowerCase();
+  return (await listProjects({ publishedOnly })).find(project => project.slug === clean || project.id === slugOrId) ?? null;
+}
+
+/** Key results as [{ value, label }], or lines of "value | label". */
 function parseStats(input: Input): SiteProject['stats'] {
-  return list(input, 'stats', { max: 6 }).map(line => {
-    const [value, ...label] = line.split('|');
-    return { value: value.trim(), label: label.join('|').trim() };
-  }).filter(stat => stat.value && stat.label);
+  const raw = input.stats;
+  const stats = Array.isArray(raw) && raw.some(item => typeof item === 'object' && item)
+    ? raw.map(item => ({
+      value: text(item as Input, 'value', { max: 20, label: 'Result value' }),
+      label: text(item as Input, 'label', { max: 80, label: 'Result label' }),
+    }))
+    : list(input, 'stats', { max: 6 }).map(line => {
+      const [value, ...label] = line.split('|');
+      return { value: value.trim(), label: label.join('|').trim() };
+    });
+  const filled = stats.filter(stat => stat.value && stat.label);
+  if (filled.length > 6) throw new SiteContentValidationError('Add at most 6 key results.');
+  return filled;
 }
 
+/**
+ * Creates (no id) or updates a workstation project from the C-panel: name,
+ * admin URL, metrics endpoint and token, and website content. A blank
+ * token keeps the saved one; clearApiToken removes it.
+ */
 export async function saveProject(input: Input, id?: string): Promise<SiteProject> {
   const name = text(input, 'name', { required: true, max: 120, label: 'Title' });
   const category = text(input, 'category', { required: true, max: 60, label: 'Category' });
-  let saved: SiteProject | undefined;
-  await updateCollection('projects', defaultProjects, projects => {
-    const existing = id ? projects.find(project => project.id === id) : undefined;
-    if (id && !existing) throw new SiteContentNotFoundError('Project');
-    const slug = existing?.slug ?? uniqueSlug(name, projects.map(p => p.slug), 'project');
-    saved = {
-      ...(existing ?? { testimonials: [], heroBgClass: undefined, impact: undefined }),
-      id: existing?.id ?? slug,
-      slug,
-      name,
-      category,
-      icon: icon(input, 'icon', existing?.icon ?? 'Briefcase'),
-      subtitle: text(input, 'subtitle', { max: 200, label: 'Tagline' }),
-      homeDescription: text(input, 'homeDescription', { max: 300, label: 'Card description' }),
-      description: text(input, 'description', { max: 4000, label: 'Overview' }),
-      challenges: text(input, 'challenges', { max: 4000, label: 'Challenge' }),
-      solution: text(input, 'solution', { max: 4000, label: 'Solution' }),
-      technologyStack: list(input, 'technologyStack', { max: 20, itemMax: 40 }),
-      image: url(input, 'image', { label: 'Image URL' }),
-      status: text(input, 'status', { max: 40 }) || 'ACTIVE',
-      websiteUrl: url(input, 'websiteUrl', { label: 'Website URL' }),
-      stats: input.stats === undefined ? existing?.stats ?? [] : parseStats(input),
-      deliverables: input.deliverables === undefined ? existing?.deliverables ?? [] : list(input, 'deliverables'),
-    } as SiteProject;
-    return existing
-      ? projects.map(project => (project.id === existing.id ? saved! : project))
-      : [...projects, saved];
-  });
-  return saved!;
+  const kind = input.kind as ProjectKind;
+  if (!PROJECT_KINDS.includes(kind)) throw new SiteContentValidationError('Choose whether this is client work or an ecosystem platform.');
+
+  const all = await listProjects();
+  const existing = id ? all.find(project => project.id === id) : undefined;
+  if (id && !existing) throw new SiteContentNotFoundError('Project');
+  const slug = existing?.slug ?? uniqueSlug(name, all.map(p => p.slug), 'project');
+
+  const website: SiteProjectWebsite = {
+    slug,
+    kind,
+    published: input.published === true,
+    category,
+    icon: icon(input, 'icon', existing?.icon ?? 'Briefcase'),
+    subtitle: text(input, 'subtitle', { max: 200, label: 'Tagline' }),
+    homeDescription: text(input, 'homeDescription', { max: 300, label: 'Card description' }),
+    description: text(input, 'description', { max: 4000, label: 'Overview' }),
+    challenges: text(input, 'challenges', { max: 4000, label: 'Challenge' }),
+    solution: text(input, 'solution', { max: 4000, label: 'Solution' }),
+    technologyStack: list(input, 'technologyStack', { max: 20, itemMax: 40 }),
+    image: url(input, 'image', { label: 'Image URL' }),
+    status: text(input, 'status', { max: 40 }) || 'ACTIVE',
+    websiteUrl: url(input, 'websiteUrl', { label: 'Live URL' }),
+    heroBgClass: existing?.heroBgClass,
+    stats: input.stats === undefined ? existing?.stats ?? [] : parseStats(input),
+    deliverables: input.deliverables === undefined ? existing?.deliverables ?? [] : list(input, 'deliverables'),
+    testimonials: existing?.testimonials ?? [],
+    impact: text(input, 'impact', { max: 600, label: 'Impact' }),
+    ecosystemSummary: text(input, 'ecosystemSummary', { max: 160, label: 'Ecosystem summary' }),
+    ecosystemDescription: text(input, 'ecosystemDescription', { max: 1000, label: 'Ecosystem description' }),
+    ecosystemFeatures: list(input, 'ecosystemFeatures', { max: 12, itemMax: 120 }),
+  };
+  if (!website.heroBgClass) delete website.heroBgClass;
+  const adminUrl = url(input, 'adminUrl', { label: 'Admin URL' });
+  const apiEndpoint = text(input, 'apiEndpoint', { max: 500, label: 'Metrics endpoint' });
+  const apiToken = text(input, 'apiToken', { max: 2000, label: 'Bearer token' });
+  const clearApiToken = input.clearApiToken === true && !apiToken;
+  const keepsToken = !!existing?.hasApiToken && !clearApiToken;
+  if (apiEndpoint && !apiToken && !keepsToken) {
+    throw new SiteContentValidationError('Add the bearer token for the metrics endpoint.');
+  }
+
+  try {
+    if (existing) {
+      await ProjectsService.updateProject(existing.id, {
+        name, adminUrl, website: { ...website }, apiEndpoint,
+        ...(apiToken ? { apiToken } : {}), clearApiToken,
+      });
+      return { ...website, id: existing.id, name, adminUrl, apiEndpoint, hasApiToken: !!apiToken || keepsToken };
+    }
+    const card = await ProjectsService.createProject(
+      {
+        name, subtitle: category, description: website.homeDescription, adminUrl, color: '#C89B3C',
+        website: { ...website }, apiEndpoint: apiEndpoint || undefined, apiToken: apiToken || undefined,
+      },
+      { requireMetrics: false },
+    );
+    return { ...website, id: card.id, name, adminUrl, apiEndpoint, hasApiToken: !!apiToken };
+  } catch (err) {
+    if (err instanceof ProjectAlreadyExistsError) {
+      throw new SiteContentValidationError('A project with this name already exists. Open it from the list instead.');
+    }
+    if (err instanceof ProjectValidationError) throw new SiteContentValidationError(err.message);
+    throw err;
+  }
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  await updateCollection('projects', defaultProjects, projects => {
-    if (!projects.some(project => project.id === id)) throw new SiteContentNotFoundError('Project');
-    return projects.filter(project => project.id !== id);
-  });
+/** Shows or hides a project on the website; it stays in the workstation either way. */
+export async function setProjectPublished(id: string, published: boolean): Promise<void> {
+  const record = (await listProjectRecords()).find(r => (r._id || r.id) === id);
+  if (!record) throw new SiteContentNotFoundError('Project');
+  const website: Record<string, unknown> = { ...toSiteProject(record), published };
+  // These live on the record itself (or are derived), not in its website map.
+  for (const key of ['id', 'name', 'adminUrl', 'apiEndpoint', 'hasApiToken']) delete website[key];
+  await ProjectsService.updateProject(id, { website });
 }
 
 // ── Team ────────────────────────────────────────────────────────────────────
 
-export async function listTeam(): Promise<SiteTeamMember[]> {
-  return (await readCollection('team')) ?? defaultTeamMembers();
+/** Members saved before these fields existed were all leads and all shown. */
+function withTeamDefaults(member: SiteTeamMember): SiteTeamMember {
+  return {
+    ...member,
+    department: member.department ?? '',
+    isLead: member.isLead ?? true,
+    showOnWebsite: member.showOnWebsite ?? true,
+  };
 }
 
+export async function listTeam(): Promise<SiteTeamMember[]> {
+  return ((await readCollection('team')) ?? defaultTeamMembers()).map(withTeamDefaults);
+}
+
+/** The members chosen to appear on the website. */
+export async function listDisplayedTeam(): Promise<SiteTeamMember[]> {
+  return (await listTeam()).filter(member => member.showOnWebsite);
+}
+
+/**
+ * Saves a member. Marking someone lead of a department replaces that
+ * department's previous lead, who stays on the team.
+ */
 export async function saveTeamMember(input: Input, id?: string): Promise<SiteTeamMember> {
+  const department = text(input, 'department', { required: true, max: 60, label: 'Department' });
   const member = {
     name: text(input, 'name', { required: true, max: 80, label: 'Full name' }),
     role: text(input, 'role', { required: true, max: 80, label: 'Role / title' }),
+    department,
+    isLead: input.isLead === true,
+    showOnWebsite: input.showOnWebsite === true,
     bio: text(input, 'bio', { max: 600, label: 'Bio' }),
     image: url(input, 'image', { label: 'Photo URL' }),
     linkedin: url(input, 'linkedin', { label: 'LinkedIn URL' }),
   };
   let saved: SiteTeamMember | undefined;
-  await updateCollection('team', defaultTeamMembers, team => {
+  await updateCollection('team', defaultTeamMembers, stored => {
+    const team = stored.map(withTeamDefaults);
     if (id && !team.some(m => m.id === id)) throw new SiteContentNotFoundError('Team member');
     saved = { id: id ?? randomUUID(), ...member };
-    return id ? team.map(m => (m.id === id ? saved! : m)) : [...team, saved];
+    const next = id ? team.map(m => (m.id === id ? saved! : m)) : [...team, saved];
+    return member.isLead
+      ? next.map(m => (m.id !== saved!.id && m.isLead && m.department.toLowerCase() === department.toLowerCase() ? { ...m, isLead: false } : m))
+      : next;
   });
   return saved!;
+}
+
+/** Saves a new order (ids, first to last); the website shows members in this order. */
+export async function reorderTeam(ids: unknown): Promise<SiteTeamMember[]> {
+  if (!Array.isArray(ids)) throw new SiteContentValidationError('ids must be a list.');
+  const team = await updateCollection('team', defaultTeamMembers, members => {
+    const byId = new Map(members.map(m => [m.id, m]));
+    if (ids.length !== members.length || ids.some(id => !byId.has(id as string))) {
+      throw new SiteContentValidationError('The order must list every team member exactly once.');
+    }
+    return ids.map(id => byId.get(id as string)!);
+  });
+  return team.map(withTeamDefaults);
 }
 
 export async function deleteTeamMember(id: string): Promise<void> {

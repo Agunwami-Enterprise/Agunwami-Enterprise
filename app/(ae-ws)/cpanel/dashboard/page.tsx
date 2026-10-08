@@ -7,7 +7,7 @@ import { listApplications, listArticles, listProjects, listTeam } from '@/backen
 export const dynamic = 'force-dynamic';
 
 const QUICK_ACTIONS = [
-  { label: 'Add New Project', href: '/cpanel/projects?new=1' },
+  { label: 'Add New Project', href: '/cpanel/projects/new' },
   { label: 'Add Team Member', href: '/cpanel/team?new=1' },
   { label: 'Write New Article', href: '/cpanel/insights/new' },
   { label: 'Update Site Settings', href: '/cpanel/settings' },

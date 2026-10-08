@@ -3,9 +3,9 @@ import Link from "next/link";
 import { BsArrowRight } from "react-icons/bs";
 import { RiLinkedinBoxFill, RiTeamLine } from "react-icons/ri";
 import ScrollReveal from "@/app/components/common/ScrollReveal";
-import { defaultTeam } from "@/lib/data/teamData";
+import { defaultTeam, type TeamMember } from "@/lib/data/teamData";
 
-export default function TeamSection() {
+export default function TeamSection({ members = defaultTeam }: { members?: TeamMember[] }) {
   return (
     <section
       id="leadership"
@@ -86,7 +86,7 @@ export default function TeamSection() {
 
         {/* 3-Card Static Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {defaultTeam.slice(0, 3).map((member, idx) => (
+          {members.slice(0, 3).map((member, idx) => (
             <ScrollReveal key={idx} delay={idx * 100} direction="up">
               <div className="group bg-white dark:bg-[#161616] rounded-2xl border border-gray-100/90 dark:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col h-full hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                 {/* Photo */}

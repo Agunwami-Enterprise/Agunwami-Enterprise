@@ -13,7 +13,7 @@ import type {
   SiteArticle,
   SiteIconName,
   SitePartnershipCategory,
-  SiteProject,
+  SiteProjectWebsite,
   SiteSettings,
   SiteTeamMember,
 } from './site-content.types';
@@ -35,6 +35,9 @@ const PROJECT_ICONS: Record<string, SiteIconName> = {
   'Meridian Crest Solutions': 'Briefcase',
   'Abia Women Assembly': 'Heart',
   'Delight Tees': 'ShoppingBag',
+  'AE Hub': 'GraduationCap',
+  'Mobility Platform': 'Rocket',
+  'AE Workstation': 'Layers',
 };
 
 const PARTNERSHIP_ICONS: SiteIconName[] = ['Users', 'Sprout', 'Building2'];
@@ -45,15 +48,20 @@ function toIsoDate(display: string): string {
   return Number.isNaN(parsed.getTime()) ? display : parsed.toISOString().slice(0, 10);
 }
 
-export function defaultProjects(): SiteProject[] {
-  return projects
-    .filter(project => project.client)
-    .map(project => {
-      const slug = project.link.replace(/^\/projects\//, '') || slugify(project.name);
-      return {
-        id: slug,
-        slug,
-        name: project.name,
+/**
+ * The projects that were hard-coded on the portfolio (client work and AE's
+ * ecosystem platforms), for seeding into the workstation's project
+ * collection. No metrics endpoints: those are added in the CEO dashboard.
+ */
+export function portfolioProjects(): { name: string; website: SiteProjectWebsite }[] {
+  return projects.map(project => {
+    const fromLink = project.link.startsWith('/projects/') ? project.link.replace(/^\/projects\//, '') : '';
+    return {
+      name: project.name,
+      website: {
+        slug: fromLink || slugify(project.name),
+        kind: project.client ? 'client' : 'ecosystem',
+        published: true,
         category: project.projectCategory,
         icon: PROJECT_ICONS[project.name] ?? 'Briefcase',
         subtitle: project.subtitle ?? '',
@@ -67,15 +75,33 @@ export function defaultProjects(): SiteProject[] {
         websiteUrl: '',
         heroBgClass: project.heroBgClass,
         stats: (project.stats ?? []).map(stat => ({ ...stat })),
-        deliverables: [...(project.deliverables ?? [])],
+        deliverables: [...(project.deliverables ?? project.key ?? [])],
         testimonials: (project.testimonials ?? []).map(t => ({ ...t })),
-        impact: project.impact,
-      };
-    });
+        impact: project.impact ?? '',
+        ecosystemSummary: project.ecoshort ?? '',
+        ecosystemDescription: project.ecodesc ?? '',
+        ecosystemFeatures: [...(project.ecokey ?? [])],
+      },
+    };
+  });
 }
 
+const TEAM_DEPARTMENT_BY_ROLE: Record<string, string> = {
+  'Chief Executive Officer': 'Executive',
+  'Operation Manager': 'Operations',
+  'Project Manager': 'Project Management',
+  'Research & Development Director': 'Research & Development',
+};
+
+/** The leaders the About page showed before the C-panel: department leads, all shown. */
 export function defaultTeamMembers(): SiteTeamMember[] {
-  return defaultTeam.map(member => ({ id: slugify(member.name), ...member }));
+  return defaultTeam.map(member => ({
+    id: slugify(member.name),
+    ...member,
+    department: TEAM_DEPARTMENT_BY_ROLE[member.role] ?? 'Other',
+    isLead: true,
+    showOnWebsite: true,
+  }));
 }
 
 export function defaultArticles(): SiteArticle[] {
@@ -117,9 +143,9 @@ export function defaultSettings(): SiteSettings {
   return {
     companyName: 'Agunwami Enterprise',
     tagline: 'Platform Infrastructure Partner',
-    location: '',
+    location: 'Atlanta, Georgia, US',
     email: 'Contact@agunwamienterprise.com',
-    phone: '',
+    phone: '+1 (470) 526-0343',
     socialLinks: [
       { label: 'LinkedIn', url: 'https://www.linkedin.com/company/agunwami-enterprises/' },
     ],

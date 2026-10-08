@@ -108,7 +108,9 @@ jobs:
           port: 21098
           # packages/agunwami-backend is bundled into .next, but npm needs it on
           # disk to resolve the file: dependency when installing on the server.
-          source: ".next/,public/,data/,package.json,package-lock.json,packages/agunwami-backend/package.json,packages/agunwami-backend/dist/,server.js,next.config.ts,tmp/restart.txt"
+          # Only data/.gitkeep: the server's data/ files (projects, C-panel
+          # content, uploads) must never be overwritten by a deploy.
+          source: ".next/,public/,data/.gitkeep,package.json,package-lock.json,packages/agunwami-backend/package.json,packages/agunwami-backend/dist/,server.js,next.config.ts,tmp/restart.txt"
           target: "./agunwami-app/"
 
       - name: 📦 Install Server Dependencies & Restart

@@ -19,7 +19,6 @@ import { getAdminAuthToken, rawDocToObject, wrapFields } from '../../core/firest
 import type { SiteCollectionName, SiteContentCollections, SiteSettings } from './site-content.types';
 
 const FIRESTORE_COLLECTIONS: Record<SiteCollectionName, string> = {
-  projects: 'site_projects',
   team: 'site_team',
   articles: 'site_articles',
   partnershipCategories: 'site_partnership_categories',
@@ -135,13 +134,13 @@ export async function readCollection<K extends SiteCollectionName>(name: K): Pro
  */
 export function updateCollection<K extends SiteCollectionName>(
   name: K,
-  defaults: () => SiteContentCollections[K][],
+  defaults: () => SiteContentCollections[K][] | Promise<SiteContentCollections[K][]>,
   change: (items: SiteContentCollections[K][]) => SiteContentCollections[K][],
 ): Promise<SiteContentCollections[K][]> {
   return serialized(async () => {
     const stored = await readCollection(name);
     const seeding = stored === null;
-    const before = stored ?? defaults();
+    const before = stored ?? await defaults();
     const after = change(before.map(item => ({ ...item })));
 
     if (await usingFirestore()) {
