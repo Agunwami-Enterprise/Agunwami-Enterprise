@@ -90,7 +90,8 @@ function LoginForm() {
         throw new Error(body.error ?? 'Failed to create session');
       }
 
-      router.push('/ceo/dashboard');
+      const { home } = await res.json().catch(() => ({ home: undefined }));
+      router.push(typeof home === 'string' ? home : '/ceo/dashboard');
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? '';
       const msg  = (err as { message?: string }).message ?? '';

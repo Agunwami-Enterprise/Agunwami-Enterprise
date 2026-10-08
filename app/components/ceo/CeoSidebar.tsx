@@ -22,6 +22,7 @@ const NAV = [
   { label: 'Notifications',    href: '/ceo/notifications',     icon: <IconBell /> },
   { label: 'Training',         href: '/ceo/training',          icon: <IconBook /> },
   { label: 'Settings',         href: '/ceo/settings',          icon: <IconGear /> },
+  { label: 'Website C-Panel',  href: '/cpanel/dashboard',       icon: <IconGlobe /> },
 ];
 
 interface Props { open: boolean; onClose: () => void; onNavigate?: () => void; }
@@ -258,6 +259,15 @@ function IconBook() {
     </svg>
   );
 }
+function IconGlobe() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
+      <circle cx="8" cy="8" r="6.5" />
+      <path d="M1.5 8h13M8 1.5c1.8 1.8 2.6 4 2.6 6.5S9.8 12.7 8 14.5M8 1.5C6.2 3.3 5.4 5.5 5.4 8s.8 4.7 2.6 6.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function IconGear() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
