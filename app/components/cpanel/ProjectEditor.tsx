@@ -144,8 +144,11 @@ function CardPreview({ draft }: { draft: Draft }) {
  * The one editor for workstation projects, used by the C-panel and the CEO
  * dashboard. `basePath` is where the list/edit pages live in each.
  */
-export default function ProjectEditor({ project, basePath = '/cpanel/projects', backHref = basePath, backLabel = 'All projects' }: {
-  project?: SiteProject; basePath?: string; backHref?: string; backLabel?: string;
+export default function ProjectEditor({
+  project, basePath = '/cpanel/projects', editSuffix = '', backHref = basePath, backLabel = 'All projects',
+}: {
+  /** editSuffix: appended to `${basePath}/<id>` for the edit page ('/edit' in the CEO workstation). */
+  project?: SiteProject; basePath?: string; editSuffix?: string; backHref?: string; backLabel?: string;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState(() => toDraft(project));
@@ -179,7 +182,7 @@ export default function ProjectEditor({ project, basePath = '/cpanel/projects', 
       setDraft(d => ({ ...d, apiToken: '', clearApiToken: false }));
       setDirty(false);
       setSavedAt(new Date());
-      if (!project) router.replace(`${basePath}/${encodeURIComponent(saved.id)}`);
+      if (!project) router.replace(`${basePath}/${encodeURIComponent(saved.id)}${editSuffix}`);
       else router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the project.');
@@ -187,7 +190,7 @@ export default function ProjectEditor({ project, basePath = '/cpanel/projects', 
       savingRef.current = false;
       setSaving(false);
     }
-  }, [basePath, draft, project, router]);
+  }, [basePath, draft, editSuffix, project, router]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

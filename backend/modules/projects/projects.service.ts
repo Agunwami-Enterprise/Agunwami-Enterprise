@@ -17,10 +17,13 @@ import type {
   ProjectDepartment,
   ProjectLeaveRequest,
   ProjectMonthlyRevenue,
+  ProjectRecordTone,
+  ProjectRecordsTable,
   ProjectStaffMember,
   ProjectTaskCreatePayload,
   ProjectTaskItem,
   ProjectTasksSummary,
+  ProjectTopItems,
   CreateProjectDto,
   UpdateProjectDto,
 } from './projects.types';
@@ -54,6 +57,8 @@ interface ProjectMetricsData {
   departments?: ProjectDepartment[];
   tasks?: ProjectTasksSummary;
   leaveRequests?: ProjectLeaveRequest[];
+  topItems?: ProjectTopItems;
+  recentRecords?: ProjectRecordsTable;
 }
 
 const METRICS_TIMEOUT_MS = 5_000;
@@ -256,7 +261,11 @@ function parseMetrics(data: DataRecord): ProjectCardMetric[] {
       const label = stringValue(record.label ?? record.name ?? record.title);
       const value = record.value;
       if (!label || value == null || typeof value === 'object') return [];
-      return [{ label, value: String(value) }];
+      const hint = stringValue(record.hint ?? record.change ?? record.caption);
+      const trend = record.trend === 'up' || record.trend === 'down'
+        ? record.trend
+        : hint?.startsWith('+') ? 'up' : hint?.startsWith('-') || hint?.startsWith('−') ? 'down' : undefined;
+      return [{ label, value: String(value), ...(hint ? { hint } : {}), ...(trend ? { trend } : {}) }];
     });
   }
 
@@ -272,7 +281,7 @@ function parseMetrics(data: DataRecord): ProjectCardMetric[] {
     'health', 'healthScore', 'systemHealth', 'score', 'revenueTrend', 'monthlyRevenue',
     'revenueSeries', 'trend', 'series', 'status', 'id', 'name', 'subtitle', 'approvals',
     'pendingApprovals', 'staff', 'departments', 'tasks', 'activity', 'activities', 'feed',
-    'events', 'analytics',
+    'events', 'analytics', 'topItems', 'recentRecords',
   ]);
   return Object.entries(data)
     .filter(([key, value]) => !excludedKeys.has(key) && value != null && typeof value !== 'object')
@@ -496,6 +505,41 @@ function parseActivity(value: unknown): ProjectActivityItem[] | undefined {
   });
 }
 
+/** Optional ranked chart: { title, subtitle?, items: [{ label, value }] }. */
+function parseTopItems(raw: unknown): ProjectTopItems | undefined {
+  const record = asRecord(raw);
+  const title = record && stringValue(record.title);
+  if (!record || !title || !Array.isArray(record.items)) return undefined;
+  const items = record.items.flatMap(item => {
+    const entry = asRecord(item);
+    const label = entry && stringValue(entry.label ?? entry.name);
+    const value = entry && numberValue(entry.value ?? entry.count);
+    return label && value != null ? [{ label, value }] : [];
+  }).slice(0, 10);
+  if (items.length === 0) return undefined;
+  const subtitle = stringValue(record.subtitle);
+  return { title, ...(subtitle ? { subtitle } : {}), items };
+}
+
+const RECORD_TONES: ProjectRecordTone[] = ['success', 'info', 'warning', 'danger', 'neutral'];
+
+/** Optional table: { title, columns: [...], rows: [{ cells: [...], status?, tone? }] }. */
+function parseRecordsTable(raw: unknown): ProjectRecordsTable | undefined {
+  const record = asRecord(raw);
+  const title = record && stringValue(record.title);
+  if (!record || !title || !Array.isArray(record.columns) || !Array.isArray(record.rows)) return undefined;
+  const columns = record.columns.map(column => stringValue(column) ?? '').slice(0, 6);
+  const rows = record.rows.flatMap(row => {
+    const entry = asRecord(row);
+    if (!entry || !Array.isArray(entry.cells)) return [];
+    const cells = entry.cells.map(cell => (cell == null || typeof cell === 'object' ? '' : String(cell))).slice(0, columns.length);
+    const status = stringValue(entry.status);
+    const tone = RECORD_TONES.includes(entry.tone as ProjectRecordTone) ? entry.tone as ProjectRecordTone : undefined;
+    return [{ cells, ...(status ? { status } : {}), ...(tone ? { tone } : {}) }];
+  }).slice(0, 10);
+  return columns.length ? { title, columns, rows } : undefined;
+}
+
 function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const outer = asRecord(response);
   if (!outer) throw new Error('Metrics endpoint response must be a JSON object.');
@@ -526,6 +570,8 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const approvals = parseApprovals(rawApprovals, endpointName ?? 'Project');
   const activity = parseActivity(data.activity ?? data.activities ?? data.feed ?? data.events);
   const metrics = parseMetrics(data);
+  const topItems = parseTopItems(data.topItems);
+  const recentRecords = parseRecordsTable(data.recentRecords);
   const pendingApprovals = Array.isArray(data.pendingApprovals)
     ? data.pendingApprovals.length
     : numberValue(asRecord(data.pendingApprovals)?.count ?? data.pendingApprovals);
@@ -566,6 +612,8 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
     ...(departments ? { departments } : {}),
     ...(tasks ? { tasks } : {}),
     ...(leaveRequests ? { leaveRequests } : {}),
+    ...(topItems ? { topItems } : {}),
+    ...(recentRecords ? { recentRecords } : {}),
   };
 }
 

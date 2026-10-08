@@ -7,6 +7,26 @@
 export interface ProjectCardMetric {
   label: string;
   value: string | null;
+  /** Optional line under the value, e.g. "+5.3% vs June". */
+  hint?: string;
+  /** Arrow next to the hint. */
+  trend?: 'up' | 'down';
+}
+
+/** A ranked bar chart a project chooses, e.g. "Top 5 Selling Products". */
+export interface ProjectTopItems {
+  title: string;
+  subtitle?: string;
+  items: Array<{ label: string; value: number }>;
+}
+
+export type ProjectRecordTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
+
+/** A small table a project chooses, e.g. "Recent Orders". */
+export interface ProjectRecordsTable {
+  title: string;
+  columns: string[];
+  rows: Array<{ cells: string[]; status?: string; tone?: ProjectRecordTone }>;
 }
 
 export interface ProjectMonthlyRevenue {
@@ -194,6 +214,8 @@ export interface ProjectCardData {
   tasks?: ProjectTasksSummary;
   leaveRequests?: ProjectLeaveRequest[];
   analytics?: ProjectAnalyticsData;
+  topItems?: ProjectTopItems;
+  recentRecords?: ProjectRecordsTable;
   lastSyncedAt?: string;
 }
 

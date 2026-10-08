@@ -56,6 +56,32 @@ Example response:
 }
 ```
 
+### Optional fields for the project page
+
+The CEO project page (`/ceo/projects/[id]`) also uses these optional fields. Endpoints that leave them out keep working; the page shows departments and tasks instead.
+
+- **`metrics[].hint`** and **`metrics[].trend`**: a line under a KPI value (also accepted as `change` or `caption`), with `"up"` or `"down"` for the arrow. Without `trend`, a hint starting with `+` or `-` sets it.
+- **`topItems`**: a ranked bar chart, up to 10 items.
+- **`recentRecords`**: a table, up to 6 columns and 10 rows. A row's `tone` colours its status badge: `success`, `info`, `warning`, `danger` or `neutral`.
+
+```json
+{
+  "metrics": [
+    { "label": "Revenue (MTD)", "value": "₦580,000", "hint": "+5.3% vs June", "trend": "up" }
+  ],
+  "topItems": {
+    "title": "Top 5 Selling Products",
+    "subtitle": "Units sold this month",
+    "items": [{ "label": "iPhone 17 Pro-Max", "value": 850 }]
+  },
+  "recentRecords": {
+    "title": "Recent Orders",
+    "columns": ["Order ID", "Customer", "Amount"],
+    "rows": [{ "cells": ["TRD-10258", "Amaka Okafor", "₦128,000"], "status": "Completed", "tone": "success" }]
+  }
+}
+```
+
 Configure this URL in the project's **Project Metrics Endpoint** field. The endpoint is fetched server-side by `/api/ceo/projects/overview`; it should be reachable by the Enterprise server and return JSON.
 
 ---

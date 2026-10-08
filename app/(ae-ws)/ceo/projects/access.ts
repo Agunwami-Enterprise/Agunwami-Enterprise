@@ -6,5 +6,7 @@ import { canEditWebsite } from '@/lib/workstation/content-access';
 export async function requireCeoProjectAccess(path: string): Promise<void> {
   const session = await verifySession();
   if (session.role.toLowerCase() === 'ceo') return;
-  redirect(canEditWebsite(session) ? path.replace(/^\/ceo\/projects/, '/cpanel/projects') : '/ceo/dashboard');
+  redirect(canEditWebsite(session)
+    ? path.replace(/^\/ceo\/projects/, '/cpanel/projects').replace(/\/edit$/, '')
+    : '/ceo/dashboard');
 }
