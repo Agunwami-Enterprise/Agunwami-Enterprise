@@ -71,7 +71,7 @@ export default function DashboardPage() {
 
   async function reloadProjects() {
     try {
-      const res = await fetch('/api/ceo/projects/overview');
+      const res = await fetch('/api/ceo/projects/overview?refresh=1');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Could not load projects (${res.status}).`);
       if (!Array.isArray(data.projects)) throw new Error('Projects response is invalid.');
@@ -837,6 +837,8 @@ export interface ApiProject {
     }>;
   };
   status?: 'online' | 'pending' | 'error';
+  stale?: boolean;
+  lastSyncedAt?: string;
 }
 
 function ProjectCard({
@@ -883,7 +885,9 @@ function ProjectCard({
                 <span className="inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.2 text-[9px] font-medium text-gray-600 dark:bg-white/10 dark:text-gray-400">
                   {project.status === 'error'
                     ? 'Endpoint error'
-                    : project.status === 'online'
+                    : project.stale
+                      ? 'Last sync shown'
+                      : project.status === 'online'
                       ? 'Metrics live'
                       : project.apiEndpoint
                         ? 'Awaiting metrics'
@@ -931,11 +935,15 @@ function ProjectCard({
 
       {/* Body Stats */}
       <div className="p-4 space-y-4">
-        {project.endpointError && (
+        {project.endpointError && (project.stale ? (
+          <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+            Endpoint unreachable — showing data from {project.lastSyncedAt ? new Date(project.lastSyncedAt).toLocaleString() : 'the last sync'}. {project.endpointError}
+          </p>
+        ) : (
           <p role="status" className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700 dark:bg-red-950/30 dark:text-red-300">
             Metrics endpoint failed: {project.endpointError}
           </p>
-        )}
+        ))}
 
         {/* Metric Columns */}
         <div className="grid grid-cols-3 gap-2 text-center">

@@ -46,3 +46,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+
+# local-only project endpoint store (dev fallback when Firestore is unavailable)
+/data/configured_endpoints.json

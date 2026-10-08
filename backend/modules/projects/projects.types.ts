@@ -183,6 +183,8 @@ export interface ProjectCardData {
   metrics: ProjectCardMetric[];
   health: number | null;
   status: 'online' | 'pending' | 'error';
+  /** True when the endpoint failed and the card shows the last successful sync. */
+  stale?: boolean;
   endpointError?: string;
   revenueTrend?: ProjectMonthlyRevenue[];
   approvals?: ProjectApprovalItem[];

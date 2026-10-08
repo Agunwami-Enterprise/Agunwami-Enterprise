@@ -57,7 +57,16 @@ interface ProjectMetricsData {
 }
 
 const METRICS_TIMEOUT_MS = 5_000;
+// Successful endpoint responses are reused for this long so one dashboard load
+// (which reads project data from several services) hits each project once.
+const METRICS_CACHE_TTL_MS = 60_000;
+const SNAPSHOT_COLLECTION = 'enterprise_project_snapshots';
 const API_TOKEN_ENCRYPTION_VERSION = 'v1';
+const DEV_ONLY_TOKEN_SECRET = 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+// The JSON file store only exists for local development without Firestore
+// credentials; hosted instances have an ephemeral, read-only filesystem.
+const LOCAL_STORE_ENABLED = !IS_PRODUCTION;
 
 export class ProjectAlreadyExistsError extends Error {
   constructor() {
@@ -66,14 +75,33 @@ export class ProjectAlreadyExistsError extends Error {
   }
 }
 
-function getApiTokenEncryptionKey(): Buffer {
-  const secret = process.env.SESSION_SECRET || 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
-  return createHash('sha256').update(secret).digest();
+export class ProjectValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProjectValidationError';
+  }
+}
+
+/**
+ * Keys that can decrypt stored project tokens, primary first. A dedicated
+ * PROJECT_TOKEN_ENCRYPTION_KEY lets SESSION_SECRET be rotated (to sign
+ * everyone out) without breaking saved project credentials.
+ */
+function getApiTokenEncryptionKeys(): Buffer[] {
+  const secrets = [process.env.PROJECT_TOKEN_ENCRYPTION_KEY, process.env.SESSION_SECRET]
+    .filter((secret): secret is string => Boolean(secret?.trim()));
+  if (secrets.length === 0) {
+    if (IS_PRODUCTION) {
+      throw new Error('Server is missing PROJECT_TOKEN_ENCRYPTION_KEY (or SESSION_SECRET); project tokens cannot be stored or read.');
+    }
+    secrets.push(DEV_ONLY_TOKEN_SECRET);
+  }
+  return secrets.map(secret => createHash('sha256').update(secret).digest());
 }
 
 function encryptApiToken(token: string): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', getApiTokenEncryptionKey(), iv);
+  const cipher = createCipheriv('aes-256-gcm', getApiTokenEncryptionKeys()[0], iv);
   const ciphertext = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
   return [
     API_TOKEN_ENCRYPTION_VERSION,
@@ -93,16 +121,25 @@ function decryptApiToken(encrypted: string): string {
   ) {
     throw new Error('Stored project metrics token has an unsupported format.');
   }
-  const decipher = createDecipheriv(
-    'aes-256-gcm',
-    getApiTokenEncryptionKey(),
-    Buffer.from(encodedIv, 'base64url'),
-  );
-  decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'));
-  return Buffer.concat([
-    decipher.update(Buffer.from(encodedCiphertext, 'base64url')),
-    decipher.final(),
-  ]).toString('utf8');
+  for (const key of getApiTokenEncryptionKeys()) {
+    try {
+      const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(encodedIv, 'base64url'));
+      decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'));
+      return Buffer.concat([
+        decipher.update(Buffer.from(encodedCiphertext, 'base64url')),
+        decipher.final(),
+      ]).toString('utf8');
+    } catch {
+      // GCM authentication failed: wrong key, try the next one.
+    }
+  }
+  throw new Error('Stored project token could not be decrypted with the server key. Re-enter the token for this project.');
+}
+
+function storedApiToken(project: StoredProject): string | undefined {
+  return typeof project.apiTokenEncrypted === 'string' && project.apiTokenEncrypted
+    ? decryptApiToken(project.apiTokenEncrypted)
+    : undefined;
 }
 
 function getLocalProjectsFilePath(): string {
@@ -110,6 +147,7 @@ function getLocalProjectsFilePath(): string {
 }
 
 function readLocalProjects(): StoredProject[] {
+  if (!LOCAL_STORE_ENABLED) return [];
   try {
     const filePath = getLocalProjectsFilePath();
     if (!fs.existsSync(filePath)) return [];
@@ -123,6 +161,7 @@ function readLocalProjects(): StoredProject[] {
 }
 
 function writeLocalProjects(projects: StoredProject[]): void {
+  if (!LOCAL_STORE_ENABLED) return;
   try {
     const filePath = getLocalProjectsFilePath();
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -142,16 +181,17 @@ async function loadStoredProjects(): Promise<StoredProject[]> {
 
   const localProjects = readLocalProjects();
 
+  // Firestore is the source of truth; the dev-only local file fills gaps.
   const merged = new Map<string, StoredProject>();
-  for (const project of firestoreProjects) {
-    const id = (project._id || project.id) as string;
-    if (typeof id === 'string' && id) merged.set(id, project as StoredProject);
-  }
   for (const project of localProjects) {
     const id = (project._id || project.id) as string;
+    if (typeof id === 'string' && id) merged.set(id, project);
+  }
+  for (const project of firestoreProjects) {
+    const id = (project._id || project.id) as string;
     if (typeof id === 'string' && id) {
-      const firestoreProject = merged.get(id);
-      merged.set(id, firestoreProject ? { ...firestoreProject, ...project } : project);
+      const localProject = merged.get(id);
+      merged.set(id, localProject ? { ...localProject, ...project } : project as StoredProject);
     }
   }
 
@@ -526,34 +566,202 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   };
 }
 
+function isPrivateHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.internal') ||
+    host.endsWith('.local')
+  ) {
+    return true;
+  }
+
+  const ipv4 = host.replace(/^::ffff:/, '').match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    return (
+      a === 0 || a === 10 || a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    );
+  }
+
+  return host.includes(':') && (host === '::' || host === '::1' || /^f[cd]/.test(host) || /^fe[89ab]/.test(host));
+}
+
+/**
+ * Validates a project endpoint before any token is sent to it. In production
+ * the token must travel over HTTPS to a public host; local development may
+ * point at http://localhost projects.
+ */
 function normalizeMetricsUrl(endpoint: string): string {
-  const url = new URL(endpoint.trim());
+  let url: URL;
+  try {
+    url = new URL(endpoint.trim());
+  } catch {
+    throw new ProjectValidationError('Metrics endpoint must be a valid URL.');
+  }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
-    throw new Error('Metrics endpoint must be an HTTP(S) URL without embedded credentials.');
+    throw new ProjectValidationError('Metrics endpoint must be an HTTP(S) URL without embedded credentials.');
+  }
+  if (IS_PRODUCTION && url.protocol !== 'https:') {
+    throw new ProjectValidationError('Metrics endpoint must use HTTPS so the bearer token is not sent in plain text.');
+  }
+  if (IS_PRODUCTION && isPrivateHostname(url.hostname)) {
+    throw new ProjectValidationError('Metrics endpoint must be a public host, not a local or private network address.');
   }
   return url.toString();
 }
 
-async function fetchProjectMetrics(endpoint: string, apiToken?: string): Promise<ProjectMetricsData> {
-  const url = normalizeMetricsUrl(endpoint);
+/** Derives a sibling action endpoint, e.g. `/api/enterprise/metrics` → `/api/enterprise/tasks`. */
+function projectActionUrl(project: StoredProject | undefined, action: 'leave-requests' | 'tasks'): URL {
+  if (!project || typeof project.apiEndpoint !== 'string' || !project.apiEndpoint.trim()) {
+    throw new Error('The selected project has no configured metrics endpoint.');
+  }
+  const url = new URL(normalizeMetricsUrl(project.apiEndpoint));
+  if (!url.pathname.endsWith('/metrics')) {
+    throw new Error(`The selected project endpoint does not support ${action === 'tasks' ? 'project task creation' : 'leave-request updates'}.`);
+  }
+  url.pathname = `${url.pathname.slice(0, -'metrics'.length)}${action}`;
+  return url;
+}
+
+/** Calls a project endpoint with its bearer token, a timeout, and no redirects. */
+async function callProjectEndpoint(
+  url: string | URL,
+  apiToken: string | undefined,
+  init: { method?: 'GET' | 'POST' | 'PATCH'; body?: unknown } = {},
+): Promise<{ response: Response; body: unknown }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), METRICS_TIMEOUT_MS);
   try {
     const response = await fetch(url, {
+      method: init.method ?? 'GET',
       headers: {
         Accept: 'application/json',
+        ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
       },
+      ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+      // Never follow a redirect: it could carry the token somewhere unvetted.
+      redirect: 'error',
       signal: controller.signal,
       cache: 'no-store',
     });
-    if (!response.ok) {
-      throw new Error(`Metrics endpoint returned HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`);
+    const body: unknown = await response.json().catch(() => null);
+    return { response, body };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Project endpoint did not respond within ${METRICS_TIMEOUT_MS / 1000}s.`);
     }
-    return parseMetricsResponse(await response.json());
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function httpErrorMessage(label: string, response: Response, body: unknown): string {
+  return (
+    stringValue(asRecord(body)?.error) ||
+    `${label} returned HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`
+  );
+}
+
+async function fetchProjectMetrics(endpoint: string, apiToken?: string): Promise<ProjectMetricsData> {
+  const { response, body } = await callProjectEndpoint(normalizeMetricsUrl(endpoint), apiToken);
+  if (!response.ok) {
+    throw new Error(httpErrorMessage('Metrics endpoint', response, body));
+  }
+  return parseMetricsResponse(body);
+}
+
+// ── Metrics cache & last-known-good snapshots ───────────────────────────────
+
+interface CachedMetrics {
+  fingerprint: string;
+  data: ProjectMetricsData;
+  fetchedAt: number;
+  /** Set when a later fetch failed, so the entry is only used as a fallback. */
+  expired?: boolean;
+}
+
+const metricsCache = new Map<string, CachedMetrics>();
+const metricsInFlight = new Map<string, Promise<ProjectMetricsData>>();
+
+/** Changes whenever the endpoint or token changes, so edits bypass old data. */
+function metricsFingerprint(project: StoredProject): string {
+  return createHash('sha256')
+    .update(`${project.apiEndpoint ?? ''}\n${project.apiTokenEncrypted ?? ''}`)
+    .digest('base64url');
+}
+
+function invalidateProjectMetrics(projectId: string): void {
+  metricsCache.delete(projectId);
+}
+
+async function saveSnapshot(projectId: string, cached: CachedMetrics): Promise<void> {
+  try {
+    await updateDoc(SNAPSHOT_COLLECTION, projectId, {
+      fingerprint: cached.fingerprint,
+      data: JSON.stringify(cached.data),
+      syncedAt: new Date(cached.fetchedAt).toISOString(),
+    });
+  } catch (err) {
+    console.warn(`[backend/modules/projects] Could not save metrics snapshot for ${projectId}:`, err);
+  }
+}
+
+async function loadSnapshot(projectId: string, fingerprint: string): Promise<CachedMetrics | null> {
+  try {
+    const doc = await getDoc(SNAPSHOT_COLLECTION, projectId);
+    if (!doc || doc.fingerprint !== fingerprint || typeof doc.data !== 'string') return null;
+    const fetchedAt = Date.parse(String(doc.syncedAt));
+    if (Number.isNaN(fetchedAt)) return null;
+    return { fingerprint, data: JSON.parse(doc.data) as ProjectMetricsData, fetchedAt };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns fresh metrics, reusing a response younger than the cache TTL and
+ * sharing a single request between concurrent callers.
+ */
+async function getProjectMetrics(
+  projectId: string,
+  project: StoredProject,
+  endpoint: string,
+  forceRefresh: boolean,
+): Promise<CachedMetrics> {
+  const fingerprint = metricsFingerprint(project);
+  const cached = metricsCache.get(projectId);
+  if (
+    !forceRefresh &&
+    cached?.fingerprint === fingerprint &&
+    !cached.expired &&
+    Date.now() - cached.fetchedAt < METRICS_CACHE_TTL_MS
+  ) {
+    return cached;
+  }
+
+  const inFlightKey = `${projectId}:${fingerprint}`;
+  let request = metricsInFlight.get(inFlightKey);
+  if (!request) {
+    request = fetchProjectMetrics(endpoint, storedApiToken(project))
+      .finally(() => metricsInFlight.delete(inFlightKey));
+    metricsInFlight.set(inFlightKey, request);
+  }
+  const data = await request;
+  const fresh = metricsCache.get(projectId);
+  if (fresh?.fingerprint === fingerprint && fresh.data === data) return fresh;
+
+  const entry = { fingerprint, data, fetchedAt: Date.now() };
+  metricsCache.set(projectId, entry);
+  void saveSnapshot(projectId, entry);
+  return entry;
 }
 
 function toProjectCard(project: StoredProject): ProjectCardData | null {
@@ -580,55 +788,69 @@ function toProjectCard(project: StoredProject): ProjectCardData | null {
   };
 }
 
-async function loadProject(project: StoredProject): Promise<ProjectCardData | null> {
+function mergeMetricsIntoCard(card: ProjectCardData, metrics: ProjectMetricsData): ProjectCardData {
+  const resolvedName = metrics.name || card.name;
+  return {
+    ...card,
+    ...metrics,
+    name: resolvedName,
+    subtitle: metrics.subtitle || card.subtitle,
+    description: metrics.description ?? card.description,
+    lead: metrics.lead ?? card.lead,
+    adminUrl: metrics.adminUrl !== undefined ? metrics.adminUrl : card.adminUrl,
+    color: metrics.color || card.color,
+    leaveRequests: metrics.leaveRequests?.map(request => ({
+      ...request,
+      projectId: card.id,
+      project: resolvedName,
+    })),
+  };
+}
+
+async function loadProject(project: StoredProject, forceRefresh = false): Promise<ProjectCardData | null> {
   const card = toProjectCard(project);
   if (!card || !card.apiEndpoint) return card;
 
   try {
-    const apiToken = typeof project.apiTokenEncrypted === 'string'
-      ? decryptApiToken(project.apiTokenEncrypted)
-      : undefined;
-    const metrics = await fetchProjectMetrics(card.apiEndpoint, apiToken);
-    const resolvedName = metrics.name || card.name;
-    const resolvedSubtitle = metrics.subtitle || card.subtitle;
-    const resolvedDescription = metrics.description ?? card.description;
-    const resolvedLead = metrics.lead ?? card.lead;
-    const resolvedAdminUrl = metrics.adminUrl !== undefined ? metrics.adminUrl : card.adminUrl;
-    const resolvedColor = metrics.color || card.color;
-
+    const { data, fetchedAt } = await getProjectMetrics(card.id, project, card.apiEndpoint, forceRefresh);
     return {
-      ...card,
-      ...metrics,
-      name: resolvedName,
-      subtitle: resolvedSubtitle,
-      description: resolvedDescription,
-      lead: resolvedLead,
-      adminUrl: resolvedAdminUrl,
-      color: resolvedColor,
-      leaveRequests: metrics.leaveRequests?.map(request => ({
-        ...request,
-        projectId: card.id,
-        project: resolvedName,
-      })),
+      ...mergeMetricsIntoCard(card, data),
       status: 'online',
-      lastSyncedAt: new Date().toISOString(),
+      lastSyncedAt: new Date(fetchedAt).toISOString(),
     };
   } catch (error) {
-    return {
-      ...card,
-      status: 'error',
-      endpointError: error instanceof Error ? error.message : String(error),
-    };
+    const endpointError = error instanceof Error ? error.message : String(error);
+    // Keep showing the last good data (flagged as stale) while a project is down.
+    const fingerprint = metricsFingerprint(project);
+    const cached = metricsCache.get(card.id);
+    if (cached?.fingerprint === fingerprint) cached.expired = true;
+    const lastGood = cached?.fingerprint === fingerprint
+      ? cached
+      : await loadSnapshot(card.id, fingerprint);
+    if (lastGood) {
+      return {
+        ...mergeMetricsIntoCard(card, lastGood.data),
+        status: 'online',
+        stale: true,
+        endpointError,
+        lastSyncedAt: new Date(lastGood.fetchedAt).toISOString(),
+      };
+    }
+    return { ...card, status: 'error', endpointError };
   }
 }
 
 export class ProjectsService {
-  static async getProjectsOverview(): Promise<ProjectCardData[]> {
+  /**
+   * Project cards with endpoint data. Responses are cached for a minute;
+   * pass `forceRefresh` to re-read every endpoint now.
+   */
+  static async getProjectsOverview(forceRefresh = false): Promise<ProjectCardData[]> {
     const stored = await loadStoredProjects();
     if (stored.length === 0) {
       return [];
     }
-    return Promise.all(stored.map(loadProject))
+    return Promise.all(stored.map(project => loadProject(project, forceRefresh)))
       .then(projects => projects.filter((project): project is ProjectCardData => project !== null));
   }
 
@@ -644,9 +866,11 @@ export class ProjectsService {
           ? []
           : project.status === 'error'
             ? [{ project: project.name, error: project.endpointError || 'Project endpoint failed.' }]
-            : project.leaveRequests === undefined
-              ? [{ project: project.name, error: 'Metrics response does not include leaveRequests.' }]
-              : [],
+            : project.stale
+              ? [{ project: project.name, error: `Showing requests from the last sync (${project.lastSyncedAt}); endpoint failed: ${project.endpointError}` }]
+              : project.leaveRequests === undefined
+                ? [{ project: project.name, error: 'Metrics response does not include leaveRequests.' }]
+                : [],
       ),
     };
   }
@@ -660,98 +884,39 @@ export class ProjectsService {
     comments?: string,
   ): Promise<void> {
     const project = (await loadStoredProjects()).find(item => (item._id || item.id) === projectId);
-    if (!project || typeof project.apiEndpoint !== 'string' || !project.apiEndpoint.trim()) {
-      throw new Error('The selected project has no configured metrics endpoint.');
-    }
-
-    const metricsUrl = new URL(normalizeMetricsUrl(project.apiEndpoint));
-    if (!metricsUrl.pathname.endsWith('/metrics')) {
-      throw new Error('The selected project endpoint does not support leave-request updates.');
-    }
-    metricsUrl.pathname = `${metricsUrl.pathname.slice(0, -'metrics'.length)}leave-requests`;
-
-    const apiToken = typeof project.apiTokenEncrypted === 'string'
-      ? decryptApiToken(project.apiTokenEncrypted)
-      : undefined;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), METRICS_TIMEOUT_MS);
-    try {
-      const response = await fetch(metricsUrl, {
-        method: 'PATCH',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
-        },
-        body: JSON.stringify({ id: requestId, status, reviewerId, reviewerName, comments }),
-        signal: controller.signal,
-        cache: 'no-store',
-      });
-      const result = asRecord(await response.json().catch(() => null));
-      if (!response.ok) {
-        throw new Error(
-          stringValue(result?.error) ||
-          `Project leave endpoint returned HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`,
-        );
-      }
-      if (result?.success !== true) throw new Error('Project leave endpoint did not confirm the status update.');
-    } finally {
-      clearTimeout(timeout);
-    }
+    const url = projectActionUrl(project, 'leave-requests');
+    const { response, body } = await callProjectEndpoint(url, storedApiToken(project!), {
+      method: 'PATCH',
+      body: { id: requestId, status, reviewerId, reviewerName, comments },
+    });
+    if (!response.ok) throw new Error(httpErrorMessage('Project leave endpoint', response, body));
+    if (asRecord(body)?.success !== true) throw new Error('Project leave endpoint did not confirm the status update.');
+    invalidateProjectMetrics(projectId);
   }
 
   static async createProjectTask(projectId: string, payload: ProjectTaskCreatePayload): Promise<{ id: string }> {
     const project = (await loadStoredProjects()).find(item => (item._id || item.id) === projectId);
-    if (!project || typeof project.apiEndpoint !== 'string' || !project.apiEndpoint.trim()) {
-      throw new Error('The selected project has no configured metrics endpoint.');
-    }
-
-    const metricsUrl = new URL(normalizeMetricsUrl(project.apiEndpoint));
-    if (!metricsUrl.pathname.endsWith('/metrics')) {
-      throw new Error('The selected project endpoint does not support project task creation.');
-    }
-    metricsUrl.pathname = `${metricsUrl.pathname.slice(0, -'metrics'.length)}tasks`;
-
-    const apiToken = typeof project.apiTokenEncrypted === 'string'
-      ? decryptApiToken(project.apiTokenEncrypted)
-      : undefined;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), METRICS_TIMEOUT_MS);
-    try {
-      const response = await fetch(metricsUrl, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-        cache: 'no-store',
-      });
-      const result = asRecord(await response.json().catch(() => null));
-      if (!response.ok) {
-        throw new Error(
-          stringValue(result?.error) ||
-          `Project task endpoint returned HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`,
-        );
-      }
-      const id = stringValue(result?.id);
-      if (!id) throw new Error('Project task endpoint returned an invalid task response.');
-      return { id };
-    } finally {
-      clearTimeout(timeout);
-    }
+    const url = projectActionUrl(project, 'tasks');
+    const { response, body } = await callProjectEndpoint(url, storedApiToken(project!), {
+      method: 'POST',
+      body: payload,
+    });
+    if (!response.ok) throw new Error(httpErrorMessage('Project task endpoint', response, body));
+    const id = stringValue(asRecord(body)?.id);
+    if (!id) throw new Error('Project task endpoint returned an invalid task response.');
+    invalidateProjectMetrics(projectId);
+    return { id };
   }
 
   static async createProject(dto: CreateProjectDto): Promise<ProjectCardData> {
     const endpoint = dto.apiEndpoint?.trim();
     if (!endpoint) {
-      throw new Error('Project metrics endpoint URL is required.');
+      throw new ProjectValidationError('Project metrics endpoint URL is required.');
     }
+    normalizeMetricsUrl(endpoint);
     const token = dto.apiToken?.trim();
     if (!token) {
-      throw new Error('Project endpoint Bearer Token is required.');
+      throw new ProjectValidationError('Project endpoint Bearer Token is required.');
     }
 
     const slug = dto.name
@@ -784,16 +949,18 @@ export class ProjectsService {
       updatedAt: now,
     };
 
-    try {
-      await createDoc('enterprise_projects', project, slug);
-    } catch (err) {
+    const saved = await createDoc('enterprise_projects', project, slug).catch(err => {
       console.warn('[backend/modules/projects] Could not save project to Firestore:', err);
+      return null;
+    });
+    if (!saved && !LOCAL_STORE_ENABLED) {
+      throw new Error('Could not save the project to Firestore. Check the server credentials and try again.');
     }
 
     const existing = readLocalProjects().filter(item => (item.id || item._id) !== slug);
     writeLocalProjects([...existing, project]);
 
-    const card = await loadProject(project);
+    const card = await loadProject(project, true);
     if (!card) throw new Error('Unable to create a project response.');
     return card;
   }
@@ -805,16 +972,22 @@ export class ProjectsService {
     if (dto.description !== undefined) allowedUpdates.description = dto.description;
     if (dto.lead !== undefined) allowedUpdates.lead = dto.lead;
     if (dto.adminUrl !== undefined) allowedUpdates.adminUrl = dto.adminUrl;
-    if (dto.apiEndpoint !== undefined) allowedUpdates.apiEndpoint = dto.apiEndpoint?.trim() || '';
+    if (dto.apiEndpoint !== undefined) {
+      const endpoint = dto.apiEndpoint?.trim() || '';
+      if (endpoint) normalizeMetricsUrl(endpoint);
+      allowedUpdates.apiEndpoint = endpoint;
+    }
     if (dto.apiToken?.trim()) allowedUpdates.apiTokenEncrypted = encryptApiToken(dto.apiToken.trim());
     else if (dto.clearApiToken) allowedUpdates.apiTokenEncrypted = null;
     if (dto.color !== undefined) allowedUpdates.color = dto.color;
     const updatedAt = new Date().toISOString();
 
-    try {
-      await updateDoc('enterprise_projects', id, { ...allowedUpdates, updatedAt });
-    } catch (err) {
+    const saved = await updateDoc('enterprise_projects', id, { ...allowedUpdates, updatedAt }).catch(err => {
       console.warn('[backend/modules/projects] Could not update project in Firestore:', err);
+      return null;
+    });
+    if (!saved && !LOCAL_STORE_ENABLED) {
+      throw new Error('Could not save the project changes to Firestore. Check the server credentials and try again.');
     }
 
     const existing = readLocalProjects();
@@ -823,16 +996,21 @@ export class ProjectsService {
       existing[index] = { ...existing[index], ...allowedUpdates, updatedAt };
       writeLocalProjects(existing);
     }
+    invalidateProjectMetrics(id);
     return true;
   }
 
   static async deleteProject(id: string): Promise<boolean> {
-    try {
-      await deleteDoc('enterprise_projects', id);
-    } catch (err) {
+    const deleted = await deleteDoc('enterprise_projects', id).catch(err => {
       console.warn('[backend/modules/projects] Could not delete project in Firestore:', err);
+      return false;
+    });
+    if (!deleted && !LOCAL_STORE_ENABLED) {
+      throw new Error('Could not delete the project from Firestore. Check the server credentials and try again.');
     }
+    await deleteDoc(SNAPSHOT_COLLECTION, id).catch(() => false);
     writeLocalProjects(readLocalProjects().filter(project => (project.id || project._id) !== id));
+    invalidateProjectMetrics(id);
     return true;
   }
 }
