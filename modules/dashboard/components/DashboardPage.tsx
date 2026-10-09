@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/workstation/auth-context';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/workstation/firebase';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /* CEO executive dashboard — project metrics come from each configured project endpoint. */
 
@@ -51,6 +52,7 @@ interface RevenueMonth {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date | null>(null);
 
@@ -60,13 +62,7 @@ export default function DashboardPage() {
   // Modal state
   const [showExecReport,  setShowExecReport]  = useState(false);
   const [showBroadcast,   setShowBroadcast]   = useState(false);
-  const [selectedProject, setSelectedProject] = useState<ApiProject | null>(null);
   const [selectedApproval, setSelectedApproval] = useState<LiveApprovalItem | null>(null);
-  const [projectModal, setProjectModal] = useState<{
-    open: boolean;
-    mode: 'create' | 'edit';
-    project?: ApiProject | null;
-  }>({ open: false, mode: 'create', project: null });
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
 
   async function reloadProjects() {
@@ -502,7 +498,7 @@ export default function DashboardPage() {
           </div>
 
           <button
-            onClick={() => setProjectModal({ open: true, mode: 'create', project: null })}
+            onClick={() => router.push('/ceo/projects/new')}
             className="inline-flex items-center gap-2 rounded-xl bg-[#E5A800] px-4 py-2 text-[12px] font-bold text-gray-950 shadow-sm transition hover:brightness-105 active:scale-95"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -539,7 +535,7 @@ export default function DashboardPage() {
               Add enterprise projects and configure each project&rsquo;s metrics endpoint to report dashboard data.
             </p>
             <button
-              onClick={() => setProjectModal({ open: true, mode: 'create', project: null })}
+              onClick={() => router.push('/ceo/projects/new')}
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#E5A800] px-4 py-2 text-[12px] font-bold text-gray-950 shadow-sm transition hover:brightness-105"
             >
               + Add First Project
@@ -551,8 +547,8 @@ export default function DashboardPage() {
               <ProjectCard
                 key={project.id}
                 project={project}
-                onView={() => setSelectedProject(project)}
-                onEdit={() => setProjectModal({ open: true, mode: 'edit', project })}
+                onView={() => router.push(`/ceo/projects/${encodeURIComponent(project.id)}`)}
+                onEdit={() => router.push(`/ceo/projects/${encodeURIComponent(project.id)}/edit`)}
                 onDelete={() => handleDeleteProject(project.id, project.name)}
                 isDeleting={deletingProjectId === project.id}
               />
@@ -705,27 +701,6 @@ export default function DashboardPage() {
         <BroadcastModal
           onClose={() => setShowBroadcast(false)}
           overview={overview}
-        />
-      )}
-
-      {projectModal.open && (
-        <ProjectConfigModal
-          mode={projectModal.mode}
-          project={projectModal.project}
-          onClose={() => setProjectModal({ open: false, mode: 'create', project: null })}
-          onSaved={reloadProjects}
-        />
-      )}
-
-      {selectedProject && (
-        <ProjectDetailModal
-          project={selectedProject}
-          onClose={() => setSelectedProject(null)}
-          onEdit={() => {
-            const p = selectedProject;
-            setSelectedProject(null);
-            setProjectModal({ open: true, mode: 'edit', project: p });
-          }}
         />
       )}
 
@@ -1017,314 +992,6 @@ function ProjectCard({
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
-      </div>
-    </div>
-  );
-}
-
-const PRESET_COLORS = [
-  { name: 'Amber', hex: '#d97706' },
-  { name: 'Blue', hex: '#2563eb' },
-  { name: 'Orange', hex: '#ea580c' },
-  { name: 'Emerald', hex: '#059669' },
-  { name: 'Purple', hex: '#8b5cf6' },
-  { name: 'Cyan', hex: '#06b6d4' },
-  { name: 'Rose', hex: '#e11d48' },
-];
-
-function ProjectConfigModal({
-  mode,
-  project,
-  onClose,
-  onSaved,
-}: {
-  mode: 'create' | 'edit';
-  project?: ApiProject | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState(project?.name || '');
-  const [subtitle, setSubtitle] = useState(project?.subtitle || '');
-  const [adminUrl, setAdminUrl] = useState(project?.adminUrl || '');
-  const [apiEndpoint, setApiEndpoint] = useState(project?.apiEndpoint || '');
-  const [apiToken, setApiToken] = useState('');
-  const [clearApiToken, setClearApiToken] = useState(false);
-  const [lead, setLead] = useState(project?.lead || '');
-  const [description, setDescription] = useState(project?.description || '');
-  const [color, setColor] = useState(project?.color || '#d97706');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim() || !subtitle.trim()) {
-      setError('Please provide project name and category.');
-      return;
-    }
-    if (!apiEndpoint.trim()) {
-      setError('Please provide the project metrics endpoint URL.');
-      return;
-    }
-    if (mode === 'create' && !apiToken.trim()) {
-      setError('Bearer Token is required to authenticate with this endpoint.');
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      if (mode === 'create') {
-        const res = await fetch('/api/ceo/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: name.trim(),
-            subtitle: subtitle.trim(),
-            adminUrl: adminUrl.trim() || null,
-            apiEndpoint: apiEndpoint.trim(),
-            apiToken: apiToken.trim(),
-            lead: lead.trim() || '',
-            description: description.trim() || '',
-            color,
-          }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || 'Failed to create project');
-        }
-      } else if (mode === 'edit' && project) {
-        const res = await fetch('/api/ceo/projects', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: project.id,
-            name: name.trim(),
-            subtitle: subtitle.trim(),
-            adminUrl: adminUrl.trim() || null,
-            apiEndpoint: apiEndpoint.trim() || null,
-            apiToken: apiToken.trim() || undefined,
-            clearApiToken,
-            lead: lead.trim() || '',
-            description: description.trim() || '',
-            color,
-          }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || 'Failed to update project');
-        }
-      }
-
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while saving.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1a1a1a]">
-        <div className="flex items-start justify-between border-b border-gray-100 pb-4 dark:border-white/8">
-          <div>
-            <div className="flex items-center gap-2">
-              <span
-                className="h-3 w-3 rounded-full"
-                style={{ backgroundColor: color }}
-              />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                {mode === 'create' ? 'New Venture Setup' : 'Configure Venture'}
-              </span>
-            </div>
-            <h2 className="mt-1 text-[18px] font-bold text-gray-900 dark:text-white">
-              {mode === 'create' ? 'Add Enterprise Project' : `Edit ${project?.name || 'Project'}`}
-            </h2>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400">
-              Add the project metrics endpoint to populate its dashboard data.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/6"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        {error && (
-          <div className="mt-4 rounded-xl bg-red-50 p-3 text-[12px] font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4 text-[12px]">
-          {/* Row 1: Name & Subtitle */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                Project Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g., Meridian Crest Solutions"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                Category / Subtitle *
-              </label>
-              <input
-                type="text"
-                required
-                value={subtitle}
-                onChange={e => setSubtitle(e.target.value)}
-                placeholder="e.g., Talent Recruitment & HR"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Hosted Admin URL */}
-          <div>
-            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Hosted Link / Web Admin URL
-            </label>
-            <input
-              type="url"
-              value={adminUrl}
-              onChange={e => setAdminUrl(e.target.value)}
-              placeholder="https://yourproject.web.app/staff/ or https://admin.yourventure.com"
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-            />
-            <p className="mt-1 text-[11px] text-gray-400">
-              The direct web link for the project admin. Clicking &ldquo;Project Admin&rdquo; on the card opens this link in a new tab.
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Project Metrics Endpoint
-            </label>
-            <input
-              type="url"
-              value={apiEndpoint}
-              onChange={event => setApiEndpoint(event.target.value)}
-              placeholder="https://your-project.example.com/api/enterprise/metrics"
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-            />
-            <p className="mt-1 text-[11px] text-gray-400">
-              Returns JSON metrics for this project. The endpoint is fetched by the Enterprise server when the dashboard loads.
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Metrics Endpoint Bearer Token <span className="text-amber-500 font-bold">*</span> (Required)
-            </label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              required={mode === 'create'}
-              value={apiToken}
-              onChange={event => {
-                setApiToken(event.target.value);
-                if (event.target.value) setClearApiToken(false);
-              }}
-              placeholder={project?.hasApiToken ? 'Saved token — enter new token to update' : 'Enter the endpoint bearer token (required)'}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-            />
-            <p className="mt-1 text-[11px] text-gray-400">
-              Required to authenticate with this endpoint. Sent as a Bearer token by the Enterprise server, encrypted before storage, and never returned to the browser.
-            </p>
-            {project?.hasApiToken && (
-              <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-400">
-                <input
-                  type="checkbox"
-                  checked={clearApiToken}
-                  onChange={event => setClearApiToken(event.target.checked)}
-                  disabled={Boolean(apiToken)}
-                />
-                Remove saved token
-              </label>
-            )}
-          </div>
-
-          {/* Row 5: Lead & Accent Color */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                Project Lead / Manager
-              </label>
-              <input
-                type="text"
-                value={lead}
-                onChange={e => setLead(e.target.value)}
-                placeholder="e.g., Marcus Adebayo"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-                Accent Theme Color
-              </label>
-              <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                {PRESET_COLORS.map(c => (
-                  <button
-                    key={c.hex}
-                    type="button"
-                    onClick={() => setColor(c.hex)}
-                    style={{ backgroundColor: c.hex }}
-                    className={`h-6 w-6 rounded-full transition-transform ${
-                      color.toLowerCase() === c.hex.toLowerCase()
-                        ? 'ring-2 ring-offset-2 ring-gray-900 dark:ring-white scale-110'
-                        : 'hover:scale-105'
-                    }`}
-                    title={c.name}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 6: Description */}
-          <div>
-            <label className="mb-1 block font-semibold text-gray-700 dark:text-gray-300">
-              Venture Description
-            </label>
-            <textarea
-              rows={2}
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Brief description of operations, target market, or mission..."
-              className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-amber-500 dark:border-white/10 dark:bg-[#252525] dark:text-white"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-2.5 border-t border-gray-100 pt-4 dark:border-white/8">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-200 px-4 py-2 font-semibold text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-[#E5A800] px-5 py-2 font-bold text-gray-950 transition hover:brightness-105 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : mode === 'create' ? 'Create Project' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
@@ -2099,297 +1766,6 @@ function BroadcastModal({
 }
 
 /* ── Project Detail Modal ───────────────────────────────────────────────── */
-function ProjectDetailModal({
-  project,
-  onClose,
-  onEdit,
-}: {
-  project: ApiProject;
-  onClose: () => void;
-  onEdit?: () => void;
-}) {
-  const color = project.color || '#d97706';
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#1a1a1a]">
-        {/* Header */}
-        <div
-          className="border-b p-5"
-          style={{
-            backgroundColor: `${color}15`,
-            borderColor: `${color}30`,
-          }}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl font-bold text-base uppercase"
-                style={{
-                  backgroundColor: `${color}25`,
-                  color: color,
-                }}
-              >
-                {project.name.slice(0, 2)}
-              </div>
-              <div>
-                <h2 className="text-[18px] font-bold text-gray-900 dark:text-white leading-tight">
-                  {project.name}
-                </h2>
-                <p className="text-[12px] text-gray-600 dark:text-gray-300">
-                  {project.subtitle}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-black/5 hover:text-gray-600 dark:hover:bg-white/10 dark:hover:text-white"
-            >
-              <CloseIcon />
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="max-h-[65vh] overflow-y-auto p-5 space-y-4 text-[13px]">
-          <div>
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">
-              About Venture
-            </h4>
-            <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-[12px]">
-              {project.description || 'No description provided for this venture.'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/4">
-              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Venture Leadership</span>
-              <span className="font-semibold text-gray-900 dark:text-white text-[12px]">
-                {project.lead || 'Executive Board'}
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/4">
-              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Status &amp; Sync</span>
-              <span className="font-semibold text-emerald-600 text-[12px] capitalize">
-                {project.status || 'Active'}
-              </span>
-            </div>
-          </div>
-
-          {/* Project Link */}
-          <div className="rounded-xl border border-gray-100 p-3.5 space-y-2 dark:border-white/8 bg-gray-50/50 dark:bg-white/2">
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-              Project URL
-            </h4>
-            <div className="space-y-1.5 text-[11px]">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-gray-500 shrink-0">Hosted Link:</span>
-                {project.adminUrl ? (
-                  <a
-                    href={project.adminUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-amber-600 dark:text-amber-400 truncate hover:underline"
-                  >
-                    {project.adminUrl}
-                  </a>
-                ) : (
-                  <span className="text-gray-400">Not configured</span>
-                )}
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-gray-500 shrink-0">Metrics Endpoint:</span>
-                {project.apiEndpoint ? (
-                  <a
-                    href={project.apiEndpoint}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-amber-600 dark:text-amber-400 truncate hover:underline"
-                  >
-                    {project.apiEndpoint}
-                  </a>
-                ) : (
-                  <span className="text-gray-400">Not configured</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {(project.tasks || project.departments || project.staff) && (
-            <div className="space-y-3">
-              {project.tasks && (
-                <section>
-                  <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                    Tasks · {project.tasks.completed}/{project.tasks.total} completed
-                  </h4>
-                  {project.tasks.items?.length ? (
-                    <div className="space-y-1.5">
-                      {project.tasks.items.slice(0, 8).map(task => (
-                        <div key={task.id} className="flex items-start justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/4">
-                          <div className="min-w-0">
-                            <p className="truncate text-[12px] font-medium text-gray-800 dark:text-gray-200">{task.task}</p>
-                            <p className="text-[10px] text-gray-500">
-                              {[task.assignee, task.department, task.dueDate].filter(Boolean).join(' · ') || 'No assignment details'}
-                            </p>
-                          </div>
-                          <span className="shrink-0 text-[10px] text-gray-500">{task.status}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-gray-500">Task totals are reported; individual tasks were not included.</p>
-                  )}
-                </section>
-              )}
-
-              {project.departments && (
-                <section>
-                  <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                    Departments
-                  </h4>
-                  {project.departments.length ? (
-                    <div className="space-y-1.5">
-                      {project.departments.map(department => (
-                        <div key={department.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/4">
-                          <span className="text-[12px] font-medium text-gray-800 dark:text-gray-200">{department.name}</span>
-                          <span className="shrink-0 text-[10px] text-gray-500">
-                            {department.headcount} staff
-                            {department.tasksTotal != null ? ` · ${department.tasksCompleted ?? 0}/${department.tasksTotal} tasks` : ''}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-gray-500">No departments reported.</p>
-                  )}
-                </section>
-              )}
-
-              {project.staff && (
-                <section>
-                  <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                    Project Staff · {project.staff.length}
-                  </h4>
-                  {project.staff.length ? (
-                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                      {project.staff.slice(0, 12).map(staff => (
-                        <div key={staff.id} className="rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/4">
-                          <p className="truncate text-[12px] font-medium text-gray-800 dark:text-gray-200">{staff.name}</p>
-                          <p className="truncate text-[10px] text-gray-500">
-                            {[staff.role, staff.department, staff.status].filter(Boolean).join(' · ') || 'No profile details'}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-gray-500">No staff reported.</p>
-                  )}
-                </section>
-              )}
-            </div>
-          )}
-
-          {/* Revenue 6-Month Breakdown if available */}
-          {project.revenueTrend && project.revenueTrend.length > 0 && (
-            <div>
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2">
-                Recent 6-Month Revenue
-              </h4>
-              <div className="grid grid-cols-6 gap-1.5 text-center">
-                {project.revenueTrend.map((t, idx) => (
-                  <div key={idx} className="rounded-lg bg-gray-50 p-2 dark:bg-white/4">
-                    <span className="text-[10px] text-gray-400 block">{t.month}</span>
-                    <span className="text-[11px] font-bold text-gray-900 dark:text-white truncate block">
-                      {t.revenue > 0 ? (t.revenue >= 1_000_000 ? `${(t.revenue / 1_000_000).toFixed(1)}M` : `${Math.round(t.revenue / 1_000)}K`) : '0'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Key Metrics */}
-          {project.metrics && project.metrics.length > 0 && (
-            <div>
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2">
-                Performance Indicators
-              </h4>
-              <div className="grid grid-cols-3 gap-2">
-                {project.metrics.map((m, i) => (
-                  <div key={i} className="rounded-xl border border-gray-100 p-3 text-center dark:border-white/6">
-                    <div className="text-[15px] font-bold text-gray-900 dark:text-white truncate">
-                      {m.value ?? '—'}
-                    </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5 truncate">{m.label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Health Index */}
-          <div>
-            <div className="flex items-center justify-between text-[12px] mb-1">
-              <span className="font-medium text-gray-600 dark:text-gray-400">Operational Health</span>
-              <span className="font-bold" style={{ color: project.health != null ? color : '#94a3b8' }}>
-                {project.health != null ? `${project.health}% Optimal` : '—'}
-              </span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${project.health ?? 0}%`,
-                  backgroundColor: project.health != null ? color : 'transparent',
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-2.5 border-t border-gray-100 p-4 dark:border-white/8">
-          {onEdit && (
-            <button
-              onClick={() => {
-                onClose();
-                onEdit();
-              }}
-              className="rounded-lg border border-gray-200 px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
-            >
-              Edit Venture
-            </button>
-          )}
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={onClose}
-              className="rounded-lg bg-gray-100 px-4 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-200"
-            >
-              Dismiss
-            </button>
-            {project.adminUrl && (
-              <a
-                href={project.adminUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={onClose}
-                className="rounded-lg bg-[#E5A800] px-4 py-2 text-[12px] font-bold text-gray-950 hover:brightness-105"
-              >
-                Open Project Admin ↗
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   PRECISE SVG ICONS
-═══════════════════════════════════════════════════════════════════════════ */
-
 function SparklineIcon({ color = '#eab308' }: { color?: string }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

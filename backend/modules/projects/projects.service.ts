@@ -11,16 +11,23 @@ import { listDocs, getDoc, createDoc, updateDoc, deleteDoc } from '../../core/fi
 import type { FirestoreDoc } from '../../core/types';
 import type {
   ProjectActivityItem,
+  ProjectAnalyticsData,
   ProjectApprovalItem,
   ProjectCardData,
   ProjectCardMetric,
   ProjectDepartment,
   ProjectLeaveRequest,
   ProjectMonthlyRevenue,
+  ProjectNotification,
+  ProjectNotificationCategory,
+  ProjectNotificationItem,
+  ProjectRecordTone,
+  ProjectRecordsTable,
   ProjectStaffMember,
   ProjectTaskCreatePayload,
   ProjectTaskItem,
   ProjectTasksSummary,
+  ProjectTopItems,
   CreateProjectDto,
   UpdateProjectDto,
 } from './projects.types';
@@ -54,6 +61,10 @@ interface ProjectMetricsData {
   departments?: ProjectDepartment[];
   tasks?: ProjectTasksSummary;
   leaveRequests?: ProjectLeaveRequest[];
+  topItems?: ProjectTopItems;
+  recentRecords?: ProjectRecordsTable;
+  analytics?: ProjectAnalyticsData;
+  notifications?: ProjectNotification[];
 }
 
 const METRICS_TIMEOUT_MS = 5_000;
@@ -256,7 +267,11 @@ function parseMetrics(data: DataRecord): ProjectCardMetric[] {
       const label = stringValue(record.label ?? record.name ?? record.title);
       const value = record.value;
       if (!label || value == null || typeof value === 'object') return [];
-      return [{ label, value: String(value) }];
+      const hint = stringValue(record.hint ?? record.change ?? record.caption);
+      const trend = record.trend === 'up' || record.trend === 'down'
+        ? record.trend
+        : hint?.startsWith('+') ? 'up' : hint?.startsWith('-') || hint?.startsWith('−') ? 'down' : undefined;
+      return [{ label, value: String(value), ...(hint ? { hint } : {}), ...(trend ? { trend } : {}) }];
     });
   }
 
@@ -272,7 +287,7 @@ function parseMetrics(data: DataRecord): ProjectCardMetric[] {
     'health', 'healthScore', 'systemHealth', 'score', 'revenueTrend', 'monthlyRevenue',
     'revenueSeries', 'trend', 'series', 'status', 'id', 'name', 'subtitle', 'approvals',
     'pendingApprovals', 'staff', 'departments', 'tasks', 'activity', 'activities', 'feed',
-    'events', 'analytics',
+    'events', 'analytics', 'topItems', 'recentRecords', 'notifications',
   ]);
   return Object.entries(data)
     .filter(([key, value]) => !excludedKeys.has(key) && value != null && typeof value !== 'object')
@@ -496,6 +511,182 @@ function parseActivity(value: unknown): ProjectActivityItem[] | undefined {
   });
 }
 
+/** Optional ranked chart: { title, subtitle?, items: [{ label, value }] }. */
+function parseTopItems(raw: unknown): ProjectTopItems | undefined {
+  const record = asRecord(raw);
+  const title = record && stringValue(record.title);
+  if (!record || !title || !Array.isArray(record.items)) return undefined;
+  const items = record.items.flatMap(item => {
+    const entry = asRecord(item);
+    const label = entry && stringValue(entry.label ?? entry.name);
+    const value = entry && numberValue(entry.value ?? entry.count);
+    return label && value != null ? [{ label, value }] : [];
+  }).slice(0, 10);
+  if (items.length === 0) return undefined;
+  const subtitle = stringValue(record.subtitle);
+  return { title, ...(subtitle ? { subtitle } : {}), items };
+}
+
+const RECORD_TONES: ProjectRecordTone[] = ['success', 'info', 'warning', 'danger', 'neutral'];
+
+/** Optional table: { title, columns: [...], rows: [{ cells: [...], status?, tone? }] }. */
+function parseRecordsTable(raw: unknown): ProjectRecordsTable | undefined {
+  const record = asRecord(raw);
+  const title = record && stringValue(record.title);
+  if (!record || !title || !Array.isArray(record.columns) || !Array.isArray(record.rows)) return undefined;
+  const columns = record.columns.map(column => stringValue(column) ?? '').slice(0, 6);
+  const rows = record.rows.flatMap(row => {
+    const entry = asRecord(row);
+    if (!entry || !Array.isArray(entry.cells)) return [];
+    const cells = entry.cells.map(cell => (cell == null || typeof cell === 'object' ? '' : String(cell))).slice(0, columns.length);
+    const status = stringValue(entry.status);
+    const tone = RECORD_TONES.includes(entry.tone as ProjectRecordTone) ? entry.tone as ProjectRecordTone : undefined;
+    return [{ cells, ...(status ? { status } : {}), ...(tone ? { tone } : {}) }];
+  }).slice(0, 10);
+  return columns.length ? { title, columns, rows } : undefined;
+}
+
+const records = (value: unknown): DataRecord[] =>
+  (Array.isArray(value) ? value.flatMap(item => { const record = asRecord(item); return record ? [record] : []; }) : []);
+const numbers = (value: unknown): number[] =>
+  (Array.isArray(value) ? value.map(item => numberValue(item) ?? 0) : []);
+const strings = (value: unknown): string[] =>
+  (Array.isArray(value) ? value.flatMap(item => { const text = stringValue(item); return text ? [text] : []; }) : []);
+const percent = (value: unknown) => Math.max(0, Math.min(100, numberValue(value) ?? 0));
+const colorValue = (value: unknown, fallback: string) => {
+  const color = stringValue(value);
+  return color && /^#[0-9a-f]{3,8}$/i.test(color) ? color : fallback;
+};
+
+/**
+ * The optional `analytics` block read by the CEO Analytics page. Each section
+ * is kept only if it has the expected shape; anything else is dropped.
+ */
+function parseAnalytics(raw: unknown): ProjectAnalyticsData | undefined {
+  const data = asRecord(raw);
+  if (!data) return undefined;
+  const result: ProjectAnalyticsData = {};
+
+  const staffPerformance = records(data.staffPerformance).flatMap(item => {
+    const name = stringValue(item.name);
+    if (!name) return [];
+    const department = stringValue(item.department);
+    const rating = numberValue(item.rating) ?? stringValue(item.rating) ?? 0;
+    return [{
+      name,
+      ...(department ? { department } : {}),
+      tasks: numberValue(item.tasks) ?? 0,
+      attendance: percent(item.attendance),
+      rating,
+      productivity: percent(item.productivity),
+    }];
+  });
+  if (staffPerformance.length) result.staffPerformance = staffPerformance;
+
+  const radar = asRecord(data.departmentPerformance);
+  const axes = strings(radar?.axes);
+  if (radar && axes.length) {
+    const series = records(radar.series).flatMap((item, index) => {
+      const label = stringValue(item.label);
+      const fracs = numbers(item.fracs).map(value => Math.max(0, Math.min(1, value)));
+      return label && fracs.length === axes.length
+        ? [{ label, color: colorValue(item.color, ['#22c55e', '#3b82f6', '#f5bd02'][index % 3]), fracs }]
+        : [];
+    });
+    if (series.length) result.departmentPerformance = { axes, series };
+  }
+
+  const timeline = asRecord(data.staffTimeline);
+  const timelineMonths = strings(timeline?.months);
+  if (timeline && timelineMonths.length) {
+    const active = numbers(timeline.active);
+    const onLeave = numbers(timeline.onLeave);
+    if (active.length === timelineMonths.length && onLeave.length === timelineMonths.length) {
+      result.staffTimeline = { months: timelineMonths, active, onLeave };
+    }
+  }
+
+  const monthlyFinance = records(data.monthlyFinance).flatMap(item => {
+    const month = stringValue(item.month);
+    return month ? [{ month, revenue: numberValue(item.revenue) ?? 0, expenses: numberValue(item.expenses) ?? 0 }] : [];
+  });
+  if (monthlyFinance.length) result.monthlyFinance = monthlyFinance;
+
+  const expenseBreakdown = records(data.expenseBreakdown).flatMap((item, index) => {
+    const label = stringValue(item.label);
+    const amount = numberValue(item.amount);
+    return label
+      ? [{ label, pct: percent(item.pct), color: colorValue(item.color, ['#ef4444', '#f5bd02', '#3b82f6', '#8b5cf6'][index % 4]), ...(amount != null ? { amount } : {}) }]
+      : [];
+  });
+  if (expenseBreakdown.length) result.expenseBreakdown = expenseBreakdown;
+
+  const trainingCompliance = records(data.trainingCompliance).flatMap(item => {
+    const label = stringValue(item.label);
+    return label ? [{ label, pct: percent(item.pct), mandatory: item.mandatory === true }] : [];
+  });
+  if (trainingCompliance.length) result.trainingCompliance = trainingCompliance;
+
+  const timeRecords = asRecord(data.timeRecords);
+  if (timeRecords) {
+    const departmentHours = records(timeRecords.departmentHours).flatMap(item => {
+      const label = stringValue(item.label);
+      return label ? [{ label, pct: percent(item.pct), sub: stringValue(item.sub) ?? '' }] : [];
+    });
+    const punctuality = records(timeRecords.punctuality).flatMap(item => {
+      const label = stringValue(item.label);
+      return label ? [{ label, pct: percent(item.pct) }] : [];
+    });
+    if (departmentHours.length || punctuality.length) result.timeRecords = { departmentHours, punctuality };
+  }
+
+  const recentActivities = records(data.recentActivities).flatMap(item => {
+    const name = stringValue(item.name);
+    const action = stringValue(item.action);
+    if (!name || !action) return [];
+    const initials = stringValue(item.initials);
+    const color = stringValue(item.color);
+    return [{
+      name, action, detail: stringValue(item.detail) ?? '', time: stringValue(item.time) ?? '',
+      ...(initials ? { initials } : {}), ...(color ? { color } : {}),
+    }];
+  }).slice(0, 20);
+  if (recentActivities.length) result.recentActivities = recentActivities;
+
+  return Object.keys(result).length ? result : undefined;
+}
+
+const NOTIFICATION_CATEGORIES: ProjectNotificationCategory[] = ['tasks', 'updates', 'payments', 'messages'];
+
+/** Optional `notifications`: project-wide events, newest first (max 30). */
+function parseNotifications(raw: unknown): ProjectNotification[] | undefined {
+  const items = records(raw).flatMap(item => {
+    const title = stringValue(item.title);
+    const createdAt = stringValue(item.createdAt ?? item.time);
+    const time = createdAt ? Date.parse(createdAt) : NaN;
+    if (!title || Number.isNaN(time)) return [];
+    const category = NOTIFICATION_CATEGORIES.includes(item.category as ProjectNotificationCategory)
+      ? item.category as ProjectNotificationCategory
+      : 'updates';
+    const priority = stringValue(item.priority)?.toLowerCase();
+    const link = stringValue(item.link);
+    return [{
+      id: stringValue(item.id) ?? `${title}-${time}`,
+      title,
+      message: stringValue(item.message ?? item.body) ?? '',
+      type: stringValue(item.type) ?? 'update',
+      category,
+      createdAt: new Date(time).toISOString(),
+      ...(priority === 'high' || priority === 'medium' || priority === 'low' ? { priority } : {}),
+      // Only http(s) links, so a project can't send a javascript: URL.
+      ...(link && /^https?:\/\//i.test(link) ? { link } : {}),
+    } satisfies ProjectNotification];
+  });
+  return items.length
+    ? items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30)
+    : undefined;
+}
+
 function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const outer = asRecord(response);
   if (!outer) throw new Error('Metrics endpoint response must be a JSON object.');
@@ -526,6 +717,10 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const approvals = parseApprovals(rawApprovals, endpointName ?? 'Project');
   const activity = parseActivity(data.activity ?? data.activities ?? data.feed ?? data.events);
   const metrics = parseMetrics(data);
+  const topItems = parseTopItems(data.topItems);
+  const recentRecords = parseRecordsTable(data.recentRecords);
+  const analytics = parseAnalytics(data.analytics);
+  const notifications = parseNotifications(data.notifications);
   const pendingApprovals = Array.isArray(data.pendingApprovals)
     ? data.pendingApprovals.length
     : numberValue(asRecord(data.pendingApprovals)?.count ?? data.pendingApprovals);
@@ -566,6 +761,10 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
     ...(departments ? { departments } : {}),
     ...(tasks ? { tasks } : {}),
     ...(leaveRequests ? { leaveRequests } : {}),
+    ...(topItems ? { topItems } : {}),
+    ...(recentRecords ? { recentRecords } : {}),
+    ...(analytics ? { analytics } : {}),
+    ...(notifications ? { notifications } : {}),
   };
 }
 
@@ -874,6 +1073,20 @@ export class ProjectsService {
     }
     return Promise.all(stored.map(project => loadProject(project, forceRefresh)))
       .then(projects => projects.filter((project): project is ProjectCardData => project !== null));
+  }
+
+  /** Every project's reported notifications, newest first, labelled with the project. */
+  static async getProjectNotifications(limit = 60): Promise<ProjectNotificationItem[]> {
+    const projects = await ProjectsService.getProjectsOverview();
+    return projects
+      .flatMap(project => (project.notifications ?? []).map(notification => ({
+        ...notification,
+        projectId: project.id,
+        projectName: project.name,
+        projectColor: project.color || '#C89B3C',
+      })))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
   }
 
   static async getProjectLeaveRequests(): Promise<{

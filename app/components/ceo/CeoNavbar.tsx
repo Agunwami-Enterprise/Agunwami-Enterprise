@@ -2,16 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { UserRound } from 'lucide-react';
 import { useTheme } from '@/lib/workstation/theme-context';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeUserProfile, type UserProfile } from '@/modules/settings/services';
 import { subscribeNotifications, markNotifRead, markAllNotifsRead, routeForNotif, type NotifItem } from '@/modules/notifications/services';
+import { categoryColors, timeAgo, useProjectNotifications } from '@/modules/notifications/project-notifications';
 
 interface Props { onMenuClick: () => void; }
 
 export default function CeoNavbar({ onMenuClick }: Props) {
   const [showNotif, setShowNotif] = useState(false);
   const [showUser, setShowUser]   = useState(false);
+  // The photo URL whose image failed to load, so we show the icon instead.
+  const [brokenPhoto, setBrokenPhoto] = useState<string | null>(null);
   const [profile, setProfile]     = useState<UserProfile | null>(null);
   const [navNotifs, setNavNotifs] = useState<NotifItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -40,6 +44,8 @@ export default function CeoNavbar({ onMenuClick }: Props) {
   }, [user?.uid]);
 
   const navUnread = navNotifs.filter(n => !n.read).length;
+  // Project-wide events from each project's metrics endpoint (no read state).
+  const projectNotifs = useProjectNotifications().items.slice(0, 4);
 
   function handleNotifClick(n: NotifItem) {
     setShowNotif(false);
@@ -58,7 +64,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
 
   const displayName  = profile?.displayName  || user?.displayName || 'Agunwami';
   const displayEmail = profile?.email || user?.email       || 'ceo@agunwami.com';
-  const initials     = displayName.charAt(0).toUpperCase();
+  const photoURL     = profile?.photoURL || user?.photoURL || '';
 
   return (
     <header className="relative z-10 flex h-14 flex-shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 dark:border-white/6 dark:bg-[#1a1a1a]">
@@ -123,7 +129,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
 
             {/* Items */}
             <div className="max-h-[360px] overflow-y-auto">
-              {navNotifs.length === 0 ? (
+              {navNotifs.length === 0 && projectNotifs.length === 0 ? (
                 <div className="px-4 py-8 text-center text-[12px] text-gray-400">No notifications</div>
               ) : (
                 navNotifs.slice(0, 8).map(n => (
@@ -144,10 +150,39 @@ export default function CeoNavbar({ onMenuClick }: Props) {
                   </button>
                 ))
               )}
+              {projectNotifs.length > 0 && (
+                <>
+                  <p className="bg-gray-50 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:bg-white/3">From your projects</p>
+                  {projectNotifs.map(n => {
+                    const colors = categoryColors(n.category);
+                    return (
+                      <a
+                        key={`${n.projectId}-${n.id}`}
+                        href={n.link || `/ceo/projects/${encodeURIComponent(n.projectId)}`}
+                        {...(n.link ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                        onClick={() => setShowNotif(false)}
+                        className="flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left last:border-0 hover:bg-gray-50 dark:border-white/4 dark:hover:bg-white/3"
+                      >
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: colors.bg }}>
+                          <NotifCategoryIcon category={n.category} color={colors.color} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-semibold text-gray-800 dark:text-white">{n.title}</p>
+                          <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400">{n.message}</p>
+                          <p className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-gray-500">
+                            <span className="rounded-sm px-1 py-px font-bold text-white" style={{ backgroundColor: n.projectColor }}>{n.projectName}</span>
+                            {timeAgo(n.createdAt)}
+                          </p>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </>
+              )}
             </div>
 
             {/* Footer */}
-            {navNotifs.length > 0 && (
+            {(navNotifs.length > 0 || projectNotifs.length > 0) && (
               <div className="border-t border-gray-100 dark:border-white/6">
                 <button
                   onClick={() => { setShowNotif(false); router.push('/ceo/notifications'); }}
@@ -168,17 +203,19 @@ export default function CeoNavbar({ onMenuClick }: Props) {
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-white/6"
         >
           <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-gray-200 dark:ring-white/10">
-            <img
-              src={profile?.photoURL || user?.photoURL || '/agunwami_ceo.jpg'}
-              alt={displayName}
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLElement).style.display = 'none';
-              }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-[#f5bd02] text-[11px] font-bold text-[#1a1a1a] -z-10">
-              {initials}
-            </div>
+            {/* The user's own photo, or an icon; never someone else's picture. */}
+            {photoURL && photoURL !== brokenPhoto ? (
+              <img
+                src={photoURL}
+                alt={displayName}
+                className="h-full w-full object-cover"
+                onError={() => setBrokenPhoto(photoURL)}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-[#f5bd02] text-[#1a1a1a]" aria-hidden="true">
+                <UserRound className="h-[18px] w-[18px]" />
+              </div>
+            )}
           </div>
           <div className="hidden text-left sm:block">
             <p className="text-[12px] font-semibold leading-tight text-gray-800 dark:text-white">{displayName}</p>

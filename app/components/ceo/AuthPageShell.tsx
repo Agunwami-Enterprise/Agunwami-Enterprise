@@ -5,12 +5,12 @@ export default function AuthPageShell({ children }: { children: React.ReactNode 
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#faf8ec] px-4 py-10 dark:bg-[#111111]">
       {/* Brand header */}
       <div className="mb-7 flex flex-col items-center">
-        <Image src="/AE-Logo.svg" alt="AE Hub" width={84} height={84} priority />
+        <Image src="/AE-Logo.svg" alt="AE Workstation" width={84} height={84} priority />
         <h1
           className="mt-2 font-bold tracking-tight text-[#1a1a1a] dark:text-white"
           style={{ fontSize: 28, lineHeight: '34px' }}
         >
-          AE Hub
+          AE Workstation
         </h1>
         <p
           className="mt-0.75 text-center font-medium"

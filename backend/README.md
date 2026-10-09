@@ -56,6 +56,75 @@ Example response:
 }
 ```
 
+### Optional fields for the project page
+
+The CEO project page (`/ceo/projects/[id]`) also uses these optional fields. Endpoints that leave them out keep working; the page shows departments and tasks instead.
+
+- **`metrics[].hint`** and **`metrics[].trend`**: a line under a KPI value (also accepted as `change` or `caption`), with `"up"` or `"down"` for the arrow. Without `trend`, a hint starting with `+` or `-` sets it.
+- **`topItems`**: a ranked bar chart, up to 10 items.
+- **`recentRecords`**: a table, up to 6 columns and 10 rows. A row's `tone` colours its status badge: `success`, `info`, `warning`, `danger` or `neutral`.
+
+```json
+{
+  "metrics": [
+    { "label": "Revenue (MTD)", "value": "₦580,000", "hint": "+5.3% vs June", "trend": "up" }
+  ],
+  "topItems": {
+    "title": "Top 5 Selling Products",
+    "subtitle": "Units sold this month",
+    "items": [{ "label": "iPhone 17 Pro-Max", "value": 850 }]
+  },
+  "recentRecords": {
+    "title": "Recent Orders",
+    "columns": ["Order ID", "Customer", "Amount"],
+    "rows": [{ "cells": ["TRD-10258", "Amaka Okafor", "₦128,000"], "status": "Completed", "tone": "success" }]
+  }
+}
+```
+
+### Optional `notifications` (project page, Notifications page, bell)
+
+Project-wide events for the CEO, newest first (the workstation keeps the latest 30). `category` is `tasks`, `updates`, `payments` or `messages` (anything else counts as `updates`). `link` must be an absolute http(s) URL into the project. Send events, not per-person copies: one entry per event.
+
+```json
+{
+  "notifications": [{
+    "id": "evt-123",
+    "title": "Staff Promotion: Ada",
+    "message": "Ada was promoted to Content Admin.",
+    "type": "staff_promotion",
+    "category": "updates",
+    "createdAt": "2026-10-09T08:55:00Z",
+    "priority": "high",
+    "link": "https://project.example.com/staff/content/overview"
+  }]
+}
+```
+
+### Optional `analytics` block (CEO Analytics page)
+
+`/ceo/analytics` reads an optional `analytics` object from each project, plus `hoursLogged`, `attendanceRate`, `productivity`, `efficiency` and `engagement` on each department. Every section is optional, and a section with the wrong shape is dropped. Percentages are 0–100, except `fracs`, which are 0–1, one per axis.
+
+```json
+{
+  "analytics": {
+    "staffPerformance": [{ "name": "Ada", "department": "Content", "tasks": 12, "attendance": 95, "rating": 4.6, "productivity": 88 }],
+    "departmentPerformance": { "axes": ["Content", "Operations"], "series": [{ "label": "Attendance", "color": "#3b82f6", "fracs": [0.9, 0.8] }] },
+    "staffTimeline": { "months": ["May", "Jun"], "active": [8, 9], "onLeave": [1, 0] },
+    "monthlyFinance": [{ "month": "Jun", "revenue": 250000, "expenses": 120000 }],
+    "expenseBreakdown": [{ "label": "Salaries", "pct": 70, "color": "#ef4444", "amount": 840000 }],
+    "trainingCompliance": [{ "label": "Security basics", "pct": 80, "mandatory": true }],
+    "timeRecords": {
+      "departmentHours": [{ "label": "Content", "pct": 100, "sub": "160h" }],
+      "punctuality": [{ "label": "Content", "pct": 92 }]
+    },
+    "recentActivities": [{ "name": "Ada", "action": "clocked in", "detail": "Content", "time": "2026-10-09T08:55:00Z", "initials": "A" }]
+  }
+}
+```
+
+AE Hub computes all of these from its own records, except `trainingCompliance` (see `functions/src/enterpriseInsights.ts` in aehub-onboarding).
+
 Configure this URL in the project's **Project Metrics Endpoint** field. The endpoint is fetched server-side by `/api/ceo/projects/overview`; it should be reachable by the Enterprise server and return JSON.
 
 ---
