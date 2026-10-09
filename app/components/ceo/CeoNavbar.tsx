@@ -7,6 +7,7 @@ import { useTheme } from '@/lib/workstation/theme-context';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeUserProfile, type UserProfile } from '@/modules/settings/services';
 import { subscribeNotifications, markNotifRead, markAllNotifsRead, routeForNotif, type NotifItem } from '@/modules/notifications/services';
+import { categoryColors, timeAgo, useProjectNotifications } from '@/modules/notifications/project-notifications';
 
 interface Props { onMenuClick: () => void; }
 
@@ -43,6 +44,8 @@ export default function CeoNavbar({ onMenuClick }: Props) {
   }, [user?.uid]);
 
   const navUnread = navNotifs.filter(n => !n.read).length;
+  // Project-wide events from each project's metrics endpoint (no read state).
+  const projectNotifs = useProjectNotifications().items.slice(0, 4);
 
   function handleNotifClick(n: NotifItem) {
     setShowNotif(false);
@@ -126,7 +129,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
 
             {/* Items */}
             <div className="max-h-[360px] overflow-y-auto">
-              {navNotifs.length === 0 ? (
+              {navNotifs.length === 0 && projectNotifs.length === 0 ? (
                 <div className="px-4 py-8 text-center text-[12px] text-gray-400">No notifications</div>
               ) : (
                 navNotifs.slice(0, 8).map(n => (
@@ -147,10 +150,39 @@ export default function CeoNavbar({ onMenuClick }: Props) {
                   </button>
                 ))
               )}
+              {projectNotifs.length > 0 && (
+                <>
+                  <p className="bg-gray-50 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:bg-white/3">From your projects</p>
+                  {projectNotifs.map(n => {
+                    const colors = categoryColors(n.category);
+                    return (
+                      <a
+                        key={`${n.projectId}-${n.id}`}
+                        href={n.link || `/ceo/projects/${encodeURIComponent(n.projectId)}`}
+                        {...(n.link ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                        onClick={() => setShowNotif(false)}
+                        className="flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left last:border-0 hover:bg-gray-50 dark:border-white/4 dark:hover:bg-white/3"
+                      >
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: colors.bg }}>
+                          <NotifCategoryIcon category={n.category} color={colors.color} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-semibold text-gray-800 dark:text-white">{n.title}</p>
+                          <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400">{n.message}</p>
+                          <p className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-gray-500">
+                            <span className="rounded-sm px-1 py-px font-bold text-white" style={{ backgroundColor: n.projectColor }}>{n.projectName}</span>
+                            {timeAgo(n.createdAt)}
+                          </p>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </>
+              )}
             </div>
 
             {/* Footer */}
-            {navNotifs.length > 0 && (
+            {(navNotifs.length > 0 || projectNotifs.length > 0) && (
               <div className="border-t border-gray-100 dark:border-white/6">
                 <button
                   onClick={() => { setShowNotif(false); router.push('/ceo/notifications'); }}

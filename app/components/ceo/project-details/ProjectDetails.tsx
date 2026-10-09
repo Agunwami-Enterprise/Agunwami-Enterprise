@@ -7,13 +7,13 @@
 
 import Link from 'next/link';
 import {
-  Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BookOpen, CheckSquare, Clock, DollarSign,
+  Activity, AlertCircle, ArrowDownRight, Bell, ArrowLeft, ArrowUpRight, BookOpen, CheckSquare, Clock, DollarSign,
   ExternalLink, LayoutDashboard, Megaphone, Package, Pencil, RotateCcw, ShoppingBag, TrendingUp, Users, Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import SiteIcon from '@/app/components/common/SiteIcon';
 import type {
-  ProjectApprovalItem, ProjectCardData, ProjectCardMetric, ProjectRecordTone,
+  ProjectApprovalItem, ProjectCardData, ProjectCardMetric, ProjectNotification, ProjectRecordTone,
 } from '@/backend/modules/projects/projects.types';
 import type { SiteIconName } from '@/backend/modules/site-content/site-content.types';
 import RefreshButton from './RefreshButton';
@@ -217,6 +217,55 @@ function Approvals({ items }: { items: ProjectApprovalItem[] }) {
   );
 }
 
+function ago(iso: string): string {
+  const minutes = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (!Number.isFinite(minutes) || minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.floor(hours / 24);
+  return days < 7 ? `${days} day${days === 1 ? '' : 's'} ago` : new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** Project-wide events the project reports through its metrics endpoint. */
+function Notifications({ items }: { items: ProjectNotification[] }) {
+  return (
+    <section className={card}>
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-[16px] font-semibold text-gray-900 dark:text-white">
+          <Bell className="h-4 w-4 text-gray-400" aria-hidden="true" /> Recent Notifications
+        </h2>
+        <Link href="/ceo/notifications" className="text-[13px] font-medium text-[#C89B3C] hover:underline">View all</Link>
+      </div>
+      {items.length === 0 ? (
+        <p className="py-10 text-center text-[13px] text-gray-400">No notifications from this project in the last 30 days.</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-gray-100 dark:divide-white/5">
+          {items.slice(0, 6).map(item => {
+            const content = (
+              <>
+                <p className="flex flex-wrap items-center gap-2 text-[14px] font-medium text-gray-900 dark:text-white">
+                  {item.title}
+                  {item.priority === 'high' && <span className="rounded bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">HIGH</span>}
+                </p>
+                {item.message && <p className="text-[13px] text-gray-600 dark:text-gray-300">{item.message}</p>}
+                <p className="mt-0.5 text-[12px] text-gray-400">{ago(item.createdAt)}</p>
+              </>
+            );
+            return (
+              <li key={item.id} className="py-3">
+                {item.link
+                  ? <a href={item.link} target="_blank" rel="noopener noreferrer" className="block rounded-lg hover:opacity-80">{content}</a>
+                  : content}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 const button = 'inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-800 shadow-sm hover:bg-gray-50 dark:border-white/10 dark:bg-white/5 dark:text-gray-100 dark:hover:bg-white/10';
 
 export default function ProjectDetails({ project, category, icon, websiteUrl }: {
@@ -305,6 +354,8 @@ export default function ProjectDetails({ project, category, icon, websiteUrl }: 
           : <RecordsTable title="Recent Records" columns={[]} rows={[]} empty="This project's endpoint doesn't send recent records yet." />}
         <Approvals items={project.approvals ?? []} />
       </div>
+
+      <Notifications items={project.notifications ?? []} />
 
       {project.lastSyncedAt && (
         <p className="text-right text-[12px] text-gray-400">Last synced {new Date(project.lastSyncedAt).toLocaleString()}</p>

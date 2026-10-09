@@ -82,6 +82,25 @@ The CEO project page (`/ceo/projects/[id]`) also uses these optional fields. End
 }
 ```
 
+### Optional `notifications` (project page, Notifications page, bell)
+
+Project-wide events for the CEO, newest first (the workstation keeps the latest 30). `category` is `tasks`, `updates`, `payments` or `messages` (anything else counts as `updates`). `link` must be an absolute http(s) URL into the project. Send events, not per-person copies: one entry per event.
+
+```json
+{
+  "notifications": [{
+    "id": "evt-123",
+    "title": "Staff Promotion: Ada",
+    "message": "Ada was promoted to Content Admin.",
+    "type": "staff_promotion",
+    "category": "updates",
+    "createdAt": "2026-10-09T08:55:00Z",
+    "priority": "high",
+    "link": "https://project.example.com/staff/content/overview"
+  }]
+}
+```
+
 ### Optional `analytics` block (CEO Analytics page)
 
 `/ceo/analytics` reads an optional `analytics` object from each project, plus `hoursLogged`, `attendanceRate`, `productivity`, `efficiency` and `engagement` on each department. Every section is optional, and a section with the wrong shape is dropped. Percentages are 0–100, except `fracs`, which are 0–1, one per axis.

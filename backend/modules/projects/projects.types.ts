@@ -20,6 +20,29 @@ export interface ProjectTopItems {
   items: Array<{ label: string; value: number }>;
 }
 
+export type ProjectNotificationCategory = 'tasks' | 'updates' | 'payments' | 'messages';
+
+/** A project-wide event a project reports through its metrics endpoint. */
+export interface ProjectNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  category: ProjectNotificationCategory;
+  /** ISO time. */
+  createdAt: string;
+  priority?: 'high' | 'medium' | 'low';
+  /** Absolute link into the project, if it has one. */
+  link?: string;
+}
+
+/** A project notification with the project it came from (for merged lists). */
+export interface ProjectNotificationItem extends ProjectNotification {
+  projectId: string;
+  projectName: string;
+  projectColor: string;
+}
+
 export type ProjectRecordTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 /** A small table a project chooses, e.g. "Recent Orders". */
@@ -216,6 +239,7 @@ export interface ProjectCardData {
   analytics?: ProjectAnalyticsData;
   topItems?: ProjectTopItems;
   recentRecords?: ProjectRecordsTable;
+  notifications?: ProjectNotification[];
   lastSyncedAt?: string;
 }
 

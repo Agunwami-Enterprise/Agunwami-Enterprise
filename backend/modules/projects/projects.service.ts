@@ -18,6 +18,9 @@ import type {
   ProjectDepartment,
   ProjectLeaveRequest,
   ProjectMonthlyRevenue,
+  ProjectNotification,
+  ProjectNotificationCategory,
+  ProjectNotificationItem,
   ProjectRecordTone,
   ProjectRecordsTable,
   ProjectStaffMember,
@@ -61,6 +64,7 @@ interface ProjectMetricsData {
   topItems?: ProjectTopItems;
   recentRecords?: ProjectRecordsTable;
   analytics?: ProjectAnalyticsData;
+  notifications?: ProjectNotification[];
 }
 
 const METRICS_TIMEOUT_MS = 5_000;
@@ -283,7 +287,7 @@ function parseMetrics(data: DataRecord): ProjectCardMetric[] {
     'health', 'healthScore', 'systemHealth', 'score', 'revenueTrend', 'monthlyRevenue',
     'revenueSeries', 'trend', 'series', 'status', 'id', 'name', 'subtitle', 'approvals',
     'pendingApprovals', 'staff', 'departments', 'tasks', 'activity', 'activities', 'feed',
-    'events', 'analytics', 'topItems', 'recentRecords',
+    'events', 'analytics', 'topItems', 'recentRecords', 'notifications',
   ]);
   return Object.entries(data)
     .filter(([key, value]) => !excludedKeys.has(key) && value != null && typeof value !== 'object')
@@ -652,6 +656,37 @@ function parseAnalytics(raw: unknown): ProjectAnalyticsData | undefined {
   return Object.keys(result).length ? result : undefined;
 }
 
+const NOTIFICATION_CATEGORIES: ProjectNotificationCategory[] = ['tasks', 'updates', 'payments', 'messages'];
+
+/** Optional `notifications`: project-wide events, newest first (max 30). */
+function parseNotifications(raw: unknown): ProjectNotification[] | undefined {
+  const items = records(raw).flatMap(item => {
+    const title = stringValue(item.title);
+    const createdAt = stringValue(item.createdAt ?? item.time);
+    const time = createdAt ? Date.parse(createdAt) : NaN;
+    if (!title || Number.isNaN(time)) return [];
+    const category = NOTIFICATION_CATEGORIES.includes(item.category as ProjectNotificationCategory)
+      ? item.category as ProjectNotificationCategory
+      : 'updates';
+    const priority = stringValue(item.priority)?.toLowerCase();
+    const link = stringValue(item.link);
+    return [{
+      id: stringValue(item.id) ?? `${title}-${time}`,
+      title,
+      message: stringValue(item.message ?? item.body) ?? '',
+      type: stringValue(item.type) ?? 'update',
+      category,
+      createdAt: new Date(time).toISOString(),
+      ...(priority === 'high' || priority === 'medium' || priority === 'low' ? { priority } : {}),
+      // Only http(s) links, so a project can't send a javascript: URL.
+      ...(link && /^https?:\/\//i.test(link) ? { link } : {}),
+    } satisfies ProjectNotification];
+  });
+  return items.length
+    ? items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30)
+    : undefined;
+}
+
 function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const outer = asRecord(response);
   if (!outer) throw new Error('Metrics endpoint response must be a JSON object.');
@@ -685,6 +720,7 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const topItems = parseTopItems(data.topItems);
   const recentRecords = parseRecordsTable(data.recentRecords);
   const analytics = parseAnalytics(data.analytics);
+  const notifications = parseNotifications(data.notifications);
   const pendingApprovals = Array.isArray(data.pendingApprovals)
     ? data.pendingApprovals.length
     : numberValue(asRecord(data.pendingApprovals)?.count ?? data.pendingApprovals);
@@ -728,6 +764,7 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
     ...(topItems ? { topItems } : {}),
     ...(recentRecords ? { recentRecords } : {}),
     ...(analytics ? { analytics } : {}),
+    ...(notifications ? { notifications } : {}),
   };
 }
 
@@ -1036,6 +1073,20 @@ export class ProjectsService {
     }
     return Promise.all(stored.map(project => loadProject(project, forceRefresh)))
       .then(projects => projects.filter((project): project is ProjectCardData => project !== null));
+  }
+
+  /** Every project's reported notifications, newest first, labelled with the project. */
+  static async getProjectNotifications(limit = 60): Promise<ProjectNotificationItem[]> {
+    const projects = await ProjectsService.getProjectsOverview();
+    return projects
+      .flatMap(project => (project.notifications ?? []).map(notification => ({
+        ...notification,
+        projectId: project.id,
+        projectName: project.name,
+        projectColor: project.color || '#C89B3C',
+      })))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
   }
 
   static async getProjectLeaveRequests(): Promise<{

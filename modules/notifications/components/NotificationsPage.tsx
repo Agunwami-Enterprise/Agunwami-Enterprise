@@ -1,28 +1,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { subscribeNotifications } from '@/modules/notifications/services';
+import { markAllNotifsRead, subscribeNotifications } from '@/modules/notifications/services';
+import { categoryColors, timeAgo, useProjectNotifications } from '@/modules/notifications/project-notifications';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { SkeletonNotifications } from '@/app/components/ceo/Skeleton';
 
 type NotifTab    = 'notifications' | 'announcements';
-type NotifFilter = 'all' | 'tasks' | 'updates' | 'payments' | 'messages';
+type NotifFilter = 'all' | 'tasks' | 'updates' | 'payments' | 'messages' | 'projects';
 type Priority    = 'High' | 'Medium' | 'Low';
 type AnnType     = 'Information' | 'Warning' | 'Success';
 
 interface Notif {
   id: string; title: string; body: string; time: string;
   tag: string; tagColor: string; read: boolean;
-  iconBg: string; iconColor: string; category: Exclude<NotifFilter,'all'>;
+  iconBg: string; iconColor: string; category: Exclude<NotifFilter, 'all' | 'projects'>;
 }
 
 
-const FILTER_LABELS: { key: NotifFilter; label: string; count: number }[] = [
-  { key:'all',      label:'All',      count:10 },
-  { key:'tasks',    label:'Tasks',    count:2  },
-  { key:'updates',  label:'Updates',  count:3  },
-  { key:'payments', label:'Payments', count:2  },
-  { key:'messages', label:'Messages', count:1  },
+const FILTER_LABELS: { key: NotifFilter; label: string }[] = [
+  { key:'all',      label:'All' },
+  { key:'tasks',    label:'Tasks' },
+  { key:'updates',  label:'Updates' },
+  { key:'payments', label:'Payments' },
+  { key:'messages', label:'Messages' },
+  { key:'projects', label:'From projects' },
 ];
 
 export default function NotificationsPage() {
@@ -41,6 +43,9 @@ export default function NotificationsPage() {
     return subscribeNotifications(user.uid, (data) => { setNotifs(data as Notif[]); setLoading(false); });
   }, [user?.uid, authLoading]);
 
+  // Project-wide events reported by each project's metrics endpoint.
+  const project = useProjectNotifications();
+
   /* Create Announcement modal */
   const [showAnn,    setShowAnn]    = useState(false);
   const [annTitle,   setAnnTitle]   = useState('');
@@ -48,15 +53,26 @@ export default function NotificationsPage() {
   const [annPriority, setAnnPriority] = useState<Priority>('High');
   const [annType,    setAnnType]    = useState<AnnType>('Information');
 
-  const filtered = notifs.filter(n => {
-    if (filter !== 'all' && n.category !== filter) return false;
-    if (search && !n.title.toLowerCase().includes(search.toLowerCase()) && !n.body.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const term = search.trim().toLowerCase();
+  const matches = (title: string, body: string) =>
+    !term || title.toLowerCase().includes(term) || body.toLowerCase().includes(term);
+  const filtered = filter === 'projects' ? [] : notifs.filter(n =>
+    (filter === 'all' || n.category === filter) && matches(n.title, n.body));
+  const filteredProject = project.items.filter(n =>
+    (filter === 'all' || filter === 'projects' || n.category === filter) && matches(n.title, n.message));
 
   const unread = notifs.filter(n => !n.read).length;
+  const countFor = (key: NotifFilter) => key === 'all'
+    ? notifs.length + project.items.length
+    : key === 'projects'
+      ? project.items.length
+      : notifs.filter(n => n.category === key).length + project.items.filter(n => n.category === key).length;
 
-  function markAllRead() { setNotifs(prev => prev.map(n => ({ ...n, read: true }))); }
+  async function markAllRead() {
+    const ids = notifs.filter(n => !n.read).map(n => n.id);
+    setNotifs(prev => prev.map(n => ({ ...n, read: true, tag: '' })));
+    await markAllNotifsRead(ids).catch(err => console.error('[Notifications] Could not mark as read:', err));
+  }
   function clearAll()    { setNotifs([]); }
   function dismiss(id: string) { setNotifs(prev => prev.filter(n => n.id !== id)); }
 
@@ -85,10 +101,10 @@ export default function NotificationsPage() {
         {/* Stat cards */}
         <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label:'Total Notifications', value:notifs.length, sub:`${unread} pinned`,   iconBg:'#dbeafe', iconColor:'#2563eb', icon:<BellIcon /> },
-            { label:'Tasks',               value:2,             sub:'New notifications',   iconBg:'#dcfce7', iconColor:'#16a34a', icon:<TaskIcon /> },
-            { label:'Announcements',        value:2,             sub:'CEO/Admin updates',  iconBg:'#fef9c3', iconColor:'#d97706', icon:<MegaIcon /> },
-            { label:'Payments',             value:2,             sub:'Payment updates',    iconBg:'#ede9fe', iconColor:'#7c3aed', icon:<PayIcon />  },
+            { label:'Total Notifications', value:countFor('all'),      sub:`${unread} unread`,           iconBg:'#dbeafe', iconColor:'#2563eb', icon:<BellIcon /> },
+            { label:'Tasks',               value:countFor('tasks'),    sub:'Yours and your projects', iconBg:'#dcfce7', iconColor:'#16a34a', icon:<TaskIcon /> },
+            { label:'From Projects',       value:countFor('projects'), sub:'Last 30 days',            iconBg:'#fef9c3', iconColor:'#d97706', icon:<MegaIcon /> },
+            { label:'Payments',            value:countFor('payments'), sub:'Payment updates',         iconBg:'#ede9fe', iconColor:'#7c3aed', icon:<PayIcon />  },
           ].map(s => (
             <div key={s.label} className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e]">
               <div>
@@ -134,7 +150,7 @@ export default function NotificationsPage() {
                 <button key={f.key} onClick={() => setFilter(f.key)}
                   className={`flex flex-shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors
                     ${filter === f.key ? 'bg-[#f5bd02] text-[#1a1a1a]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/6 dark:text-gray-300 dark:hover:bg-white/10'}`}>
-                  {f.label === 'All' ? f.label : f.label} ({f.count})
+                  {f.label} ({countFor(f.key)})
                 </button>
               ))}
             </div>
@@ -143,11 +159,14 @@ export default function NotificationsPage() {
             <div className="p-4">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-[13px] font-bold text-gray-800 dark:text-white">Recent Notifications</p>
-                <p className="text-[11px] text-gray-400">{notifs.length} notifications</p>
+                <p className="text-[11px] text-gray-400">{filtered.length + filteredProject.length} shown</p>
               </div>
               <div className="flex flex-col gap-2">
-                {filtered.length === 0 && (
+                {filtered.length === 0 && filteredProject.length === 0 && (
                   <p className="py-8 text-center text-[13px] text-gray-400">No notifications</p>
+                )}
+                {filtered.length > 0 && filteredProject.length > 0 && (
+                  <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Your notifications</p>
                 )}
                 {filtered.map(n => (
                   <div key={n.id}
@@ -171,6 +190,39 @@ export default function NotificationsPage() {
                     </div>
                   </div>
                 ))}
+
+                {/* Project-wide events from each project's metrics endpoint */}
+                {filteredProject.length > 0 && (
+                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">From your projects</p>
+                )}
+                {project.error && filter === 'projects' && (
+                  <p className="py-2 text-[12px] text-red-500">{project.error}</p>
+                )}
+                {filteredProject.map(n => {
+                  const colors = categoryColors(n.category);
+                  const content = (
+                    <>
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: colors.bg, color: colors.color }}>
+                        <BellIcon />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[12px] font-semibold text-gray-800 dark:text-white">{n.title}</p>
+                          <span className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold text-white" style={{ backgroundColor: n.projectColor }}>{n.projectName}</span>
+                          {n.priority === 'high' && <span className="rounded-sm bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">HIGH</span>}
+                        </div>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">{n.message}</p>
+                        <p className="mt-0.5 text-[10px] text-gray-400">{timeAgo(n.createdAt)}</p>
+                      </div>
+                    </>
+                  );
+                  return n.link ? (
+                    <a key={`${n.projectId}-${n.id}`} href={n.link} target="_blank" rel="noopener noreferrer"
+                      className="flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-gray-50 dark:hover:bg-white/3">{content}</a>
+                  ) : (
+                    <div key={`${n.projectId}-${n.id}`} className="flex items-start gap-3 rounded-xl p-3">{content}</div>
+                  );
+                })}
               </div>
             </div>
           </div>
