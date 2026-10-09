@@ -93,6 +93,8 @@ function RevenueTrend({ data, color }: { data: ProjectCardData['revenueTrend']; 
       <p className="text-[13px] text-gray-500 dark:text-gray-400">Revenue over the past {points.length || 6} months</p>
       {points.length === 0 ? (
         <p className="py-16 text-center text-[13px] text-gray-400">This project&apos;s endpoint doesn&apos;t report revenue yet.</p>
+      ) : max === 0 ? (
+        <p className="py-16 text-center text-[13px] text-gray-400">No revenue recorded in these {points.length} months.</p>
       ) : (
         <svg viewBox={`0 0 ${width} ${height}`} className="mt-4 h-auto w-full" role="img"
           aria-label={`Revenue: ${points.map(p => `${p.month} ₦${p.revenue.toLocaleString()}`).join(', ')}`}>
