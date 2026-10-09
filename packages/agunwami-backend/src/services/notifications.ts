@@ -2,6 +2,7 @@
 
 import {
   collection, doc, onSnapshot, query, updateDoc, writeBatch, where, orderBy,
+  type Firestore,
 } from 'firebase/firestore';
 import { getDb } from './firebase-instance';
 import { relativeTime } from '../utils/time';
@@ -51,28 +52,35 @@ function typeToIcon(type: string): { bg: string; color: string } {
   return { bg: '#fef9c3', color: '#d97706' };
 }
 
+// Each function takes an optional `db` for when notifications live in a
+// different Firebase project than the business data.
+
 /** Mark a single notification as read. */
-export async function markNotifRead(id: string): Promise<void> {
-  await updateDoc(doc(getDb(), 'notifications', id), { read: true });
+export async function markNotifRead(id: string, db: Firestore = getDb()): Promise<void> {
+  await updateDoc(doc(db, 'notifications', id), { read: true });
 }
 
 /** Mark multiple notifications as read in a single batch write. */
-export async function markAllNotifsRead(ids: string[]): Promise<void> {
+export async function markAllNotifsRead(ids: string[], db: Firestore = getDb()): Promise<void> {
   if (!ids.length) return;
-  const batch = writeBatch(getDb());
-  ids.forEach(id => batch.update(doc(getDb(), 'notifications', id), { read: true }));
+  const batch = writeBatch(db);
+  ids.forEach(id => batch.update(doc(db, 'notifications', id), { read: true }));
   await batch.commit();
 }
 
-/** Subscribe to all notifications for a given user (newest first). */
+/**
+ * Subscribe to all notifications for a given user (newest first). If the
+ * listener fails, `cb` gets an empty list so callers stop waiting.
+ */
 export function subscribeNotifications(
   uid: string,
   cb: (items: NotifItem[]) => void,
+  db: Firestore = getDb(),
 ): () => void {
   if (!uid) { cb([]); return () => {}; }
   try {
     const q = query(
-      collection(getDb(), 'notifications'),
+      collection(db, 'notifications'),
       where('recipientId', '==', uid),
       orderBy('createdAt', 'desc'),
     );
@@ -86,7 +94,7 @@ export function subscribeNotifications(
           const read = !!data.read;
           return {
             id:        d.id,
-            title:     typeToTitle(type),
+            title:     (data.title as string | undefined) || typeToTitle(type),
             body:      (data.message || data.body || '') as string,
             time:      relativeTime(data.createdAt as { toDate(): Date }),
             tag:       read ? '' : 'NEW',
@@ -103,6 +111,7 @@ export function subscribeNotifications(
         if ((err as any).code !== 'permission-denied') {
           console.warn('[agunwami-backend] Notifications snapshot error:', err);
         }
+        cb([]);
       },
     );
   } catch (err) {

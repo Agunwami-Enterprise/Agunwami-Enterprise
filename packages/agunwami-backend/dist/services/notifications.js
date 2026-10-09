@@ -52,26 +52,31 @@ function typeToIcon(type) {
         return { bg: '#dcfce7', color: '#16a34a' };
     return { bg: '#fef9c3', color: '#d97706' };
 }
+// Each function takes an optional `db` for when notifications live in a
+// different Firebase project than the business data.
 /** Mark a single notification as read. */
-async function markNotifRead(id) {
-    await (0, firestore_1.updateDoc)((0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'notifications', id), { read: true });
+async function markNotifRead(id, db = (0, firebase_instance_1.getDb)()) {
+    await (0, firestore_1.updateDoc)((0, firestore_1.doc)(db, 'notifications', id), { read: true });
 }
 /** Mark multiple notifications as read in a single batch write. */
-async function markAllNotifsRead(ids) {
+async function markAllNotifsRead(ids, db = (0, firebase_instance_1.getDb)()) {
     if (!ids.length)
         return;
-    const batch = (0, firestore_1.writeBatch)((0, firebase_instance_1.getDb)());
-    ids.forEach(id => batch.update((0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'notifications', id), { read: true }));
+    const batch = (0, firestore_1.writeBatch)(db);
+    ids.forEach(id => batch.update((0, firestore_1.doc)(db, 'notifications', id), { read: true }));
     await batch.commit();
 }
-/** Subscribe to all notifications for a given user (newest first). */
-function subscribeNotifications(uid, cb) {
+/**
+ * Subscribe to all notifications for a given user (newest first). If the
+ * listener fails, `cb` gets an empty list so callers stop waiting.
+ */
+function subscribeNotifications(uid, cb, db = (0, firebase_instance_1.getDb)()) {
     if (!uid) {
         cb([]);
         return () => { };
     }
     try {
-        const q = (0, firestore_1.query)((0, firestore_1.collection)((0, firebase_instance_1.getDb)(), 'notifications'), (0, firestore_1.where)('recipientId', '==', uid), (0, firestore_1.orderBy)('createdAt', 'desc'));
+        const q = (0, firestore_1.query)((0, firestore_1.collection)(db, 'notifications'), (0, firestore_1.where)('recipientId', '==', uid), (0, firestore_1.orderBy)('createdAt', 'desc'));
         return (0, firestore_1.onSnapshot)(q, (snap) => {
             cb(snap.docs.map((d) => {
                 const data = d.data();
@@ -80,7 +85,7 @@ function subscribeNotifications(uid, cb) {
                 const read = !!data.read;
                 return {
                     id: d.id,
-                    title: typeToTitle(type),
+                    title: data.title || typeToTitle(type),
                     body: (data.message || data.body || ''),
                     time: (0, time_1.relativeTime)(data.createdAt),
                     tag: read ? '' : 'NEW',
@@ -96,6 +101,7 @@ function subscribeNotifications(uid, cb) {
             if (err.code !== 'permission-denied') {
                 console.warn('[agunwami-backend] Notifications snapshot error:', err);
             }
+            cb([]);
         });
     }
     catch (err) {
