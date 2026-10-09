@@ -53,8 +53,11 @@ function toMember(id, data) {
         shiftEndTime: data.shiftEndTime,
     };
 }
-/** Subscribe to all staff in the `users` collection. */
-function subscribeStaff(cb) {
-    const q = (0, firestore_1.query)((0, firestore_1.collection)((0, firebase_instance_1.getDb)(), 'users'), (0, firestore_1.where)('role', '==', 'staff'));
+/**
+ * Subscribe to all staff in the `users` collection. Pass `db` when staff
+ * accounts live in a different Firebase project than the business data.
+ */
+function subscribeStaff(cb, db = (0, firebase_instance_1.getDb)()) {
+    const q = (0, firestore_1.query)((0, firestore_1.collection)(db, 'users'), (0, firestore_1.where)('role', '==', 'staff'));
     return (0, firestore_1.onSnapshot)(q, (snap) => cb(snap.docs.map((d) => toMember(d.id, d.data()))), (err) => console.warn('[agunwami-backend] Staff snapshot error:', err));
 }

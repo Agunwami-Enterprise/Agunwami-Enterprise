@@ -1,6 +1,6 @@
 // ─── Staff Service ────────────────────────────────────────────────────────────
 
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, type Firestore } from 'firebase/firestore';
 import { getDb } from './firebase-instance';
 import type { Member, StaffStatus, ClockStatus } from '../types/staff';
 import { getStaffDisplayName, getStaffAvatar, getStaffPhone, getStaffPosition, getStaffPermissions } from '../types/user';
@@ -53,9 +53,12 @@ function toMember(id: string, data: Record<string, any>): Member {
   };
 }
 
-/** Subscribe to all staff in the `users` collection. */
-export function subscribeStaff(cb: (members: Member[]) => void): () => void {
-  const q = query(collection(getDb(), 'users'), where('role', '==', 'staff'));
+/**
+ * Subscribe to all staff in the `users` collection. Pass `db` when staff
+ * accounts live in a different Firebase project than the business data.
+ */
+export function subscribeStaff(cb: (members: Member[]) => void, db: Firestore = getDb()): () => void {
+  const q = query(collection(db, 'users'), where('role', '==', 'staff'));
   return onSnapshot(
     q,
     (snap: any) => cb(snap.docs.map((d: any) => toMember(d.id, d.data()))),
