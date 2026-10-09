@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+const MAIN_HOST = 'agunwamienterprise.com';
+const ADMIN_HOST = 'admin.agunwamienterprise.com';
+// The CEO workstation (app/(ae-ws): /auth/* and /ceo/*) lives on the admin
+// subdomain; everything else is the public site. /api and /_next are served
+// on both hosts, and the session cookie is per host, so the whole admin flow
+// (login included) must stay on ADMIN_HOST.
+const ADMIN_PATHS = ['ceo', 'auth'];
+
 const nextConfig: NextConfig = {
   transpilePackages: ['agunwami-backend'],
   devIndicators: false,
@@ -20,10 +28,47 @@ const nextConfig: NextConfig = {
         destination: 'https://agunwamienterprise.com/:path*',
         permanent: true,
       },
+      // Admin subdomain root opens the dashboard (which sends signed-out
+      // visitors to /auth/login). Must come before the catch-all below.
+      ...['/', '/ceo'].map(source => ({
+        source,
+        has: [{ type: 'host' as const, value: ADMIN_HOST }],
+        destination: '/ceo/dashboard',
+        permanent: false,
+      })),
+      // Workstation pages on the main site move to the admin subdomain.
+      ...ADMIN_PATHS.flatMap(section => [
+        {
+          source: `/${section}`,
+          has: [{ type: 'host' as const, value: MAIN_HOST }],
+          destination: `https://${ADMIN_HOST}/${section}`,
+          permanent: false,
+        },
+        {
+          source: `/${section}/:path*`,
+          has: [{ type: 'host' as const, value: MAIN_HOST }],
+          destination: `https://${ADMIN_HOST}/${section}/:path*`,
+          permanent: false,
+        },
+      ]),
+      // Public pages requested on the admin subdomain go back to the main
+      // site. API routes, Next.js assets and files (e.g. /logo.png) stay put.
+      {
+        source: `/:path((?!(?:${ADMIN_PATHS.join('|')})(?:/|$)|api/|_next/|.*\\.[A-Za-z0-9]+$).*)`,
+        has: [{ type: 'host', value: ADMIN_HOST }],
+        destination: `https://${MAIN_HOST}/:path`,
+        permanent: false,
+      },
     ];
   },
   async headers() {
     return [
+      // Keep the private admin subdomain out of search results.
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: ADMIN_HOST }],
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
       {
         source: '/_next/static/media/:path*',
         headers: [
