@@ -71,6 +71,10 @@ const METRICS_TIMEOUT_MS = 5_000;
 // Successful endpoint responses are reused for this long so one dashboard load
 // (which reads project data from several services) hits each project once.
 const METRICS_CACHE_TTL_MS = 60_000;
+// After that, the last good response is still served at once for this long
+// while a background request refreshes it, so pages don't wait on a slow
+// endpoint (AE Hub's takes seconds). Older data, or a forced refresh, waits.
+const METRICS_STALE_MAX_MS = 10 * 60_000;
 const SNAPSHOT_COLLECTION = 'enterprise_project_snapshots';
 const API_TOKEN_ENCRYPTION_VERSION = 'v1';
 const DEV_ONLY_TOKEN_SECRET = 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
@@ -949,21 +953,40 @@ async function getProjectMetrics(
     return cached;
   }
 
-  const inFlightKey = `${projectId}:${fingerprint}`;
-  let request = metricsInFlight.get(inFlightKey);
-  if (!request) {
-    request = fetchProjectMetrics(endpoint, storedApiToken(project))
-      .finally(() => metricsInFlight.delete(inFlightKey));
-    metricsInFlight.set(inFlightKey, request);
-  }
-  const data = await request;
-  const fresh = metricsCache.get(projectId);
-  if (fresh?.fingerprint === fingerprint && fresh.data === data) return fresh;
+  const refresh = () => {
+    const inFlightKey = `${projectId}:${fingerprint}`;
+    let request = metricsInFlight.get(inFlightKey);
+    if (!request) {
+      request = fetchProjectMetrics(endpoint, storedApiToken(project))
+        .finally(() => metricsInFlight.delete(inFlightKey));
+      metricsInFlight.set(inFlightKey, request);
+    }
+    return request.then(data => {
+      const fresh = metricsCache.get(projectId);
+      if (fresh?.fingerprint === fingerprint && fresh.data === data) return fresh;
+      const entry = { fingerprint, data, fetchedAt: Date.now() };
+      metricsCache.set(projectId, entry);
+      void saveSnapshot(projectId, entry);
+      return entry;
+    });
+  };
 
-  const entry = { fingerprint, data, fetchedAt: Date.now() };
-  metricsCache.set(projectId, entry);
-  void saveSnapshot(projectId, entry);
-  return entry;
+  // Serve recent data now and refresh behind it; a failed background refresh
+  // leaves the entry in place, flagged so it isn't served as fresh again.
+  if (
+    !forceRefresh &&
+    cached?.fingerprint === fingerprint &&
+    !cached.expired &&
+    Date.now() - cached.fetchedAt < METRICS_STALE_MAX_MS
+  ) {
+    refresh().catch(err => {
+      cached.expired = true;
+      console.warn(`[backend/modules/projects] Background refresh of ${projectId} failed:`, err instanceof Error ? err.message : err);
+    });
+    return cached;
+  }
+
+  return refresh();
 }
 
 function toProjectCard(project: StoredProject): ProjectCardData | null {
