@@ -11,6 +11,7 @@ import { listDocs, getDoc, createDoc, updateDoc, deleteDoc } from '../../core/fi
 import type { FirestoreDoc } from '../../core/types';
 import type {
   ProjectActivityItem,
+  ProjectAnalyticsData,
   ProjectApprovalItem,
   ProjectCardData,
   ProjectCardMetric,
@@ -59,6 +60,7 @@ interface ProjectMetricsData {
   leaveRequests?: ProjectLeaveRequest[];
   topItems?: ProjectTopItems;
   recentRecords?: ProjectRecordsTable;
+  analytics?: ProjectAnalyticsData;
 }
 
 const METRICS_TIMEOUT_MS = 5_000;
@@ -540,6 +542,116 @@ function parseRecordsTable(raw: unknown): ProjectRecordsTable | undefined {
   return columns.length ? { title, columns, rows } : undefined;
 }
 
+const records = (value: unknown): DataRecord[] =>
+  (Array.isArray(value) ? value.flatMap(item => { const record = asRecord(item); return record ? [record] : []; }) : []);
+const numbers = (value: unknown): number[] =>
+  (Array.isArray(value) ? value.map(item => numberValue(item) ?? 0) : []);
+const strings = (value: unknown): string[] =>
+  (Array.isArray(value) ? value.flatMap(item => { const text = stringValue(item); return text ? [text] : []; }) : []);
+const percent = (value: unknown) => Math.max(0, Math.min(100, numberValue(value) ?? 0));
+const colorValue = (value: unknown, fallback: string) => {
+  const color = stringValue(value);
+  return color && /^#[0-9a-f]{3,8}$/i.test(color) ? color : fallback;
+};
+
+/**
+ * The optional `analytics` block read by the CEO Analytics page. Each section
+ * is kept only if it has the expected shape; anything else is dropped.
+ */
+function parseAnalytics(raw: unknown): ProjectAnalyticsData | undefined {
+  const data = asRecord(raw);
+  if (!data) return undefined;
+  const result: ProjectAnalyticsData = {};
+
+  const staffPerformance = records(data.staffPerformance).flatMap(item => {
+    const name = stringValue(item.name);
+    if (!name) return [];
+    const department = stringValue(item.department);
+    const rating = numberValue(item.rating) ?? stringValue(item.rating) ?? 0;
+    return [{
+      name,
+      ...(department ? { department } : {}),
+      tasks: numberValue(item.tasks) ?? 0,
+      attendance: percent(item.attendance),
+      rating,
+      productivity: percent(item.productivity),
+    }];
+  });
+  if (staffPerformance.length) result.staffPerformance = staffPerformance;
+
+  const radar = asRecord(data.departmentPerformance);
+  const axes = strings(radar?.axes);
+  if (radar && axes.length) {
+    const series = records(radar.series).flatMap((item, index) => {
+      const label = stringValue(item.label);
+      const fracs = numbers(item.fracs).map(value => Math.max(0, Math.min(1, value)));
+      return label && fracs.length === axes.length
+        ? [{ label, color: colorValue(item.color, ['#22c55e', '#3b82f6', '#f5bd02'][index % 3]), fracs }]
+        : [];
+    });
+    if (series.length) result.departmentPerformance = { axes, series };
+  }
+
+  const timeline = asRecord(data.staffTimeline);
+  const timelineMonths = strings(timeline?.months);
+  if (timeline && timelineMonths.length) {
+    const active = numbers(timeline.active);
+    const onLeave = numbers(timeline.onLeave);
+    if (active.length === timelineMonths.length && onLeave.length === timelineMonths.length) {
+      result.staffTimeline = { months: timelineMonths, active, onLeave };
+    }
+  }
+
+  const monthlyFinance = records(data.monthlyFinance).flatMap(item => {
+    const month = stringValue(item.month);
+    return month ? [{ month, revenue: numberValue(item.revenue) ?? 0, expenses: numberValue(item.expenses) ?? 0 }] : [];
+  });
+  if (monthlyFinance.length) result.monthlyFinance = monthlyFinance;
+
+  const expenseBreakdown = records(data.expenseBreakdown).flatMap((item, index) => {
+    const label = stringValue(item.label);
+    const amount = numberValue(item.amount);
+    return label
+      ? [{ label, pct: percent(item.pct), color: colorValue(item.color, ['#ef4444', '#f5bd02', '#3b82f6', '#8b5cf6'][index % 4]), ...(amount != null ? { amount } : {}) }]
+      : [];
+  });
+  if (expenseBreakdown.length) result.expenseBreakdown = expenseBreakdown;
+
+  const trainingCompliance = records(data.trainingCompliance).flatMap(item => {
+    const label = stringValue(item.label);
+    return label ? [{ label, pct: percent(item.pct), mandatory: item.mandatory === true }] : [];
+  });
+  if (trainingCompliance.length) result.trainingCompliance = trainingCompliance;
+
+  const timeRecords = asRecord(data.timeRecords);
+  if (timeRecords) {
+    const departmentHours = records(timeRecords.departmentHours).flatMap(item => {
+      const label = stringValue(item.label);
+      return label ? [{ label, pct: percent(item.pct), sub: stringValue(item.sub) ?? '' }] : [];
+    });
+    const punctuality = records(timeRecords.punctuality).flatMap(item => {
+      const label = stringValue(item.label);
+      return label ? [{ label, pct: percent(item.pct) }] : [];
+    });
+    if (departmentHours.length || punctuality.length) result.timeRecords = { departmentHours, punctuality };
+  }
+
+  const recentActivities = records(data.recentActivities).flatMap(item => {
+    const name = stringValue(item.name);
+    const action = stringValue(item.action);
+    if (!name || !action) return [];
+    const initials = stringValue(item.initials);
+    const color = stringValue(item.color);
+    return [{
+      name, action, detail: stringValue(item.detail) ?? '', time: stringValue(item.time) ?? '',
+      ...(initials ? { initials } : {}), ...(color ? { color } : {}),
+    }];
+  }).slice(0, 20);
+  if (recentActivities.length) result.recentActivities = recentActivities;
+
+  return Object.keys(result).length ? result : undefined;
+}
+
 function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const outer = asRecord(response);
   if (!outer) throw new Error('Metrics endpoint response must be a JSON object.');
@@ -572,6 +684,7 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const metrics = parseMetrics(data);
   const topItems = parseTopItems(data.topItems);
   const recentRecords = parseRecordsTable(data.recentRecords);
+  const analytics = parseAnalytics(data.analytics);
   const pendingApprovals = Array.isArray(data.pendingApprovals)
     ? data.pendingApprovals.length
     : numberValue(asRecord(data.pendingApprovals)?.count ?? data.pendingApprovals);
@@ -614,6 +727,7 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
     ...(leaveRequests ? { leaveRequests } : {}),
     ...(topItems ? { topItems } : {}),
     ...(recentRecords ? { recentRecords } : {}),
+    ...(analytics ? { analytics } : {}),
   };
 }
 

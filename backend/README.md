@@ -82,6 +82,30 @@ The CEO project page (`/ceo/projects/[id]`) also uses these optional fields. End
 }
 ```
 
+### Optional `analytics` block (CEO Analytics page)
+
+`/ceo/analytics` reads an optional `analytics` object from each project, plus `hoursLogged`, `attendanceRate`, `productivity`, `efficiency` and `engagement` on each department. Every section is optional, and a section with the wrong shape is dropped. Percentages are 0–100, except `fracs`, which are 0–1, one per axis.
+
+```json
+{
+  "analytics": {
+    "staffPerformance": [{ "name": "Ada", "department": "Content", "tasks": 12, "attendance": 95, "rating": 4.6, "productivity": 88 }],
+    "departmentPerformance": { "axes": ["Content", "Operations"], "series": [{ "label": "Attendance", "color": "#3b82f6", "fracs": [0.9, 0.8] }] },
+    "staffTimeline": { "months": ["May", "Jun"], "active": [8, 9], "onLeave": [1, 0] },
+    "monthlyFinance": [{ "month": "Jun", "revenue": 250000, "expenses": 120000 }],
+    "expenseBreakdown": [{ "label": "Salaries", "pct": 70, "color": "#ef4444", "amount": 840000 }],
+    "trainingCompliance": [{ "label": "Security basics", "pct": 80, "mandatory": true }],
+    "timeRecords": {
+      "departmentHours": [{ "label": "Content", "pct": 100, "sub": "160h" }],
+      "punctuality": [{ "label": "Content", "pct": 92 }]
+    },
+    "recentActivities": [{ "name": "Ada", "action": "clocked in", "detail": "Content", "time": "2026-10-09T08:55:00Z", "initials": "A" }]
+  }
+}
+```
+
+AE Hub computes all of these from its own records, except `trainingCompliance` (see `functions/src/enterpriseInsights.ts` in aehub-onboarding).
+
 Configure this URL in the project's **Project Metrics Endpoint** field. The endpoint is fetched server-side by `/api/ceo/projects/overview`; it should be reachable by the Enterprise server and return JSON.
 
 ---
