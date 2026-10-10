@@ -1,29 +1,26 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
-import { subscribeTraining } from '@/modules/training/services';
+import { useState } from 'react';
 import { SkeletonTraining } from '@/app/components/ceo/Skeleton';
+import {
+  ALL_SOURCES, FeedError, FeedNotices, SourceBadge, SourceFilter, formatDate, sourcesOf, useFeed,
+} from '@/app/components/ceo/feed';
+import type { TrainingFeed, TrainingFeedItem as Training } from '@/backend/modules/training/training.feed';
 
-type TrainingStatus = 'not-started' | 'in-progress' | 'completed';
-
-interface Training {
-  id: string; title: string; category: string; hours: number;
-  status: TrainingStatus; progress: number;
-  dueDate: string; overdue: boolean; mandatory: boolean;
-  assignedTo: string[]; color: string;
-}
-
-const CATEGORIES = ['All Categories','Leadership','Safety','Customer Service','Compliance','Communication','Professional Development','HR & Culture'];
+const ALL_CATEGORIES = 'All Categories';
+const CREATE_CATEGORIES = ['Select Categories','Leadership','Safety','Customer Service','Compliance','Communication','Professional Development','HR & Culture'];
 
 
 export default function TrainingPage() {
   const [search,     setSearch]     = useState('');
-  const [catFilter,  setCatFilter]  = useState('All Categories');
+  const [catFilter,  setCatFilter]  = useState(ALL_CATEGORIES);
+  const [sourceF,    setSourceF]    = useState(ALL_SOURCES);
   const [showCreate, setShowCreate] = useState(false);
-  const [MOCK,       setMOCK]       = useState<Training[]>([]);
-  const [loading,    setLoading]    = useState(true);
-
-  useEffect(() => subscribeTraining((data) => { setMOCK(data as Training[]); setLoading(false); }), []);
+  const feed = useFeed<TrainingFeed>('/api/ceo/training');
+  const allTraining: Training[] = feed.data?.items ?? [];
+  const sources = sourcesOf(allTraining);
+  const MOCK = allTraining.filter(t => sourceF === ALL_SOURCES || t.source.id === sourceF);
+  const categories = [ALL_CATEGORIES, ...[...new Set(allTraining.map(t => t.category))].sort()];
 
   /* create modal state */
   const [cTitle,   setCTitle]   = useState('');
@@ -36,25 +33,27 @@ export default function TrainingPage() {
 
   const ASSIGN_OPTIONS = ['All Staff','Engineering','Management Team'];
 
+  const term = search.trim().toLowerCase();
   const filtered = MOCK.filter(t => {
-    if (catFilter !== 'All Categories' && t.category !== catFilter) return false;
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (catFilter !== ALL_CATEGORIES && t.category !== catFilter) return false;
+    if (term && ![t.title, t.source.name, t.instructor ?? ''].some(v => v.toLowerCase().includes(term))) return false;
     return true;
   });
 
   const stats = {
-    available:  MOCK.length,
+    available:  MOCK.filter(t => t.status !== 'archived' && t.status !== 'draft').length,
     completed:  MOCK.filter(t => t.status === 'completed').length,
     mandatory:  MOCK.filter(t => t.mandatory).length,
     inProgress: MOCK.filter(t => t.status === 'in-progress').length,
-    hours:      MOCK.reduce((s, t) => s + t.hours, 0),
+    hours:      Math.round(MOCK.reduce((s, t) => s + t.hours, 0) * 10) / 10,
   };
 
   function toggleAssign(v: string) {
     setCAssign(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   }
 
-  if (loading) return <SkeletonTraining />;
+  if (feed.loading) return <SkeletonTraining />;
+  if (!feed.data) return <FeedError message={feed.error} onRetry={() => void feed.reload()} />;
 
   return (
     <>
@@ -64,7 +63,7 @@ export default function TrainingPage() {
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-[20px] font-bold text-gray-800 dark:text-white">Training</h1>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400">Enhance your professional skills with workplace training programs</p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">Training programs across the enterprise and every project, labelled by project</p>
           </div>
           <button onClick={() => setShowCreate(true)}
             className="flex items-center gap-1.5 self-start rounded-lg px-4 py-2.5 text-[13px] font-semibold text-[#1a1a1a] shadow-sm hover:opacity-90" style={{ backgroundColor:'#f5bd02' }}>
@@ -91,8 +90,10 @@ export default function TrainingPage() {
           ))}
         </div>
 
+        <FeedNotices projects={feed.data.projects} enterpriseError={feed.data.enterpriseError} section="training programs" />
+
         {/* Search + filter */}
-        <div className="mb-5 flex gap-3">
+        <div className="mb-5 flex flex-wrap gap-3">
           <div className="flex flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm dark:border-white/8 dark:bg-[#1e1e1e]">
             <SearchIcon />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search training programs..."
@@ -100,14 +101,18 @@ export default function TrainingPage() {
           </div>
           <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
             className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[12px] text-gray-700 shadow-sm outline-none dark:border-white/8 dark:bg-[#1e1e1e] dark:text-gray-200">
-            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            {categories.map(c => <option key={c}>{c}</option>)}
           </select>
+          <SourceFilter sources={sources} value={sourceF} onChange={setSourceF} />
         </div>
 
         {/* Training grid */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map(t => <TrainingCard key={t.id} training={t} />)}
+          {filtered.map(t => <TrainingCard key={t.key} training={t} />)}
         </div>
+        {filtered.length === 0 && (
+          <p className="rounded-2xl bg-white px-5 py-10 text-center text-[13px] text-gray-400 shadow-sm dark:bg-[#1e1e1e]">No training programs match these filters.</p>
+        )}
       </div>
 
       {/* Create Training modal */}
@@ -129,7 +134,7 @@ export default function TrainingPage() {
                   <label className="mb-1 block text-[11px] font-medium text-gray-600 dark:text-gray-400">Category</label>
                   <select value={cCat} onChange={e => setCCat(e.target.value)}
                     className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[12px] text-gray-700 outline-none dark:border-white/8 dark:bg-[#2a2a2a] dark:text-gray-200">
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                    {CREATE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -187,6 +192,7 @@ export default function TrainingPage() {
 function TrainingCard({ training: t }: { training: Training }) {
   const isCompleted  = t.status === 'completed';
   const isInProgress = t.status === 'in-progress';
+  const isProjectCourse = t.source.kind === 'project';
 
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-[#1e1e1e]">
@@ -197,6 +203,7 @@ function TrainingCard({ training: t }: { training: Training }) {
       >
         {t.overdue   && <span className="absolute right-2 top-2 rounded-sm bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">OVERDUE</span>}
         {t.mandatory && <span className="absolute left-2 top-2 rounded-sm bg-red-600 px-1.5 py-0.5 text-[9px] font-bold text-white">MANDATORY</span>}
+        <span className="absolute bottom-2 left-2"><SourceBadge source={t.source} /></span>
       </div>
 
       <div className="p-4">
@@ -208,24 +215,34 @@ function TrainingCard({ training: t }: { training: Training }) {
 
         <p className="text-[13px] font-bold text-gray-800 dark:text-white">{t.title}</p>
 
-        {/* Due Date */}
-        <div className="mt-2 flex items-center gap-1">
-          <span className="text-[10px] text-gray-400">Due Date</span>
-          <span className={`text-[10px] font-semibold ${t.overdue ? 'text-red-500' : 'text-gray-600 dark:text-gray-300'}`}>{t.dueDate}</span>
-        </div>
+        {isProjectCourse ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400">
+            <span><span className="font-semibold text-gray-600 dark:text-gray-300">{(t.learners ?? 0).toLocaleString()}</span> learners</span>
+            {t.level && <span>{t.level}</span>}
+            {t.instructor && <span className="truncate">by {t.instructor}</span>}
+          </div>
+        ) : (
+          <>
+            {/* Due Date */}
+            <div className="mt-2 flex items-center gap-1">
+              <span className="text-[10px] text-gray-400">Due Date</span>
+              <span className={`text-[10px] font-semibold ${t.overdue ? 'text-red-500' : 'text-gray-600 dark:text-gray-300'}`}>{formatDate(t.dueDate)}</span>
+            </div>
 
-        {/* Assigned to */}
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          <span className="text-[10px] text-gray-400">Assigned to:</span>
-          {t.assignedTo.map(a => (
-            <span key={a} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/8 dark:text-gray-300">{a}</span>
-          ))}
-        </div>
+            {/* Assigned to */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+              <span className="text-[10px] text-gray-400">Assigned to:</span>
+              {t.assignedTo.map(a => (
+                <span key={a} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/8 dark:text-gray-300">{a}</span>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Progress */}
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-[10px] text-gray-400">Progress</span>
+            <span className="text-[10px] text-gray-400">{isProjectCourse ? 'Average completion' : 'Progress'}</span>
             <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">{t.progress}%</span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-gray-100 dark:bg-[#2a2a2a]">
@@ -235,7 +252,14 @@ function TrainingCard({ training: t }: { training: Training }) {
 
         {/* Action button + icons */}
         <div className="mt-3 flex items-center justify-between">
-          {isCompleted ? (
+          {isProjectCourse ? (
+            <span className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold ${
+              t.status === 'published'
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                : 'bg-gray-100 text-gray-600 dark:bg-white/8 dark:text-gray-300'}`}>
+              {t.status === 'published' ? 'Published' : t.status === 'archived' ? 'Archived' : 'Draft'}
+            </span>
+          ) : isCompleted ? (
             <button className="flex items-center gap-1.5 rounded-lg bg-green-100 px-4 py-2 text-[11px] font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-400">
               <CheckSmIcon /> Completed
             </button>
@@ -248,10 +272,12 @@ function TrainingCard({ training: t }: { training: Training }) {
               <PlayIcon /> Start Training
             </button>
           )}
-          <div className="flex items-center gap-2">
-            <button className="text-gray-400 hover:text-gray-600"><EditSmIcon /></button>
-            <button className="text-gray-400 hover:text-red-400"><TrashSmIcon /></button>
-          </div>
+          {!isProjectCourse && (
+            <div className="flex items-center gap-2">
+              <button className="text-gray-400 hover:text-gray-600"><EditSmIcon /></button>
+              <button className="text-gray-400 hover:text-red-400"><TrashSmIcon /></button>
+            </div>
+          )}
         </div>
       </div>
     </div>

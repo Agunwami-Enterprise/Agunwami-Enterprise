@@ -1,28 +1,26 @@
 ﻿'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { subscribeDocs } from '@/modules/documents/services';
+import { useRef, useState } from 'react';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
+import {
+  ALL_SOURCES, FeedError, FeedNotices, SourceBadge, SourceFilter, formatDate, sourcesOf, useFeed,
+} from '@/app/components/ceo/feed';
+import type { DocumentFeedItem, DocumentsFeed } from '@/backend/modules/documents/documents.feed';
 
 /* ══════════════════════════════════════════════════════════════════════════
    TYPES
 ══════════════════════════════════════════════════════════════════════════ */
 
-type DocTab      = 'all' | 'personal' | 'team' | 'company';
-type DocCategory = 'Legal' | 'Projects' | 'Finance' | 'HR' | 'Meetings';
-type FileType    = 'PDF' | 'DOCX';
-
-interface DocFile {
-  id: string; name: string; type: FileType;
-  category: DocCategory; date: string; tab: Exclude<DocTab, 'all'>;
-}
+type DocTab  = 'all' | 'personal' | 'team' | 'company';
+type DocFile = DocumentFeedItem;
 
 /* ══════════════════════════════════════════════════════════════════════════
    CONSTANTS
 ══════════════════════════════════════════════════════════════════════════ */
 
 
-const CATEGORY_STYLE: Record<DocCategory, { bg: string; text: string }> = {
+const DEFAULT_CATEGORY_STYLE = { bg:'#f3f4f6', text:'#4b5563' };
+const CATEGORY_STYLE: Record<string, { bg: string; text: string }> = {
   'Legal':    { bg:'#fef9c3', text:'#854d0e' },
   'Projects': { bg:'#dbeafe', text:'#1e40af' },
   'Finance':  { bg:'#dcfce7', text:'#166534' },
@@ -50,20 +48,23 @@ export default function DocumentsPage() {
   const [dragOver,   setDragOver]   = useState(false);
   const [pickedFile, setPickedFile] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [MOCK_FILES, setMockFiles]  = useState<DocFile[]>([]);
-  const [loading,    setLoading]    = useState(true);
+  const [sourceF,    setSourceF]    = useState(ALL_SOURCES);
+  const feed = useFeed<DocumentsFeed>('/api/ceo/documents');
+  const files: DocFile[] = feed.data?.items ?? [];
+  const sources = sourcesOf(files);
 
-  useEffect(() => subscribeDocs((data) => { setMockFiles(data as DocFile[]); setLoading(false); }), []);
-
-  const filtered = MOCK_FILES.filter(f => {
+  const term = search.trim().toLowerCase();
+  const filtered = files.filter(f => {
+    if (sourceF !== ALL_SOURCES && f.source.id !== sourceF) return false;
     if (tab !== 'all' && f.tab !== tab) return false;
-    if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (term && ![f.name, f.category, f.source.name, f.uploadedBy ?? ''].some(v => v.toLowerCase().includes(term))) return false;
     return true;
   });
 
   const visibleFolders = tab === 'all' ? FOLDERS : FOLDERS.filter(f => f.tab === tab);
 
-  if (loading) return <SkeletonDocuments />;
+  if (feed.loading) return <SkeletonDocuments />;
+  if (!feed.data) return <FeedError message={feed.error} onRetry={() => void feed.reload()} />;
 
   return (
     <>
@@ -73,7 +74,7 @@ export default function DocumentsPage() {
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-[20px] font-bold text-gray-800 dark:text-white">Documents</h1>
-            <p className="text-[12px] text-gray-500 dark:text-gray-400">Access and manage company documents</p>
+            <p className="text-[12px] text-gray-500 dark:text-gray-400">Documents across the enterprise and every project, labelled by project</p>
           </div>
           <button
             onClick={() => setShowUpload(true)}
@@ -84,16 +85,21 @@ export default function DocumentsPage() {
           </button>
         </div>
 
+        <FeedNotices projects={feed.data.projects} enterpriseError={feed.data.enterpriseError} section="documents" />
+
         {/* ── Search ── */}
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm dark:border-white/8 dark:bg-[#1e1e1e]">
-          <SearchIcon />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search employee..."
-            className="flex-1 bg-transparent text-[12px] text-gray-600 placeholder-gray-400 outline-none dark:text-gray-300 dark:placeholder-gray-500"
-          />
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm dark:border-white/8 dark:bg-[#1e1e1e]">
+            <SearchIcon />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search documents..."
+              className="flex-1 bg-transparent text-[12px] text-gray-600 placeholder-gray-400 outline-none dark:text-gray-300 dark:placeholder-gray-500"
+            />
+          </div>
+          <SourceFilter sources={sources} value={sourceF} onChange={setSourceF} />
         </div>
 
         {/* ── Tabs ── */}
@@ -139,11 +145,11 @@ export default function DocumentsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-white/6">
-                    {['Name','Type','Category','Date','Actions'].map((h, i) => (
+                    {['Name','Project','Type','Category','Date','Actions'].map((h, i) => (
                       <th
                         key={h}
                         className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500
-                          ${i === 4 ? 'text-right' : 'text-left'}`}
+                          ${i === 5 ? 'text-right' : 'text-left'}`}
                       >
                         {h}
                       </th>
@@ -153,24 +159,30 @@ export default function DocumentsPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-5 py-10 text-center text-[13px] text-gray-400">
+                      <td colSpan={6} className="px-5 py-10 text-center text-[13px] text-gray-400">
                         No files found
                       </td>
                     </tr>
                   ) : (
                     filtered.map(f => {
-                      const cat = CATEGORY_STYLE[f.category];
+                      const cat = CATEGORY_STYLE[f.category] ?? DEFAULT_CATEGORY_STYLE;
                       return (
                         <tr
-                          key={f.id}
+                          key={f.key}
                           className="border-b border-gray-50 last:border-0 hover:bg-gray-50 dark:border-white/4 dark:hover:bg-white/3"
                         >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <FileTypeIcon type={f.type} />
-                              <span className="text-[13px] font-medium text-gray-700 dark:text-gray-200">{f.name}</span>
+                              <div className="min-w-0">
+                                <span className="block truncate text-[13px] font-medium text-gray-700 dark:text-gray-200">{f.name}</span>
+                                {(f.uploadedBy || f.size) && (
+                                  <span className="block text-[11px] text-gray-400">{[f.uploadedBy, f.size].filter(Boolean).join(' · ')}</span>
+                                )}
+                              </div>
                             </div>
                           </td>
+                          <td className="px-5 py-3.5"><SourceBadge source={f.source} /></td>
                           <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{f.type}</td>
                           <td className="px-5 py-3.5">
                             <span
@@ -180,14 +192,21 @@ export default function DocumentsPage() {
                               {f.category}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{f.date}</td>
+                          <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{formatDate(f.date)}</td>
                           <td className="px-5 py-3.5 text-right">
-                            <button
-                              className="text-[12px] font-semibold hover:underline"
-                              style={{ color: '#f5bd02' }}
-                            >
-                              Download
-                            </button>
+                            {f.url ? (
+                              <a
+                                href={f.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[12px] font-semibold hover:underline"
+                                style={{ color: '#f5bd02' }}
+                              >
+                                Download
+                              </a>
+                            ) : (
+                              <span className="text-[12px] text-gray-400" title="No download link was shared for this document">No file link</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -338,7 +357,7 @@ function FolderIllustration() {
   );
 }
 
-function FileTypeIcon({ type }: { type: FileType }) {
+function FileTypeIcon({ type }: { type: string }) {
   const isPdf = type === 'PDF';
   return (
     <div
