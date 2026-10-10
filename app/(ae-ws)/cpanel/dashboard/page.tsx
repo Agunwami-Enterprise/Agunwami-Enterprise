@@ -57,7 +57,7 @@ export default async function CpanelDashboard() {
             <ul className="divide-y divide-[#F0EEE8]">
               {applications.slice(0, 5).map(application => (
                 <li key={application.id}>
-                  <Link href={`/cpanel/applications?open=${application.id}`} className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#FBFAF6]">
+                  <Link href={`/cpanel/applications/${application.id}`} className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#FBFAF6]">
                     <div className="min-w-0">
                       <p className="truncate text-[14px] font-semibold text-[#1A1A1A]">{applicantName(application)}</p>
                       <p className="truncate text-[13px] text-[#8A8A8A]">

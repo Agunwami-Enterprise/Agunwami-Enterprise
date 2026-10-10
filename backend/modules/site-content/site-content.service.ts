@@ -554,6 +554,11 @@ export async function listApplications(): Promise<PartnershipApplication[]> {
   return [...applications].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 }
 
+export async function getApplication(id: string): Promise<PartnershipApplication | null> {
+  const applications = (await readCollection('applications')) ?? [];
+  return applications.find(a => a.id === id) ?? null;
+}
+
 const APPLICATION_TEXT_FIELDS = [
   'phone', 'linkedin', 'role', 'orgName', 'orgType', 'industry', 'orgSize', 'website', 'location',
   'yearsInOperation', 'otherHelpNeeded', 'projectDescription', 'otherChallenge', 'desiredOutcome',
