@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
+import { RefreshCw, Trash2 } from 'lucide-react';
 import {
   Button, Card, ConfirmDelete, EmptyState, ErrorNote, IconButton, Modal, PageHeader, cpanelFetch, cx, useMutation,
 } from './ui';
@@ -18,13 +18,18 @@ const DETAIL_SECTIONS: { title: string; fields: [keyof PartnershipApplication, s
   { title: 'Scope', fields: [['services', 'Services'], ['otherService', 'Other service'], ['additionalNotes', 'Notes'], ['budgetRange', 'Budget'], ['startTime', 'Start'], ['deadline', 'Deadline'], ['decisionMakers', 'Decision makers'], ['otherStakeholders', 'Other stakeholders']] },
 ];
 
-function ApplicationDetail({ application, onClose }: { application: PartnershipApplication; onClose: () => void }) {
+function ApplicationDetail({ application, onClose, onChanged }: {
+  application: PartnershipApplication;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
   const { busy, error, run } = useMutation();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const del = useMutation();
 
-  const setStatus = (status: ApplicationStatus) =>
-    run(() => cpanelFetch(`/api/cpanel/applications/${application.id}`, { method: 'PATCH', json: { status } }));
+  const setStatus = async (status: ApplicationStatus) => {
+    if (await run(() => cpanelFetch(`/api/cpanel/applications/${application.id}`, { method: 'PATCH', json: { status } }))) onChanged();
+  };
 
   return (
     <>
@@ -74,14 +79,56 @@ function ApplicationDetail({ application, onClose }: { application: PartnershipA
         effect="The submission will be removed from the C-panel." busy={del.busy} error={del.error}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={async () => {
-          if (await del.run(() => cpanelFetch(`/api/cpanel/applications/${application.id}`, { method: 'DELETE' }))) onClose();
+          if (await del.run(() => cpanelFetch(`/api/cpanel/applications/${application.id}`, { method: 'DELETE' }))) {
+            onChanged();
+            onClose();
+          }
         }} />
     </>
   );
 }
 
-export function ApplicationsManager({ applications }: { applications: PartnershipApplication[] }) {
+// New submissions arrive while the page is open, so the list re-reads them.
+const REFRESH_MS = 30_000;
+
+export function ApplicationsManager({ applications: initialApplications }: { applications: PartnershipApplication[] }) {
   const searchParams = useSearchParams();
+  const [applications, setApplications] = useState(initialApplications);
+  const [loadError, setLoadError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+
+  /** Re-reads the list from /api/cpanel/applications. */
+  const reload = useCallback(async () => {
+    try {
+      const latest = await cpanelFetch<PartnershipApplication[]>('/api/cpanel/applications', { cache: 'no-store' });
+      setApplications(Array.isArray(latest) ? latest : []);
+      setLoadError('');
+      setLastLoadedAt(new Date());
+    } catch (err) {
+      setLoadError(`Could not load the latest applications: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+  }, []);
+
+  // Load on open (the server-rendered list may be a cached copy), then keep it current.
+  useEffect(() => {
+    const first = setTimeout(() => { void reload(); }, 0);
+    const timer = setInterval(() => { void reload(); }, REFRESH_MS);
+    const onFocus = () => { void reload(); };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [reload]);
+
+  const refreshNow = async () => {
+    setRefreshing(true);
+    await reload();
+    setRefreshing(false);
+  };
+
   const [filter, setFilter] = useState<'all' | ApplicationStatus>('all');
   const [openId, setOpenId] = useState<string | null>(searchParams.get('open'));
   const counts = useMemo(() => {
@@ -95,7 +142,13 @@ export function ApplicationsManager({ applications }: { applications: Partnershi
   return (
     <div className="mx-auto max-w-[1075px]">
       <PageHeader title="Partnership Applications"
-        subtitle={`${applications.length} total submission${applications.length === 1 ? '' : 's'}`} />
+        subtitle={`${applications.length} total submission${applications.length === 1 ? '' : 's'}${lastLoadedAt ? ` · updated ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}`}
+        action={(
+          <Button variant="outline" busy={refreshing} onClick={refreshNow}>
+            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
+          </Button>
+        )} />
+      {loadError && <div className="mb-5"><ErrorNote message={loadError} /></div>}
       <div className="mb-5 flex flex-wrap gap-2" role="tablist">
         {(['all', ...APPLICATION_STATUSES] as const).map(status => (
           <button key={status} type="button" role="tab" aria-selected={filter === status} onClick={() => setFilter(status)}
@@ -130,7 +183,7 @@ export function ApplicationsManager({ applications }: { applications: Partnershi
           </ul>
         )}
       </Card>
-      {opened && <ApplicationDetail application={opened} onClose={() => setOpenId(null)} />}
+      {opened && <ApplicationDetail application={opened} onClose={() => setOpenId(null)} onChanged={() => { void reload(); }} />}
     </div>
   );
 }
