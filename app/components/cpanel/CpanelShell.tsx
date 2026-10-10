@@ -40,12 +40,12 @@ export default function CpanelShell({ email, isCeo, children }: { email: string;
           return (
             <Link key={href} href={href} onClick={() => setOpen(false)} aria-current={active ? 'page' : undefined}
               className={cx(
-                'flex items-center gap-3 rounded-lg border px-3 py-2.5 text-[14px] transition-colors',
+                'group flex items-center gap-3 rounded-lg border px-3 py-2.5 text-[14px] transition-colors',
                 active
                   ? 'border-[#C89B3C]/40 bg-[#C89B3C]/15 font-semibold text-[#C89B3C]'
                   : 'border-transparent hover:bg-white/5 hover:text-white',
               )}>
-              <Icon className="h-[17px] w-[17px]" aria-hidden="true" /> {label}
+              <Icon className="h-[17px] w-[17px] transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" aria-hidden="true" /> {label}
             </Link>
           );
         })}
@@ -71,8 +71,8 @@ export default function CpanelShell({ email, isCeo, children }: { email: string;
       <div className="hidden lg:block">{sidebar}</div>
       {open && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
-          {sidebar}
-          <button type="button" aria-label="Close menu" className="flex-1 bg-black/40" onClick={() => setOpen(false)} />
+          <div className="ae-slide-in-left">{sidebar}</div>
+          <button type="button" aria-label="Close menu" className="ae-fade-in flex-1 bg-black/40" onClick={() => setOpen(false)} />
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -91,7 +91,9 @@ export default function CpanelShell({ email, isCeo, children }: { email: string;
             </span>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto px-5 py-8 md:px-16 md:py-10">{children}</main>
+        <main className="flex-1 overflow-y-auto px-5 py-8 md:px-16 md:py-10">
+          <div key={path} className="ae-page-enter">{children}</div>
+        </main>
       </div>
     </div>
   );

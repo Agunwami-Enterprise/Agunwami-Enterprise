@@ -7,6 +7,7 @@ import type { MonthlySummaryDoc } from '@/modules/time-tracking/types';
 import ClockWidget from '@/modules/time-tracking/components/ClockWidget';
 import MonthlyCalendar from '@/modules/time-tracking/components/MonthlyCalendar';
 import TeamOverview from '@/modules/time-tracking/components/TeamOverview';
+import ProjectAttendance from '@/modules/time-tracking/components/ProjectAttendance';
 import { SkeletonTimeTracking } from '@/app/components/ceo/Skeleton';
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -18,24 +19,6 @@ type TTTab = 'overview' | 'goals' | 'reports';
 /* ══════════════════════════════════════════════════════════════════════════
    CONSTANTS
 ══════════════════════════════════════════════════════════════════════════ */
-
-const STAT_CARDS = [
-  { label:'Total Hours',        value:'1,248', unit:'',   iconBg:'#dbeafe', iconColor:'#2563eb', icon:<ClockIcon /> },
-  { label:'Overtime Hours',     value:'32',    unit:'',   iconBg:'#fef3c7', iconColor:'#d97706', icon:<ClockIcon /> },
-  { label:'Average Hours/Week', value:'38.5',  unit:'',   iconBg:'#d1fae5', iconColor:'#059669', icon:<CalIcon />   },
-  { label:'Productivity',       value:'94',    unit:'%',  iconBg:'#ede9fe', iconColor:'#7c3aed', icon:<PersonIcon /> },
-];
-
-const PIE_SLICES = [
-  { label:'Project 1', pct:35, color:'#3b82f6',
-    d:'M 60 60 L 60 10 A 50 50 0 0 1 100.45 89.39 Z' },
-  { label:'Project 2', pct:25, color:'#f5bd02',
-    d:'M 60 60 L 100.45 89.39 A 50 50 0 0 1 30.61 100.45 Z' },
-  { label:'Project 3', pct:25, color:'#22c55e',
-    d:'M 60 60 L 30.61 100.45 A 50 50 0 0 1 19.55 30.61 Z' },
-  { label:'Internal',  pct:15, color:'#ec4899',
-    d:'M 60 60 L 19.55 30.61 A 50 50 0 0 1 60 10 Z' },
-];
 
 const GOALS = [
   {
@@ -86,10 +69,16 @@ export default function TimeTrackingPage() {
   const [tab, setTab] = useState<TTTab>('overview');
   const [summary, setSummary] = useState<MonthlySummaryDoc | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     if (!user?.uid) return;
-    return subscribeMonthlySummary(user.uid, monthId(), s => { setSummary(s); setLoading(false); });
+    return subscribeMonthlySummary(
+      user.uid,
+      monthId(),
+      s => { setSummary(s); setLoading(false); },
+      err => setLoadError(err.message || 'Unknown error'),
+    );
   }, [user?.uid]);
 
   const TABS: { key: TTTab; label: string; icon: React.ReactNode }[] = [
@@ -106,8 +95,14 @@ export default function TimeTrackingPage() {
       {/* ── Header ── */}
       <div className="mb-5">
         <h1 className="text-[20px] font-bold text-gray-800 dark:text-white">Time Tracking</h1>
-        <p className="text-[12px] text-gray-500 dark:text-gray-400">Monitor staff working hours and productivity</p>
+        <p className="text-[12px] text-gray-500 dark:text-gray-400">Your clock-ins, the workstation team, and attendance reported by each project</p>
       </div>
+
+      {loadError && (
+        <p role="alert" className="mb-4 rounded-xl bg-red-50 px-4 py-2.5 text-[12px] text-red-700 dark:bg-red-500/10 dark:text-red-300">
+          Your time-tracking records could not be loaded: {loadError}
+        </p>
+      )}
 
       {/* ── Tabs ── */}
       <div className="mb-5 flex border-b border-gray-200 dark:border-white/6">
@@ -138,47 +133,7 @@ export default function TimeTrackingPage() {
 
           <TeamOverview />
 
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {STAT_CARDS.map(s => (
-              <div key={s.label} className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e]">
-                <div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">{s.label}</p>
-                  <p className="mt-0.5 text-[22px] font-bold text-gray-800 dark:text-white">
-                    {s.value}<span className="text-[14px]">{s.unit}</span>
-                  </p>
-                </div>
-                <div
-                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full"
-                  style={{ backgroundColor: s.iconBg, color: s.iconColor }}
-                >
-                  {s.icon}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pie chart card */}
-          <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
-            <h2 className="mb-4 text-[14px] font-bold text-gray-800 dark:text-white">Project Time Distribution</h2>
-            <div className="flex flex-col items-center gap-6 sm:flex-row">
-              <svg width="120" height="120" viewBox="0 0 120 120" className="flex-shrink-0">
-                {PIE_SLICES.map((s, i) => (
-                  <path key={i} d={s.d} fill={s.color} />
-                ))}
-              </svg>
-              <div className="flex flex-col gap-2.5">
-                {PIE_SLICES.map(s => (
-                  <div key={s.label} className="flex items-center gap-2">
-                    <div className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-                    <span className="text-[12px] text-gray-600 dark:text-gray-300">
-                      {s.label} ({s.pct}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <ProjectAttendance />
 
           {/* Goals section */}
           <div>
@@ -308,15 +263,6 @@ function WeeklyBars() {
    ICONS
 ══════════════════════════════════════════════════════════════════════════ */
 
-function ClockIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>;
-}
-function CalIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
-}
-function PersonIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>;
-}
 function TrophyIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 9H3V4h3M18 9h3V4h-3M12 17v4M8 21h8M7 4h10v6a5 5 0 0 1-10 0V4z"/></svg>;
 }

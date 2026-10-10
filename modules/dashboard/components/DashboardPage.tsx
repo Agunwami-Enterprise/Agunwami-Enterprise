@@ -391,7 +391,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 2. KPI Metric Cards Grid (4x2) ─────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="ae-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Card 1: Active Projects */}
         <MetricCard
           label="Configured Projects"
@@ -542,7 +542,7 @@ export default function DashboardPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="ae-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {apiProjects.map(project => (
               <ProjectCard
                 key={project.id}
@@ -832,7 +832,7 @@ function ProjectCard({
   const color = project.color || '#d97706';
 
   return (
-    <div className="flex flex-col justify-between overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:shadow-md dark:border-white/6 dark:bg-[#1e1e1e]">
+    <div className="ae-lift flex flex-col justify-between overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-white/6 dark:bg-[#1e1e1e]">
       {/* Tinted Header */}
       <div
         className="border-b p-4 relative"

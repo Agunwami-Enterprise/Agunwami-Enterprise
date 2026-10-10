@@ -1,36 +1,30 @@
 /**
  * /api/ceo/payments
  *
- * GET: Lists financial disbursements and stats from AEHub Firestore payments collection.
- * PATCH: Approves or rejects a payment voucher.
+ * GET: The Payments page list: the enterprise's payments plus each project's
+ *      reported payments, labelled by source. `?mode=stats` returns stats.
+ * PATCH: Approves or rejects one of the enterprise's own payment vouchers.
  */
 
 import { NextResponse } from 'next/server';
 import { requireCeoSession } from '@/lib/workstation/api-auth';
 import { PaymentsService } from '@/backend/modules/payments';
+import { getPaymentsFeed } from '@/backend/modules/payments/payments.feed';
+
+const errorMessage = (err: unknown) => (err instanceof Error && err.message) || 'Internal error';
 
 export async function GET(request: Request) {
   const auth = await requireCeoSession();
   if (auth.error) return auth.error;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const mode = searchParams.get('mode');
-
-    if (mode === 'stats') {
-      const stats = await PaymentsService.getPaymentStats();
-      return NextResponse.json(stats);
+    if (new URL(request.url).searchParams.get('mode') === 'stats') {
+      return NextResponse.json(await PaymentsService.getPaymentStats());
     }
-
-    const status = (searchParams.get('status') as any) || undefined;
-    const category = (searchParams.get('category') as any) || undefined;
-    const search = searchParams.get('search') || undefined;
-
-    const payments = await PaymentsService.getPayments({ status, category, search });
-    return NextResponse.json(payments);
-  } catch (err: any) {
+    return NextResponse.json(await getPaymentsFeed());
+  } catch (err) {
     console.error('[/api/ceo/payments] error:', err);
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }
 
@@ -39,21 +33,24 @@ export async function PATCH(request: Request) {
   if (auth.error) return auth.error;
 
   try {
-    const body = await request.json();
-    const { id, status, notes } = body;
+    const body = await request.json().catch(() => ({})) as { id?: unknown; status?: unknown; notes?: unknown };
+    const id = typeof body.id === 'string' ? body.id : '';
+    const status = body.status === 'APPROVED' || body.status === 'REJECTED' ? body.status : null;
     if (!id || !status) {
-      return NextResponse.json({ error: 'ID and status are required' }, { status: 400 });
+      return NextResponse.json({ error: 'A payment ID and a status of APPROVED or REJECTED are required.' }, { status: 400 });
     }
 
     const success = await PaymentsService.updatePaymentStatus(id, {
       status,
       approvedBy: 'Agunwami CEO',
-      notes,
+      notes: typeof body.notes === 'string' ? body.notes : undefined,
     });
-
+    if (!success) {
+      return NextResponse.json({ error: 'The payment could not be updated. Please try again.' }, { status: 502 });
+    }
     return NextResponse.json({ success });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[/api/ceo/payments PATCH] error:', err);
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }

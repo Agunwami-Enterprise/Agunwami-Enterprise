@@ -55,6 +55,7 @@ function ApplicationDetail({ application, onClose, onChanged }: {
           ))}
         </div>
         <ErrorNote message={error} />
+        {application.flaggedAsSpam && <SpamNote />}
         {DETAIL_SECTIONS.map(section => {
           const rows = section.fields
             .map(([key, name]) => [name, application[key]] as const)
@@ -85,6 +86,23 @@ function ApplicationDetail({ application, onClose, onChanged }: {
           }
         }} />
     </>
+  );
+}
+
+function SpamBadge() {
+  return (
+    <span className="rounded-md bg-[#FEF3C7] px-2 py-0.5 text-[12px] font-semibold text-[#92400E]" title="The form's hidden spam-trap field was filled">
+      Possible spam
+    </span>
+  );
+}
+
+function SpamNote() {
+  return (
+    <p className="mt-4 rounded-lg bg-[#FEF3C7] px-3 py-2 text-[13px] text-[#92400E]">
+      Possible spam: the form&apos;s hidden spam-trap field was filled. Browsers and password managers sometimes
+      fill it for real people, so check the details before deleting it.
+    </p>
   );
 }
 
@@ -162,7 +180,7 @@ export function ApplicationsManager({ applications: initialApplications }: { app
         {visible.length === 0 ? (
           <EmptyState>{applications.length ? 'No applications with this status.' : 'No applications yet.'}</EmptyState>
         ) : (
-          <ul className="divide-y divide-[#F0EEE8]">
+          <ul className="ae-stagger divide-y divide-[#F0EEE8]">
             {visible.map(application => (
               <li key={application.id} className="flex items-center gap-4 px-5 py-4 hover:bg-[#FBFAF6]">
                 <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpenId(application.id)}>
@@ -174,6 +192,7 @@ export function ApplicationsManager({ applications: initialApplications }: { app
                 <span className="hidden text-[13px] text-[#8A8A8A] sm:block">
                   {new Date(application.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </span>
+                {application.flaggedAsSpam && <SpamBadge />}
                 <ApplicationStatusBadge status={application.status} />
                 <IconButton label="Open" onClick={() => setOpenId(application.id)}>
                   <span className="text-[13px] font-semibold text-[#C89B3C]">View</span>

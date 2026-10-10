@@ -142,6 +142,8 @@ export interface PartnershipApplication {
   id: string;
   status: ApplicationStatus;
   submittedAt: string;
+  /** The form's hidden spam-trap field was filled; kept for a person to judge. */
+  flaggedAsSpam?: boolean;
   firstName: string;
   lastName: string;
   email: string;
