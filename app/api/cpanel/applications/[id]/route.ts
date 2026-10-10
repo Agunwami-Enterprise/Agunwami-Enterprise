@@ -5,7 +5,16 @@
  */
 
 import { cpanelHandler, readJson, type IdParams } from '@/lib/workstation/cpanel-api';
-import { deleteApplication, setApplicationStatus } from '@/backend/modules/site-content';
+import { deleteApplication, getApplication, setApplicationStatus, SiteContentNotFoundError } from '@/backend/modules/site-content';
+
+export async function GET(_request: Request, { params }: IdParams) {
+  const { id } = await params;
+  return cpanelHandler(async () => {
+    const application = await getApplication(id);
+    if (!application) throw new SiteContentNotFoundError('Application');
+    return application;
+  });
+}
 
 export async function PATCH(request: Request, { params }: IdParams) {
   const { id } = await params;
