@@ -994,7 +994,7 @@ export default function PartnershipApplyPage() {
       const res = await fetch("/api/site/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, company: honeypot }),
+        body: JSON.stringify({ ...form, hpTrap: honeypot }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1211,9 +1211,12 @@ export default function PartnershipApplyPage() {
                   {submitError}
                 </p>
               )}
+              {/* Spam trap: bots fill every input; people never see this one. Its
+                  name must not look like a real field (e.g. "company"), or the
+                  browser's autofill fills it and the application is discarded. */}
               <input
                 type="text"
-                name="company"
+                name="hp_trap_field"
                 value={honeypot}
                 onChange={(e) => setHoneypot(e.target.value)}
                 tabIndex={-1}

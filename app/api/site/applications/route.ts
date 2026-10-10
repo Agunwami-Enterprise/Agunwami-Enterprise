@@ -2,8 +2,10 @@
  * /api/site/applications
  *
  * POST: public submission of the /partnerships/apply form. No sign-in, so
- * it is rate limited per IP and has a honeypot field (`company`) that only
- * bots fill in.
+ * it is rate limited per IP and has a honeypot field (`hpTrap`) that only
+ * bots fill in. It must not be named like a real field such as `company`:
+ * browsers autofill those even when hidden, which silently drops real
+ * applications.
  */
 
 import { NextResponse } from 'next/server';
@@ -32,7 +34,10 @@ export async function POST(request: Request) {
     async () => {
       const body = await readJson(request);
       // Pretend success to bots that fill the hidden field.
-      if (typeof body.company === 'string' && body.company.trim()) return { id: 'received' };
+      if (typeof body.hpTrap === 'string' && body.hpTrap.trim()) {
+        console.warn(`[site/applications] Honeypot filled; discarded a submission from ${ip}.`);
+        return { id: 'received' };
+      }
       const application = await submitApplication(body);
       return { id: application.id };
     },
