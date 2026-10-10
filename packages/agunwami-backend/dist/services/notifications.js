@@ -52,28 +52,37 @@ function typeToIcon(type) {
         return { bg: '#dcfce7', color: '#16a34a' };
     return { bg: '#fef9c3', color: '#d97706' };
 }
-/** Mark a single notification as read. */
-async function markNotifRead(id) {
-    await (0, firestore_1.updateDoc)((0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'notifications', id), { read: true });
+/** Mark a single notification as read. Pass `db` when notifications live in another project. */
+async function markNotifRead(id, db = (0, firebase_instance_1.getDb)()) {
+    await (0, firestore_1.updateDoc)((0, firestore_1.doc)(db, 'notifications', id), { read: true });
 }
 /** Mark multiple notifications as read in a single batch write. */
-async function markAllNotifsRead(ids) {
+async function markAllNotifsRead(ids, db = (0, firebase_instance_1.getDb)()) {
     if (!ids.length)
         return;
-    const batch = (0, firestore_1.writeBatch)((0, firebase_instance_1.getDb)());
-    ids.forEach(id => batch.update((0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'notifications', id), { read: true }));
+    const batch = (0, firestore_1.writeBatch)(db);
+    ids.forEach(id => batch.update((0, firestore_1.doc)(db, 'notifications', id), { read: true }));
     await batch.commit();
 }
-/** Subscribe to all notifications for a given user (newest first). */
-function subscribeNotifications(uid, cb) {
+const createdAtMillis = (data) => typeof data.createdAt?.toMillis === 'function' ? data.createdAt.toMillis() : 0;
+/**
+ * Subscribe to all notifications for a given user (newest first). Pass `db`
+ * when notifications live in a different Firebase project than the business
+ * data. If the query fails, `cb` receives an empty list (so callers stop
+ * loading) and `onError` receives the error.
+ */
+function subscribeNotifications(uid, cb, db = (0, firebase_instance_1.getDb)(), onError) {
     if (!uid) {
         cb([]);
         return () => { };
     }
     try {
-        const q = (0, firestore_1.query)((0, firestore_1.collection)((0, firebase_instance_1.getDb)(), 'notifications'), (0, firestore_1.where)('recipientId', '==', uid), (0, firestore_1.orderBy)('createdAt', 'desc'));
+        // Sorted here rather than with orderBy, which would need a composite
+        // (recipientId, createdAt) index in every project this reads from.
+        const q = (0, firestore_1.query)((0, firestore_1.collection)(db, 'notifications'), (0, firestore_1.where)('recipientId', '==', uid));
         return (0, firestore_1.onSnapshot)(q, (snap) => {
-            cb(snap.docs.map((d) => {
+            const docs = [...snap.docs].sort((a, b) => createdAtMillis(b.data()) - createdAtMillis(a.data()));
+            cb(docs.map((d) => {
                 const data = d.data();
                 const type = (data.type || 'notification');
                 const icon = typeToIcon(type);
@@ -82,7 +91,8 @@ function subscribeNotifications(uid, cb) {
                     id: d.id,
                     title: typeToTitle(type),
                     body: (data.message || data.body || ''),
-                    time: (0, time_1.relativeTime)(data.createdAt),
+                    // A just-written server timestamp is null until the write is confirmed.
+                    time: data.createdAt?.toDate ? (0, time_1.relativeTime)(data.createdAt) : 'just now',
                     tag: read ? '' : 'NEW',
                     tagColor: read ? '' : '#ef4444',
                     read,
@@ -93,14 +103,15 @@ function subscribeNotifications(uid, cb) {
                 };
             }));
         }, (err) => {
-            if (err.code !== 'permission-denied') {
-                console.warn('[agunwami-backend] Notifications snapshot error:', err);
-            }
+            console.warn('[agunwami-backend] Notifications snapshot error:', err);
+            cb([]);
+            onError?.(err);
         });
     }
     catch (err) {
         console.warn('[agunwami-backend] subscribeNotifications error:', err);
         cb([]);
+        onError?.(err);
         return () => { };
     }
 }
