@@ -16,6 +16,7 @@ import {
   slugify,
 } from './site-content.defaults';
 import { readCollection, readSettings, updateCollection, writeSettings } from './site-content.store';
+import { APPLICATION_LIMITS, firstInvalidApplicationStep } from './application-rules';
 import {
   ProjectAlreadyExistsError,
   ProjectValidationError,
@@ -562,19 +563,22 @@ const APPLICATION_TEXT_FIELDS = [
 
 /** Stores a submission of the public /partnerships/apply form. */
 export async function submitApplication(input: Input): Promise<PartnershipApplication> {
-  const email = text(input, 'email', { required: true, max: 200, label: 'Email' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new SiteContentValidationError('Enter a valid email address.');
+  // Same rules the form checks step by step, so this only fails for requests
+  // that skipped the form.
+  const invalid = firstInvalidApplicationStep(input);
+  if (invalid) throw new SiteContentValidationError(Object.values(invalid.errors)[0]);
+  const email = text(input, 'email', { required: true, max: APPLICATION_LIMITS.email, label: 'Email' });
   const application: PartnershipApplication = {
     id: randomUUID(),
     status: 'pending',
     submittedAt: new Date().toISOString(),
-    firstName: text(input, 'firstName', { required: true, max: 80, label: 'First name' }),
-    lastName: text(input, 'lastName', { required: true, max: 80, label: 'Last name' }),
+    firstName: text(input, 'firstName', { required: true, max: APPLICATION_LIMITS.name, label: 'First name' }),
+    lastName: text(input, 'lastName', { required: true, max: APPLICATION_LIMITS.name, label: 'Last name' }),
     email,
     helpNeeded: list(input, 'helpNeeded', { max: 20, itemMax: 120 }),
     challenges: list(input, 'challenges', { max: 20, itemMax: 120 }),
     services: list(input, 'services', { max: 20, itemMax: 120 }),
-    ...Object.fromEntries(APPLICATION_TEXT_FIELDS.map(key => [key, text(input, key, { max: 3000 })])),
+    ...Object.fromEntries(APPLICATION_TEXT_FIELDS.map(key => [key, text(input, key, { max: APPLICATION_LIMITS.text })])),
   } as PartnershipApplication;
   await updateCollection('applications', noApplications, applications => [...applications, application]);
   return application;

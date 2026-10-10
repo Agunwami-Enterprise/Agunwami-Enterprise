@@ -34,13 +34,18 @@ export default function NotificationsPage() {
   const [search, setSearch] = useState('');
   const [notifs,   setNotifs]   = useState<Notif[]>([]);
   const [loading,  setLoading]  = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.uid) {
       if (!authLoading) setLoading(false);
       return;
     }
-    return subscribeNotifications(user.uid, (data) => { setNotifs(data as Notif[]); setLoading(false); });
+    return subscribeNotifications(
+      user.uid,
+      (data) => { setNotifs(data as Notif[]); setLoading(false); },
+      (error) => setLoadError(error.message || 'Unknown error'),
+    );
   }, [user?.uid, authLoading]);
 
   // Project-wide events reported by each project's metrics endpoint.
@@ -97,6 +102,12 @@ export default function NotificationsPage() {
             </button>
           </div>
         </div>
+
+        {loadError && (
+          <p role="alert" className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-[12px] text-red-700 dark:bg-red-500/10 dark:text-red-300">
+            Your notifications could not be loaded: {loadError}
+          </p>
+        )}
 
         {/* Stat cards */}
         <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">

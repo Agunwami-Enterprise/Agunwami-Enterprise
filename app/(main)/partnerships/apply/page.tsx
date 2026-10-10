@@ -8,6 +8,11 @@ import Badge from "@/app/components/common/ui/Badge";
 import Section from "@/app/components/common/ui/Section";
 import { cn } from "@/lib/utils";
 import {
+  APPLICATION_LIMITS,
+  firstInvalidApplicationStep,
+  validateApplicationStep,
+} from "@/backend/modules/site-content/application-rules";
+import {
   RiUserLine,
   RiBuilding4Line,
   RiFolderLine,
@@ -264,6 +269,18 @@ function Label({
   );
 }
 
+/** Shown under a field that failed the step check. */
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={`${id}-error`} role="alert" className="mt-1.5 text-[12px] text-red-600 dark:text-red-400">
+      {message}
+    </p>
+  );
+}
+
+const invalidRing = "ring-2 ring-red-400 dark:ring-red-500/70";
+
 function Input({
   placeholder,
   value,
@@ -271,6 +288,9 @@ function Input({
   type = "text",
   id,
   cream,
+  error,
+  maxLength = APPLICATION_LIMITS.text,
+  autoComplete,
 }: {
   placeholder?: string;
   value: string;
@@ -278,19 +298,30 @@ function Input({
   type?: string;
   id?: string;
   cream?: boolean;
+  error?: string;
+  maxLength?: number;
+  autoComplete?: string;
 }) {
   return (
-    <input
-      id={id}
-      type={type}
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "w-full px-4 py-3 rounded-xl border-0 text-gray-900 dark:text-white placeholder:text-gray-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/40 transition",
-        cream ? "bg-[#F5F0E8] dark:bg-white/5" : "bg-gray-100 dark:bg-white/10",
-      )}
-    />
+    <>
+      <input
+        id={id}
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        maxLength={maxLength}
+        autoComplete={autoComplete}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error && id ? `${id}-error` : undefined}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "w-full px-4 py-3 rounded-xl border-0 text-gray-900 dark:text-white placeholder:text-gray-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/40 transition",
+          cream ? "bg-[#F5F0E8] dark:bg-white/5" : "bg-gray-100 dark:bg-white/10",
+          error && invalidRing,
+        )}
+      />
+      {id && <FieldError id={id} message={error} />}
+    </>
   );
 }
 
@@ -301,6 +332,7 @@ function Textarea({
   rows = 4,
   cream,
   id,
+  error,
 }: {
   placeholder?: string;
   value: string;
@@ -308,19 +340,27 @@ function Textarea({
   rows?: number;
   cream?: boolean;
   id?: string;
+  error?: string;
 }) {
   return (
-    <textarea
-      id={id}
-      rows={rows}
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "w-full px-4 py-3 rounded-xl border-0 text-gray-900 dark:text-white placeholder:text-gray-400 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/40 transition resize-none",
-        cream ? "bg-[#F5F0E8] dark:bg-white/5" : "bg-gray-100 dark:bg-white/10",
-      )}
-    />
+    <>
+      <textarea
+        id={id}
+        rows={rows}
+        placeholder={placeholder}
+        value={value}
+        maxLength={APPLICATION_LIMITS.text}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error && id ? `${id}-error` : undefined}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "w-full px-4 py-3 rounded-xl border-0 text-gray-900 dark:text-white placeholder:text-gray-400 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/40 transition resize-none",
+          cream ? "bg-[#F5F0E8] dark:bg-white/5" : "bg-gray-100 dark:bg-white/10",
+          error && invalidRing,
+        )}
+      />
+      {id && <FieldError id={id} message={error} />}
+    </>
   );
 }
 
@@ -329,18 +369,29 @@ function SelectField({
   value,
   onChange,
   placeholder,
+  id,
+  error,
 }: {
   options: string[];
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
+  id?: string;
+  error?: string;
 }) {
   return (
+    <>
     <div className="relative">
       <select
+        id={id}
         value={value}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error && id ? `${id}-error` : undefined}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-4 py-3 pr-10 rounded-xl border-0 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white text-[15px] focus:outline-none appearance-none cursor-pointer"
+        className={cn(
+          "w-full px-4 py-3 pr-10 rounded-xl border-0 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white text-[15px] focus:outline-none appearance-none cursor-pointer",
+          error && invalidRing,
+        )}
       >
         <option value="">{placeholder}</option>
         {options.map((o) => (
@@ -351,6 +402,8 @@ function SelectField({
       </select>
       <RiArrowDownSLine className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] pointer-events-none" />
     </div>
+    {id && <FieldError id={id} message={error} />}
+    </>
   );
 }
 
@@ -392,9 +445,11 @@ function ChipButton({
 function StepAboutYou({
   data,
   set,
+  errors,
 }: {
   data: FormData;
   set: (k: keyof FormData, v: string) => void;
+  errors: Record<string, string>;
 }) {
   return (
     <div className="space-y-5">
@@ -411,6 +466,9 @@ function StepAboutYou({
           <Label required>First Name</Label>
           <Input
             id="firstName"
+            error={errors.firstName}
+            autoComplete="given-name"
+            maxLength={APPLICATION_LIMITS.name}
             placeholder="John"
             value={data.firstName}
             onChange={(v) => set("firstName", v)}
@@ -420,6 +478,9 @@ function StepAboutYou({
           <Label required>Last Name</Label>
           <Input
             id="lastName"
+            error={errors.lastName}
+            autoComplete="family-name"
+            maxLength={APPLICATION_LIMITS.name}
             placeholder="Doe"
             value={data.lastName}
             onChange={(v) => set("lastName", v)}
@@ -429,6 +490,9 @@ function StepAboutYou({
           <Label required>Email</Label>
           <Input
             id="email"
+            error={errors.email}
+            autoComplete="email"
+            maxLength={APPLICATION_LIMITS.email}
             type="email"
             placeholder="john@email.com"
             value={data.email}
@@ -457,7 +521,14 @@ function StepAboutYou({
       </div>
       <div>
         <Label required>What is your role?</Label>
-        <div className="flex flex-wrap gap-2.5">
+        <div
+          id="role"
+          tabIndex={-1}
+          role="radiogroup"
+          aria-invalid={errors.role ? true : undefined}
+          aria-describedby={errors.role ? "role-error" : undefined}
+          className={cn("flex flex-wrap gap-2.5 rounded-xl focus:outline-none", errors.role && "p-2 -m-2 ring-2 ring-red-400 dark:ring-red-500/70")}
+        >
           {ROLES.map((r) => (
             <ChipButton
               key={r}
@@ -467,10 +538,12 @@ function StepAboutYou({
             />
           ))}
         </div>
+        <FieldError id="role" message={errors.role} />
         {data.role === "Other" && (
           <div className="mt-3">
             <Textarea
               id="otherRole"
+              error={errors.otherRole}
               placeholder="Please specify your role..."
               rows={3}
               value={data.otherRole}
@@ -489,9 +562,11 @@ function StepAboutYou({
 function StepOrganization({
   data,
   set,
+  errors,
 }: {
   data: FormData;
   set: (k: keyof FormData, v: string) => void;
+  errors: Record<string, string>;
 }) {
   return (
     <div className="space-y-5">
@@ -508,6 +583,8 @@ function StepOrganization({
           <Label required>Organization Name</Label>
           <Input
             id="orgName"
+            error={errors.orgName}
+            autoComplete="organization"
             placeholder="Acme Nonprofit, Inc."
             value={data.orgName}
             onChange={(v) => set("orgName", v)}
@@ -516,6 +593,8 @@ function StepOrganization({
         <div>
           <Label required>Organization Type</Label>
           <SelectField
+            id="orgType"
+            error={errors.orgType}
             options={ORG_TYPES}
             value={data.orgType}
             onChange={(v) => set("orgType", v)}
@@ -525,6 +604,8 @@ function StepOrganization({
         <div>
           <Label required>Industry / Sector</Label>
           <SelectField
+            id="industry"
+            error={errors.industry}
             options={INDUSTRIES}
             value={data.industry}
             onChange={(v) => set("industry", v)}
@@ -578,9 +659,11 @@ function StepOrganization({
 function StepProject({
   data,
   setField,
+  errors,
 }: {
   data: FormData;
   setField: (k: keyof FormData, v: string | string[]) => void;
+  errors: Record<string, string>;
 }) {
   const toggle = (item: string) => {
     const next = data.helpNeeded.includes(item)
@@ -642,6 +725,8 @@ function StepProject({
       <div>
         <Label required>What are you trying to build, improve, or solve?</Label>
         <Textarea
+          id="projectDescription"
+          error={errors.projectDescription}
           cream
           rows={5}
           placeholder="Tell us about your project, the problem you're trying to solve, and what you'd like the final solution to achieve."
@@ -980,14 +1065,46 @@ export default function PartnershipApplyPage() {
   const [submitError, setSubmitError] = useState("");
   // Hidden from people; bots that fill it are ignored by the server.
   const [honeypot, setHoneypot] = useState("");
+  // Field problems on the current step, shown once the applicant tries to continue.
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const setField = (key: keyof FormData, value: string | string[]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const clearError = (key: keyof FormData) =>
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
 
-  const setStrField = (key: keyof FormData, value: string) =>
+  const setField = (key: keyof FormData, value: string | string[]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    clearError(key);
+  };
+
+  const setStrField = (key: keyof FormData, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    clearError(key);
+  };
+
+  /** Shows the errors and moves focus to the first field with a problem. */
+  const showErrors = (stepErrors: Record<string, string>) => {
+    setErrors(stepErrors);
+    const firstField = Object.keys(stepErrors)[0];
+    requestAnimationFrame(() => {
+      const element = firstField ? document.getElementById(firstField) : null;
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      element?.focus({ preventScroll: true });
+    });
+  };
 
   const submit = async () => {
+    // Every step was checked on the way here; this only catches edge cases.
+    const invalid = firstInvalidApplicationStep(form);
+    if (invalid) {
+      setStep(invalid.step);
+      showErrors(invalid.errors);
+      return;
+    }
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -1000,8 +1117,6 @@ export default function PartnershipApplyPage() {
       if (!res.ok) {
         const message = (body as { error?: string }).error || "We could not send your application. Please try again.";
         setSubmitError(message);
-        // Contact details are on the first step.
-        if (res.status === 400 && /name|email/i.test(message)) setStep(1);
         return;
       }
       setSubmitted(true);
@@ -1013,11 +1128,18 @@ export default function PartnershipApplyPage() {
   };
 
   const handleNext = () => {
+    const stepErrors = validateApplicationStep(step, form);
+    if (Object.keys(stepErrors).length > 0) {
+      showErrors(stepErrors);
+      return;
+    }
+    setErrors({});
     if (step < STEPS.length) setStep((s) => s + 1);
     else void submit();
   };
 
   const handleBack = () => {
+    setErrors({});
     if (step > 1) setStep((s) => s - 1);
   };
 
@@ -1099,7 +1221,10 @@ export default function PartnershipApplyPage() {
                         {/* Step Node */}
                         <div
                           onClick={() => {
-                            if (s.id <= step) setStep(s.id);
+                            if (s.id <= step) {
+                              setErrors({});
+                              setStep(s.id);
+                            }
                           }}
                           className="flex flex-col items-center flex-shrink-0 cursor-pointer group select-none"
                         >
@@ -1144,12 +1269,19 @@ export default function PartnershipApplyPage() {
               {/* ── White card: fields + nav ── */}
               <div className="bg-white dark:bg-[#1A1A1A] rounded-2xl shadow-sm border border-gray-100 dark:border-white/10 overflow-hidden">
                 <div className="p-6 md:p-10">
-                  {step === 1 && <StepAboutYou data={form} set={setStrField} />}
+                  <p className="mb-6 text-[12px] text-gray-400">
+                    {step <= 3 ? (
+                      <>Fields marked <span className="text-primary">*</span> are required. Everything else is optional.</>
+                    ) : (
+                      "Everything on this step is optional. Skip anything you're not sure about yet."
+                    )}
+                  </p>
+                  {step === 1 && <StepAboutYou data={form} set={setStrField} errors={errors} />}
                   {step === 2 && (
-                    <StepOrganization data={form} set={setStrField} />
+                    <StepOrganization data={form} set={setStrField} errors={errors} />
                   )}
                   {step === 3 && (
-                    <StepProject data={form} setField={setField} />
+                    <StepProject data={form} setField={setField} errors={errors} />
                   )}
                   {step === 4 && (
                     <StepSituation
