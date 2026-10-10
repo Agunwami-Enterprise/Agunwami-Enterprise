@@ -2,10 +2,10 @@
  * /api/site/applications
  *
  * POST: public submission of the /partnerships/apply form. No sign-in, so
- * it is rate limited per IP and has a honeypot field (`hpTrap`) that only
- * bots fill in. It must not be named like a real field such as `company`:
- * browsers autofill those even when hidden, which silently drops real
- * applications.
+ * it is rate limited per IP and has a hidden spam-trap field (`hpTrap`).
+ * A filled trap is not proof of a bot: browsers and password managers fill
+ * hidden fields too. So those submissions are saved flagged as possible spam
+ * for a person to judge in the C-panel, never discarded.
  */
 
 import { NextResponse } from 'next/server';
@@ -33,12 +33,9 @@ export async function POST(request: Request) {
   return runContentAction(
     async () => {
       const body = await readJson(request);
-      // Pretend success to bots that fill the hidden field.
-      if (typeof body.hpTrap === 'string' && body.hpTrap.trim()) {
-        console.warn(`[site/applications] Honeypot filled; discarded a submission from ${ip}.`);
-        return { id: 'received' };
-      }
-      const application = await submitApplication(body);
+      const flaggedAsSpam = typeof body.hpTrap === 'string' && body.hpTrap.trim() !== '';
+      if (flaggedAsSpam) console.warn(`[site/applications] Spam-trap field filled; saving the submission from ${ip} flagged.`);
+      const application = await submitApplication(body, { flaggedAsSpam });
       return { id: application.id };
     },
     { status: 201, logLabel: 'site/applications' },

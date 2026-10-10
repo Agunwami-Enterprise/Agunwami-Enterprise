@@ -562,7 +562,10 @@ const APPLICATION_TEXT_FIELDS = [
 ] as const;
 
 /** Stores a submission of the public /partnerships/apply form. */
-export async function submitApplication(input: Input): Promise<PartnershipApplication> {
+export async function submitApplication(
+  input: Input,
+  { flaggedAsSpam = false }: { flaggedAsSpam?: boolean } = {},
+): Promise<PartnershipApplication> {
   // Same rules the form checks step by step, so this only fails for requests
   // that skipped the form.
   const invalid = firstInvalidApplicationStep(input);
@@ -572,6 +575,7 @@ export async function submitApplication(input: Input): Promise<PartnershipApplic
     id: randomUUID(),
     status: 'pending',
     submittedAt: new Date().toISOString(),
+    ...(flaggedAsSpam ? { flaggedAsSpam: true } : {}),
     firstName: text(input, 'firstName', { required: true, max: APPLICATION_LIMITS.name, label: 'First name' }),
     lastName: text(input, 'lastName', { required: true, max: APPLICATION_LIMITS.name, label: 'Last name' }),
     email,
