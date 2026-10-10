@@ -32,7 +32,9 @@ export default function CeoShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <CeoNavbar onMenuClick={() => setSidebarOpen(v => !v)} />
         <SuspendedBanner />
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-y-auto">
+          <div key={pathname} className="ae-page-enter">{children}</div>
+        </main>
       </div>
     </div>
   );

@@ -180,7 +180,7 @@ export function ApplicationsManager({ applications: initialApplications }: { app
         {visible.length === 0 ? (
           <EmptyState>{applications.length ? 'No applications with this status.' : 'No applications yet.'}</EmptyState>
         ) : (
-          <ul className="divide-y divide-[#F0EEE8]">
+          <ul className="ae-stagger divide-y divide-[#F0EEE8]">
             {visible.map(application => (
               <li key={application.id} className="flex items-center gap-4 px-5 py-4 hover:bg-[#FBFAF6]">
                 <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpenId(application.id)}>

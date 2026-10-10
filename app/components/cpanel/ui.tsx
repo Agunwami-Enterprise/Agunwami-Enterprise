@@ -318,9 +318,9 @@ export function Modal({ open, title, onClose, children, footer, width = 'max-w-[
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={e => e.target === e.currentTarget && onClose()}>
+    <div className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={e => e.target === e.currentTarget && onClose()}>
       <div role="dialog" aria-modal="true" aria-label={title}
-        className={cx('flex max-h-[90vh] w-full flex-col rounded-2xl bg-white shadow-2xl', width)}>
+        className={cx('ae-pop-in flex max-h-[90vh] w-full flex-col rounded-2xl bg-white shadow-2xl', width)}>
         <div className="flex items-center justify-between border-b border-[#F0EEE8] px-6 py-4">
           <h2 className="text-[17px] font-semibold text-[#1A1A1A]">{title}</h2>
           <IconButton label="Close" onClick={onClose}><X className="h-[18px] w-[18px]" /></IconButton>

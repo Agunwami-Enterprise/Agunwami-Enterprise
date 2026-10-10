@@ -122,12 +122,12 @@ export default function DocumentsPage() {
         {visibleFolders.length > 0 && (
           <div className="mb-6">
             <h2 className="mb-3 text-[14px] font-bold text-gray-800 dark:text-white">Folders</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="ae-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visibleFolders.map(f => (
                 <button
                   key={f.tab}
                   onClick={() => setTab(f.tab)}
-                  className="flex flex-col items-center gap-3 rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:bg-[#1e1e1e]"
+                  className="ae-lift flex flex-col items-center gap-3 rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]"
                 >
                   <FolderIllustration />
                   <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200">{f.label}</span>
@@ -329,10 +329,10 @@ export default function DocumentsPage() {
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div onClick={e => e.stopPropagation()}>{children}</div>
+      <div className="ae-pop-in" onClick={e => e.stopPropagation()}>{children}</div>
     </div>
   );
 }

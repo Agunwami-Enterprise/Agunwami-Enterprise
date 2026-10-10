@@ -72,7 +72,7 @@ export default function TrainingPage() {
         </div>
 
         {/* Stat cards */}
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="ae-stagger mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {[
             { label:'Available Trainings', value:stats.available,  iconBg:'#dbeafe', iconColor:'#2563eb', icon:<BookIcon />    },
             { label:'Completed',           value:stats.completed,  iconBg:'#dcfce7', iconColor:'#16a34a', icon:<CheckCIcon />  },
@@ -107,7 +107,7 @@ export default function TrainingPage() {
         </div>
 
         {/* Training grid */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="ae-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map(t => <TrainingCard key={t.key} training={t} />)}
         </div>
         {filtered.length === 0 && (
@@ -195,7 +195,7 @@ function TrainingCard({ training: t }: { training: Training }) {
   const isProjectCourse = t.source.kind === 'project';
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-[#1e1e1e]">
+    <div className="ae-lift overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-[#1e1e1e]">
       {/* Photo header */}
       <div
         className="relative flex h-36 items-end bg-cover bg-center"
@@ -287,8 +287,8 @@ function TrainingCard({ training: t }: { training: Training }) {
 /* ── Helpers ── */
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}>{children}</div>
+    <div className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="ae-pop-in" onClick={e => e.stopPropagation()}>{children}</div>
     </div>
   );
 }

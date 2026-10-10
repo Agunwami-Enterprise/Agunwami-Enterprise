@@ -80,7 +80,7 @@ export default function ProjectAttendance() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="ae-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
             {stats.map(stat => (
               <div key={stat.label} className="rounded-2xl bg-white p-4 shadow-sm dark:bg-[#1e1e1e]">
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">{stat.label}</p>

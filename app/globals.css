@@ -153,6 +153,58 @@ body {
   background-size: 600px 100%;
 }
 
+/* ── AE Workstation & C-panel motion ─────────────────────────────────────────
+   Small, quick entrances. Everything here is off for people who ask their
+   system to reduce motion. Entrances end at `transform: none`, so they never
+   leave a transform behind that would trap fixed-position modals. */
+@keyframes ae-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes ae-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ae-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes ae-slide-left {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Page content when navigating between pages. */
+.ae-page-enter { animation: ae-enter 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+/* Children rise in one after another (cards, stat tiles, list rows). */
+.ae-stagger > * { animation: ae-enter 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.ae-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.ae-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.ae-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.ae-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.ae-stagger > *:nth-child(6) { animation-delay: 200ms; }
+.ae-stagger > *:nth-child(7) { animation-delay: 240ms; }
+.ae-stagger > *:nth-child(n + 8) { animation-delay: 280ms; }
+
+.ae-fade-in       { animation: ae-fade 0.2s ease-out both; }
+.ae-pop-in        { animation: ae-pop 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.ae-slide-in-left { animation: ae-slide-left 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+/* Cards that respond to the pointer. */
+.ae-lift { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+.ae-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.25); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ae-page-enter,
+  .ae-stagger > *,
+  .ae-fade-in,
+  .ae-pop-in,
+  .ae-slide-in-left { animation: none; }
+  .ae-lift,
+  .ae-lift:hover { transition: none; transform: none; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    HERO SCROLL INDICATOR — Viewport Height Responsiveness
    Gracefully hides when viewport height is too constrained (<600px)

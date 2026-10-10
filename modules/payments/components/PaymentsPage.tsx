@@ -106,7 +106,7 @@ export default function PaymentsPage() {
         </div>
 
         {/* Stat cards */}
-        <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="ae-stagger mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label:'Total Incoming', value:formatTotals(incoming), iconBg:'#dcfce7', iconColor:'#16a34a', icon:<ArrowUpIcon />   },
             { label:'Total Outgoing', value:formatTotals(outgoing), iconBg:'#fee2e2', iconColor:'#dc2626', icon:<ArrowDownIcon /> },
@@ -154,7 +154,7 @@ export default function PaymentsPage() {
           <div className="border-b border-gray-100 px-5 py-3.5 dark:border-white/6">
             <p className="text-[13px] font-bold text-gray-800 dark:text-white">Payments ({filtered.length})</p>
           </div>
-          <div className="flex flex-col divide-y divide-gray-50 dark:divide-white/4">
+          <div className="ae-stagger flex flex-col divide-y divide-gray-50 dark:divide-white/4">
             {filtered.length === 0 && (
               <p className="px-5 py-10 text-center text-[13px] text-gray-400">No payments match these filters.</p>
             )}
@@ -279,8 +279,8 @@ export default function PaymentsPage() {
 
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}>{children}</div>
+    <div className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="ae-pop-in" onClick={e => e.stopPropagation()}>{children}</div>
     </div>
   );
 }
