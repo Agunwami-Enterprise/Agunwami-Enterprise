@@ -4,11 +4,12 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { SignJWT, jwtVerify, createRemoteJWKSet } from 'jose';
 import { normalizeWorkstationRole } from './roles';
+import { WORKSTATION_PROJECT_ID } from './workstation-project';
 
 const SESSION_COOKIE = 'ae_session';
 const SESSION_DURATION_S = 14 * 24 * 60 * 60;
 // Auth + /users live in the workstation Firebase project — see lib/workstation/firebase.ts.
-const PROJECT_ID = process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_PROJECT_ID || 'aehub-eafa6';
+const PROJECT_ID = WORKSTATION_PROJECT_ID;
 const DEFAULT_SESSION_SECRET = 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
 
 const FIREBASE_JWKS = createRemoteJWKSet(
@@ -17,7 +18,7 @@ const FIREBASE_JWKS = createRemoteJWKSet(
   ),
 );
 
-async function verifyFirebaseToken(idToken: string) {
+export async function verifyFirebaseToken(idToken: string) {
   const { payload } = await jwtVerify(idToken, FIREBASE_JWKS, {
     issuer: `https://securetoken.google.com/${PROJECT_ID}`,
     audience: PROJECT_ID,

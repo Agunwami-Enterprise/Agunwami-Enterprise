@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import CeoSidebar from './CeoSidebar';
 import CeoNavbar from './CeoNavbar';
 import SuspendedBanner from './SuspendedBanner';
+import { ToastContainer } from 'react-toastify';
 
 export default function CeoShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -36,6 +37,8 @@ export default function CeoShell({ children }: { children: React.ReactNode }) {
           <div key={pathname} className="ae-page-enter">{children}</div>
         </main>
       </div>
+      {/* Toasts from shared dialogs (e.g. Settings → Security → 2FA). */}
+      <ToastContainer position="top-right" autoClose={4000} newestOnTop />
     </div>
   );
 }

@@ -11,12 +11,15 @@ interface ThemeContextValue {
   resolvedTheme: "light" | "dark";
   /** Cycle through: system → light → dark → system … */
   toggleTheme: () => void;
+  /** Choose a theme directly (used by the workstation's light/dark switch). */
+  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: "system",
   resolvedTheme: "light",
   toggleTheme: () => {},
+  setTheme: () => {},
 });
 
 export function useTheme() {
@@ -78,6 +81,19 @@ export default function ThemeProvider({
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  const chooseTheme = (next: Theme) => {
+    const resolved = next === "system" ? (getSystemDark() ? "dark" : "light") : next;
+    try {
+      if (next === "system") localStorage.removeItem("theme");
+      else localStorage.setItem("theme", next);
+    } catch {
+      // Storage can be unavailable (private mode); the choice still applies now.
+    }
+    setTheme(next);
+    setResolvedTheme(resolved);
+    applyToDOM(next, resolved);
+  };
+
   const toggleTheme = () => {
     setTheme((prev) => {
       // Cycle: system → light → dark → system
@@ -100,7 +116,7 @@ export default function ThemeProvider({
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, resolvedTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, resolvedTheme, toggleTheme, setTheme: chooseTheme }}>
       {children}
     </ThemeContext.Provider>
   );
