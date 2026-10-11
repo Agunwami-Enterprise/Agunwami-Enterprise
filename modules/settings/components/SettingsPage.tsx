@@ -20,11 +20,11 @@ import { useAuth } from '@/lib/workstation/auth-context';
 import { useTheme } from '@/lib/workstation/theme-context';
 import { auth } from '@/lib/workstation/firebase';
 import { seedDatabase } from '@/lib/workstation/seed-client';
+import TwoFactorModal from '@/modules/settings/components/TwoFactorModal';
 
 type SettingsTab = 'profile' | 'preferences' | 'notifications' | 'security' | 'system';
 
 const VALID_TABS: SettingsTab[] = ['profile', 'preferences', 'notifications', 'security', 'system'];
-const AE_HUB_URL = 'https://aehub-eafa6.web.app';
 // The demo-data seeder rewrites shared collections; never offer it in production.
 const SHOW_SEED_TOOL = process.env.NODE_ENV !== 'production';
 
@@ -78,6 +78,7 @@ export default function SettingsPage() {
   const [prefStatus, setPrefStatus] = useState<Status>(null);
   const [securityStatus, setSecurityStatus] = useState<Status>(null);
   const [sendingReset, setSendingReset] = useState(false);
+  const [twoFactorDialog, setTwoFactorDialog] = useState<null | 'enable' | 'disable'>(null);
 
   const [seeding, setSeeding]   = useState(false);
   const [seedLogs, setSeedLogs] = useState<string[]>([]);
@@ -524,16 +525,44 @@ export default function SettingsPage() {
                 )}
               </p>
               <p className="mb-3 text-[11px] text-gray-500 dark:text-gray-400">
-                Two-factor authentication is set up and checked when you sign in to AE Hub. Manage it in AE Hub&apos;s settings.
+                {security?.twoFactorEnabled
+                  ? `After your password, you'll be asked for ${security.twoFactorMethod === 'otp' ? 'a code we email you' : 'a code from your authenticator app'}. This also applies when you sign in to AE Hub.`
+                  : 'Ask for a code from an authenticator app or your email after your password, each time you sign in. Applies to the workstation and AE Hub.'}
               </p>
-              <a
-                href={`${AE_HUB_URL}/staff/${encodeURIComponent(profile?.department || 'ceo')}/settings/`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-medium text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/4"
-              >
-                Manage in AE Hub
-              </a>
+              {security?.twoFactorEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => setTwoFactorDialog('disable')}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-[12px] font-medium text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/4"
+                >
+                  Turn Off 2FA
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTwoFactorDialog('enable')}
+                  disabled={!security}
+                  className="rounded-lg px-4 py-2 text-[12px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-60"
+                  style={{ backgroundColor: '#f5bd02' }}
+                >
+                  Enable 2FA
+                </button>
+              )}
+              <TwoFactorModal
+                open={twoFactorDialog !== null}
+                isEnabling={twoFactorDialog === 'enable'}
+                activeMethod={security?.twoFactorMethod === 'otp' ? 'otp' : security?.twoFactorEnabled ? 'app' : null}
+                onClose={() => setTwoFactorDialog(null)}
+                onComplete={enabled => {
+                  setSecurityStatus({
+                    tone: 'success',
+                    text: enabled
+                      ? 'Two-factor authentication is on. You will be asked for a code the next time you sign in.'
+                      : 'Two-factor authentication is off.',
+                  });
+                  if (!enabled) setTwoFactorDialog(null);
+                }}
+              />
             </div>
 
             {/* Session */}
