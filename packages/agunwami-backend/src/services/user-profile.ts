@@ -2,7 +2,7 @@
 // Real-time subscription to a user's profile document in Firestore.
 // Maps the raw `users/{uid}` document to the canonical UserProfile shape.
 
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, type Firestore } from 'firebase/firestore';
 import { getDb } from './firebase-instance';
 import type { UserProfile, AccountStatus, ShiftStatus, UserRole } from '../types/user';
 import { getStaffDisplayName, getStaffAvatar, getStaffPhone, getStaffPosition, getStaffPermissions } from '../types/user';
@@ -11,15 +11,18 @@ import { DEFAULT_SHIFT_START, DEFAULT_SHIFT_END } from '../constants/shift';
 /**
  * Subscribes to the user's Firestore profile in real time.
  * Calls `cb` immediately and on every update.
- * Returns an unsubscribe function.
+ * Returns an unsubscribe function. Pass `db` when profiles live in a
+ * different Firebase project than the business data; on a read error `cb`
+ * receives null and `onError` the error.
  */
 export function subscribeUserProfile(
   uid: string,
   cb: (profile: UserProfile | null) => void,
+  db: Firestore = getDb(),
+  onError?: (error: Error) => void,
 ): () => void {
   if (!uid) { cb(null); return () => {}; }
 
-  const db = getDb();
   return onSnapshot(
     doc(db, 'users', uid),
     (snap: any) => {
@@ -104,12 +107,13 @@ export function subscribeUserProfile(
         // ── Shift hours (only shiftStartTime & shiftEndTime) ─────────────────
         shiftStartTime: (d.shiftStartTime as string) || DEFAULT_SHIFT_START,
         shiftEndTime:   (d.shiftEndTime   as string) || DEFAULT_SHIFT_END,
+        timeZone:       (d.timeZone as string) || undefined,
       } satisfies UserProfile);
     },
     (err: any) => {
-      if ((err as any).code !== 'permission-denied') {
-        console.warn('[agunwami-backend] UserProfile snapshot error:', err);
-      }
+      console.warn('[agunwami-backend] UserProfile snapshot error:', err);
+      cb(null);
+      onError?.(err);
     },
   );
 }

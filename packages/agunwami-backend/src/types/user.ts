@@ -106,6 +106,8 @@ export interface UserProfile {
   shiftStartTime?: string;
   /** HH:mm format, e.g. "17:00". Defaults to DEFAULT_SHIFT_END if unset. */
   shiftEndTime?: string;
+  /** IANA time zone, e.g. "Africa/Lagos"; AE Hub uses it for attendance. */
+  timeZone?: string;
 }
 
 // ─── Profile Field Helpers ───────────────────────────────────────────────────
