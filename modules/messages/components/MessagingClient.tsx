@@ -16,7 +16,11 @@ import {
   uploadBytes,
   getDownloadURL,
 } from "firebase/storage";
-import { rtdb, db, storage } from "@/lib/workstation/firebase";
+// Users, activities (meetings), staff tasks and leave requests live in the
+// workstation (AE Hub) Firebase project, where staff and the CEO are signed in,
+// exactly as on AE Hub's own messages page. The enterprise data project has no
+// signed-in user, so its rules refused these reads and the page stayed empty.
+import { rtdb, authDb as db, storage } from "@/lib/workstation/firebase";
 import { useAuth } from "@/lib/workstation/auth-context";
 import {
   storeLocalSticker,
@@ -4084,7 +4088,7 @@ export default function MessagingClient() {
 
   if (loadError) {
     return (
-      <div className="w-full flex flex-col items-center justify-center" style={{ height: "calc(100vh - 88px)" }}>
+      <div className="w-full flex flex-col items-center justify-center h-[calc(100dvh-88px)] md:h-[calc(100dvh-104px)]">
         <div className="flex flex-col items-center gap-4 max-w-sm text-center">
           <div className="w-16 h-16 rounded-full bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center">
             <AlertTriangle className="w-8 h-8 text-rose-500" />
@@ -4105,7 +4109,7 @@ export default function MessagingClient() {
   }
 
   return (
-    <div className="w-full flex flex-col" style={{ height: "calc(100vh - 88px)" }}>
+    <div className="w-full flex flex-col h-[calc(100dvh-88px)] md:h-[calc(100dvh-104px)]">
       {/* Page header */}
       <div className="mb-5">
         <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">Messages</h1>

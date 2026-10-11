@@ -205,6 +205,28 @@ body {
   .ae-lift:hover { transition: none; transform: none; }
 }
 
+/* ── Messages page: AE Hub staff portal look ───────────────────────────────
+   The messages page is AE Hub's messaging UI; these match AE Hub's
+   .staff-portal-layout rounding and scrollbars, scoped to that page. */
+.ae-messages button:not(.rounded-full),
+.ae-messages .rounded-3xl:not(.rounded-full),
+.ae-messages .rounded-2xl:not(.rounded-full),
+.ae-messages .rounded-xl:not(.rounded-full),
+.ae-messages .rounded-lg:not(.rounded-full),
+.ae-messages .rounded-md:not(.rounded-full) {
+  border-radius: 7px !important;
+}
+.ae-messages * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.35) transparent;
+}
+.dark .ae-messages * { scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+.ae-messages ::-webkit-scrollbar { width: 6px; height: 6px; }
+.ae-messages ::-webkit-scrollbar-track { background: transparent; }
+.ae-messages ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.35); border-radius: 9999px; }
+.ae-messages ::-webkit-scrollbar-thumb:hover { background: #EAAE11; }
+.dark .ae-messages ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    HERO SCROLL INDICATOR — Viewport Height Responsiveness
    Gracefully hides when viewport height is too constrained (<600px)
