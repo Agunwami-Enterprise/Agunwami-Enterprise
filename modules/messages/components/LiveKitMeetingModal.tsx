@@ -6,7 +6,8 @@ import "@livekit/components-styles";
 import { X, Video, AlertCircle, UserPlus, Check, Search, Clock, UserX } from "lucide-react";
 import { ref, get, push, update } from "firebase/database";
 import { doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from "firebase/firestore";
-import { db, rtdb } from "@/lib/workstation/firebase";
+// Meetings (activities) live in the workstation project; see MessagingClient.
+import { authDb as db, rtdb } from "@/lib/workstation/firebase";
 import { toast } from "react-toastify";
 
 interface StaffMember {
