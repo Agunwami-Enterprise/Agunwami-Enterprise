@@ -8,6 +8,7 @@ import { onValue, ref } from 'firebase/database';
 import { rtdb } from '@/lib/workstation/firebase';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeNotifications, type NotifItem } from '@/modules/notifications/services';
+import { useInAppPreferences } from '@/modules/settings/use-in-app-preferences';
 
 const NAV = [
   { label: 'Overview',         href: '/ceo/dashboard',        icon: <IconGrid /> },
@@ -64,7 +65,9 @@ export default function CeoSidebar({ open, onClose, onNavigate }: Props) {
 
   const activeHref = NAV.find(item => path === item.href || path.startsWith(item.href + '/'))?.href;
   const unreadMessages = messageUnreadState?.uid === uid ? messageUnreadState?.count ?? 0 : 0;
-  const notifications = notificationState?.uid === uid ? notificationState?.items ?? [] : [];
+  const inApp = useInAppPreferences();
+  const notifications = (notificationState?.uid === uid ? notificationState?.items ?? [] : [])
+    .filter(notification => inApp[notification.category]);
   const notificationUnread = notifications.filter(notification => !notification.read).length;
   const badgeCounts: Record<string, number> = {
     '/ceo/messages': unreadMessages,

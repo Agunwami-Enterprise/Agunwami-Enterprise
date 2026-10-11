@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeUserProfile, type UserProfile } from '@/modules/settings/services';
 import { subscribeNotifications, markNotifRead, markAllNotifsRead, routeForNotif, type NotifItem } from '@/modules/notifications/services';
 import { categoryColors, timeAgo, useProjectNotifications } from '@/modules/notifications/project-notifications';
+import { useInAppPreferences } from '@/modules/settings/use-in-app-preferences';
 
 interface Props { onMenuClick: () => void; }
 
@@ -17,7 +18,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
   // The photo URL whose image failed to load, so we show the icon instead.
   const [brokenPhoto, setBrokenPhoto] = useState<string | null>(null);
   const [profile, setProfile]     = useState<UserProfile | null>(null);
-  const [navNotifs, setNavNotifs] = useState<NotifItem[]>([]);
+  const [allNavNotifs, setNavNotifs] = useState<NotifItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
   const userRef  = useRef<HTMLDivElement>(null);
   const { dark, toggle } = useTheme();
@@ -43,9 +44,12 @@ export default function CeoNavbar({ onMenuClick }: Props) {
     return subscribeNotifications(user.uid, setNavNotifs);
   }, [user?.uid]);
 
+  // Settings → Notifications decides which categories appear here.
+  const inApp = useInAppPreferences();
+  const navNotifs = allNavNotifs.filter(n => inApp[n.category]);
   const navUnread = navNotifs.filter(n => !n.read).length;
   // Project-wide events from each project's metrics endpoint (no read state).
-  const projectNotifs = useProjectNotifications().items.slice(0, 4);
+  const projectNotifs = useProjectNotifications().items.filter(n => inApp[n.category]).slice(0, 4);
 
   function handleNotifClick(n: NotifItem) {
     setShowNotif(false);
@@ -63,7 +67,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
   }
 
   const displayName  = profile?.displayName  || user?.displayName || 'Agunwami';
-  const displayEmail = profile?.email || user?.email       || 'ceo@agunwami.com';
+  const displayEmail = profile?.email || user?.email       || '';
   const photoURL     = profile?.photoURL || user?.photoURL || '';
 
   return (
