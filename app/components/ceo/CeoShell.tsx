@@ -16,7 +16,7 @@ export interface SidebarProps {
 
 /**
  * The workstation frame: sidebar, top bar, page area and toasts. The CEO
- * workstation uses the defaults; other workstations (e.g. /tech) pass their
+ * workstation uses the defaults; department workstations (/ws) pass their
  * own sidebar and navbar settings.
  */
 export default function CeoShell({ children, Sidebar = CeoSidebar, navbar }: {

@@ -11,7 +11,7 @@ import { categoryColors, timeAgo, useProjectNotifications } from '@/modules/noti
 import { useInAppPreferences } from '@/modules/settings/use-in-app-preferences';
 
 export interface NavbarOptions {
-  /** Route prefix for this workstation's pages, e.g. "/ceo" or "/tech". */
+  /** Route prefix for this workstation's pages, e.g. "/ceo" or "/ws". */
   basePath?: string;
   /** Shown under the person's name. */
   roleLabel?: string;

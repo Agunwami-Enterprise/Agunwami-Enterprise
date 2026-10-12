@@ -19,6 +19,7 @@ const NAV = [
   { label: 'Analytics',        href: '/ceo/analytics',         icon: <IconChart /> },
   { label: 'Leave Request',    href: '/ceo/leave-requests',    icon: <IconLeave /> },
   { label: 'Staff Management', href: '/ceo/staff',             icon: <IconPeople /> },
+  { label: 'Departments',      href: '/ceo/departments',       icon: <IconLayers /> },
   { label: 'Payment',          href: '/ceo/payments',          icon: <IconCard /> },
   { label: 'Notifications',    href: '/ceo/notifications',     icon: <IconBell /> },
   { label: 'Training',         href: '/ceo/training',          icon: <IconBook /> },
@@ -276,6 +277,13 @@ function IconGear() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14">
       <circle cx="8" cy="8" r="2.5" />
       <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M2.7 2.7l1 1M12.3 12.3l1 1M13.3 2.7l-1 1M3.7 12.3l-1 1" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconLayers() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 2 2 7l10 5 10-5-10-5Z" /><path d="m2 17 10 5 10-5" /><path d="m2 12 10 5 10-5" />
     </svg>
   );
 }
