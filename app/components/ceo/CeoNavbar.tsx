@@ -10,9 +10,21 @@ import { subscribeNotifications, markNotifRead, markAllNotifsRead, routeForNotif
 import { categoryColors, timeAgo, useProjectNotifications } from '@/modules/notifications/project-notifications';
 import { useInAppPreferences } from '@/modules/settings/use-in-app-preferences';
 
-interface Props { onMenuClick: () => void; }
+export interface NavbarOptions {
+  /** Route prefix for this workstation's pages, e.g. "/ceo" or "/tech". */
+  basePath?: string;
+  /** Shown under the person's name. */
+  roleLabel?: string;
+  /** Project-wide notifications come from the CEO-only projects API. */
+  showProjectNotifications?: boolean;
+  /** Hide the menu button on large screens, where the sidebar is always shown. */
+  hideMenuOnDesktop?: boolean;
+}
 
-export default function CeoNavbar({ onMenuClick }: Props) {
+interface Props extends NavbarOptions { onMenuClick: () => void; }
+
+export default function CeoNavbar({ onMenuClick, basePath = '/ceo', roleLabel = 'CEO', showProjectNotifications = true, hideMenuOnDesktop = false }: Props) {
+  const route = (path: string) => path.replace(/^\/ceo(?=\/|$)/, basePath);
   const [showNotif, setShowNotif] = useState(false);
   const [showUser, setShowUser]   = useState(false);
   // The photo URL whose image failed to load, so we show the icon instead.
@@ -49,12 +61,12 @@ export default function CeoNavbar({ onMenuClick }: Props) {
   const navNotifs = allNavNotifs.filter(n => inApp[n.category]);
   const navUnread = navNotifs.filter(n => !n.read).length;
   // Project-wide events from each project's metrics endpoint (no read state).
-  const projectNotifs = useProjectNotifications().items.filter(n => inApp[n.category]).slice(0, 4);
+  const projectNotifs = useProjectNotifications(showProjectNotifications).items.filter(n => inApp[n.category]).slice(0, 4);
 
   function handleNotifClick(n: NotifItem) {
     setShowNotif(false);
     markNotifRead(n.id).catch(() => {});
-    router.push(routeForNotif(n));
+    router.push(route(routeForNotif(n)));
   }
 
   async function handleMarkAllRead() {
@@ -75,7 +87,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
       {/* Hamburger */}
       <button
         onClick={onMenuClick}
-        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/6"
+        className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/6 ${hideMenuOnDesktop ? 'lg:hidden' : ''}`}
       >
         <HamburgerIcon />
       </button>
@@ -189,7 +201,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
             {(navNotifs.length > 0 || projectNotifs.length > 0) && (
               <div className="border-t border-gray-100 dark:border-white/6">
                 <button
-                  onClick={() => { setShowNotif(false); router.push('/ceo/notifications'); }}
+                  onClick={() => { setShowNotif(false); router.push(`${basePath}/notifications`); }}
                   className="w-full py-3 text-center text-[12px] font-medium text-[#f5bd02] hover:bg-gray-50 dark:hover:bg-white/3"
                 >
                   View all notifications
@@ -223,7 +235,7 @@ export default function CeoNavbar({ onMenuClick }: Props) {
           </div>
           <div className="hidden text-left sm:block">
             <p className="text-[12px] font-semibold leading-tight text-gray-800 dark:text-white">{displayName}</p>
-            <p className="text-[10px] leading-tight text-gray-500 dark:text-gray-400">CEO</p>
+            <p className="text-[10px] leading-tight text-gray-500 dark:text-gray-400">{roleLabel}</p>
           </div>
           <ChevronIcon />
         </button>
@@ -242,14 +254,14 @@ export default function CeoNavbar({ onMenuClick }: Props) {
             {/* Menu items */}
             <div className="py-1.5">
               <button
-                onClick={() => { setShowUser(false); router.push('/ceo/settings?tab=profile'); }}
+                onClick={() => { setShowUser(false); router.push(`${basePath}/settings?tab=profile`); }}
                 className="flex h-10 w-full items-center gap-3 px-4 text-[12px] font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/4"
               >
                 <DropUserIcon />
                 Profile Settings
               </button>
               <button
-                onClick={() => { setShowUser(false); router.push('/ceo/settings?tab=preferences'); }}
+                onClick={() => { setShowUser(false); router.push(`${basePath}/settings?tab=preferences`); }}
                 className="flex h-10 w-full items-center gap-3 px-4 text-[12px] font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/4"
               >
                 <DropGearIcon />

@@ -7,6 +7,7 @@ import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, authDb } from '@/lib/workstation/firebase';
 import { normalizeWorkstationRole } from '@/lib/workstation/roles';
+import { resolveHome } from '@/lib/workstation/preferences';
 import AuthPageShell from '@/app/components/ceo/AuthPageShell';
 
 type TwoFactorChallenge = {
@@ -113,7 +114,7 @@ function LoginForm() {
       }
 
       const { home } = await res.json().catch(() => ({ home: undefined }));
-      router.push(typeof home === 'string' ? home : '/ceo/dashboard');
+      router.push(await resolveHome(home, auth.currentUser?.uid));
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? '';
       const msg  = (err as { message?: string }).message ?? '';
@@ -176,7 +177,7 @@ function LoginForm() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? 'That code could not be verified.');
-      router.push(typeof body.home === 'string' ? body.home : '/ceo/dashboard');
+      router.push(await resolveHome(body.home, auth.currentUser?.uid));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That code could not be verified.');
       setCode('');

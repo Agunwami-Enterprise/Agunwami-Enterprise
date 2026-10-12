@@ -205,6 +205,20 @@ body {
   .ae-lift:hover { transition: none; transform: none; }
 }
 
+/* Settings → Preferences → Reduce animations (this device). Spinners keep
+   turning so loading states still read as loading. */
+html.ae-reduce-motion *:not(.animate-spin),
+html.ae-reduce-motion *::before,
+html.ae-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+html.ae-reduce-motion .ae-lift:hover { transform: none; }
+
 /* ── Messages page: AE Hub staff portal look ───────────────────────────────
    The messages page is AE Hub's messaging UI; these match AE Hub's
    .staff-portal-layout rounding and scrollbars, scoped to that page. */

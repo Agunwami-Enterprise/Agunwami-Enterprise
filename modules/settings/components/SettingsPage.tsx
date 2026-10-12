@@ -10,17 +10,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  NOTIFICATION_CATEGORIES, PROFILE_LIMITS, TIME_ZONES,
+  NOTIFICATION_CATEGORIES, PROFILE_LIMITS,
   saveInAppPreference, saveProfile, saveTimeZone, sendPasswordReset,
   subscribeSecuritySettings, subscribeUserProfile, uploadProfilePhoto,
   type NotificationCategory, type SecuritySettings, type UserProfile,
 } from '@/modules/settings/services';
 import { useInAppPreferences } from '@/modules/settings/use-in-app-preferences';
 import { useAuth } from '@/lib/workstation/auth-context';
-import { useTheme } from '@/lib/workstation/theme-context';
 import { auth } from '@/lib/workstation/firebase';
+import { formatAehubId, formatEmployeeId } from '@/lib/workstation/employee-id';
 import { seedDatabase } from '@/lib/workstation/seed-client';
 import TwoFactorModal from '@/modules/settings/components/TwoFactorModal';
+import PreferencesTab, { timeZoneLabel } from '@/modules/settings/components/PreferencesTab';
 import MessageSettings from '@/modules/messages/components/MessageSettings';
 import { useMessagePreferences } from '@/modules/messages/preferences';
 
@@ -56,7 +57,6 @@ const titleCase = (value?: string | null) =>
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
-  const { dark, toggle } = useTheme();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') as SettingsTab | null;
   const [tab, setTab] = useState<SettingsTab>(
@@ -216,7 +216,10 @@ export default function SettingsPage() {
   const displayName = profile?.displayName || user?.displayName || 'Your name';
   const email = profile?.email || user?.email || '—';
   const position = profile?.departmentPosition || 'CEO';
-  const employeeId = profile?.aehubId || (profile?.staffNumber != null ? `#${profile.staffNumber}` : '—');
+  // Employee ID is AE-{employee number}; the AE Hub ID (AEHUB-{dept}-{number})
+  // is AE Hub's own ID and only shows for people who have one.
+  const employeeId = formatEmployeeId(profile);
+  const aehubId = formatAehubId(profile);
   const photoURL = profile?.photoURL || user?.photoURL || '';
   const timeZone = profile?.timeZone || 'Africa/Lagos';
   const lastSignIn = auth.currentUser?.metadata.lastSignInTime;
@@ -262,7 +265,12 @@ export default function SettingsPage() {
             <p className="text-[18px] font-bold text-gray-800 dark:text-white">{profileLoaded || !user ? displayName : 'Loading…'}</p>
             <p className="text-[12px] text-gray-500 dark:text-gray-400">{position}</p>
             <p className="text-[12px] text-gray-400 dark:text-gray-500">{titleCase(profile?.department)}</p>
-            <span className="mt-1 inline-block rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/8 dark:text-gray-300">Employee ID: {employeeId}</span>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <span className="inline-block rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/8 dark:text-gray-300">Employee ID: {employeeId ?? 'Not assigned'}</span>
+              {aehubId && (
+                <span className="inline-block rounded-md bg-[#f5bd02]/15 px-2 py-0.5 text-[10px] font-medium text-[#8a6a00] dark:text-[#f5bd02]">AE Hub ID: {aehubId}</span>
+              )}
+            </div>
           </div>
         </div>
         {editing ? (
@@ -322,8 +330,9 @@ export default function SettingsPage() {
               <InfoField label="Position"      value={position} bold />
               <InfoField label="Join Date"     value={formatDate(profile?.joinDate)} bold />
               <InfoField label="Work Schedule" value={profile?.shiftStartTime && profile?.shiftEndTime ? `${profile.shiftStartTime} – ${profile.shiftEndTime}` : '—'} bold />
-              <InfoField label="Time Zone"     value={TIME_ZONES.find(z => z.value === timeZone)?.label ?? timeZone} bold />
-              <InfoField label="Employee ID"   value={employeeId} bold />
+              <InfoField label="Time Zone"     value={timeZoneLabel(timeZone)} bold />
+              <InfoField label="Employee ID"   value={employeeId ?? 'Not assigned'} bold />
+              {aehubId && <InfoField label="AE Hub ID" value={aehubId} bold />}
             </div>
           </div>
         </div>
@@ -404,55 +413,13 @@ export default function SettingsPage() {
 
       {/* PREFERENCES TAB */}
       {tab === 'preferences' && (
-        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
-          <h2 className="text-[14px] font-bold text-gray-800 dark:text-white">Preferences</h2>
-          <p className="mb-2 text-[12px] text-gray-500 dark:text-gray-400">Customize how the workstation looks and works for you</p>
-          <StatusLine status={prefStatus} />
-
-          {/* Theme */}
-          <div className="flex items-center justify-between border-b border-gray-100 py-5 dark:border-white/6">
-            <div className="flex items-center gap-3">
-              <span className="text-gray-500 dark:text-gray-400"><SunIcon /></span>
-              <div>
-                <p className="text-[13px] font-semibold text-gray-800 dark:text-white">Dark Mode</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">Toggle between light and dark themes</p>
-              </div>
-            </div>
-            <Switch on={dark} onChange={() => toggle()} label="Dark mode" />
-          </div>
-
-          {/* Time Zone */}
-          <div className="flex flex-col gap-3 border-b border-gray-100 py-5 sm:flex-row sm:items-center sm:justify-between dark:border-white/6">
-            <div>
-              <p className="text-[13px] font-semibold text-gray-800 dark:text-white">Time Zone</p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">Used for your attendance and lateness in AE Hub reports</p>
-            </div>
-            <div className="relative">
-              <select
-                value={timeZone}
-                disabled={!profileLoaded}
-                onChange={e => void handleTimeZone(e.target.value)}
-                aria-label="Time zone"
-                className="appearance-none rounded-lg border border-gray-200 bg-white py-2 pl-3 pr-8 text-[12px] font-medium text-gray-700 outline-none disabled:opacity-60 dark:border-white/10 dark:bg-[#2a2a2a] dark:text-gray-200"
-              >
-                {TIME_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
-                {!TIME_ZONES.some(zone => zone.value === timeZone) && <option value={timeZone}>{timeZone}</option>}
-              </select>
-              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">
-                <ChevronDownIcon />
-              </span>
-            </div>
-          </div>
-
-          {/* Language */}
-          <div className="flex items-center justify-between pt-5">
-            <div>
-              <p className="flex items-center gap-2 text-[13px] font-semibold text-gray-800 dark:text-white">Language <ComingSoon /></p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">The workstation is in English for now</p>
-            </div>
-            <span className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-medium text-gray-500 dark:border-white/10 dark:text-gray-400">English</span>
-          </div>
-        </div>
+        <PreferencesTab
+          uid={user?.uid}
+          timeZone={timeZone}
+          profileLoaded={profileLoaded}
+          onTimeZone={handleTimeZone}
+          status={prefStatus}
+        />
       )}
 
       {/* NOTIFICATIONS TAB */}
@@ -719,8 +686,6 @@ function CogIcon()   { return <svg width="13" height="13" viewBox="0 0 24 24" fi
 function ChatIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>; }
 function BellIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>; }
 function ShieldIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>; }
-function SunIcon()   { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>; }
-function ChevronDownIcon() { return <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="2,4 6,8 10,4"/></svg>; }
 function EmailIcon()  { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>; }
 function KeyIcon()    { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="15" r="5"/><path d="M21 2l-9.3 9.3"/><path d="M15 2l2 2-4 4 2 2"/></svg>; }
 function InAppIcon()  { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>; }
