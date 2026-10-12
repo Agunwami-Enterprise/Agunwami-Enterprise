@@ -8,7 +8,9 @@
  */
 
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "@/lib/workstation/firebase";
+// Leave requests live in the workstation (AE Hub) project, where people are
+// signed in; the enterprise project has no signed-in user and refuses the read.
+import { authDb as db } from "@/lib/workstation/firebase";
 
 export interface ApprovedLeaveRecord {
   id: string;

@@ -1200,8 +1200,18 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
                           if (deleteConfirmName.trim() !== targetName) return;
                           setIsDeletingGroup(true);
                           try {
-                            await remove(ref(rtdb, `conversations/${convo.id}`));
+                            // The group's threads go with it. Only a thread's members may remove
+                            // it, so this is best effort for threads the deleter isn't in.
+                            await Promise.all(Object.keys(convo.threads ?? {}).map(async threadId => {
+                              try {
+                                await remove(ref(rtdb, `messages/${threadId}`));
+                                await remove(ref(rtdb, `conversations/${threadId}`));
+                              } catch { /* not a member of this thread */ }
+                            }));
+                            // Messages first: the rules only let current members remove them,
+                            // and removing the conversation ends everyone's membership.
                             await remove(ref(rtdb, `messages/${convo.id}`));
+                            await remove(ref(rtdb, `conversations/${convo.id}`));
                             toast.success(`${convo.type === "community" ? "Community" : "Group"} deleted.`);
                             setShowDeleteConfirm(false);
                             onClose();
