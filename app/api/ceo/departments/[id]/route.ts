@@ -22,6 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       description: String(body.description ?? ''),
       pages: Array.isArray(body.pages) ? body.pages as string[] : [],
       active: body.active !== false,
+      projectLinks: body.projectLinks && typeof body.projectLinks === 'object' ? body.projectLinks as Record<string, string> : {},
     }, auth.session.uid);
     invalidateAccess();
     return NextResponse.json({ department });

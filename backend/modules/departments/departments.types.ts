@@ -13,6 +13,11 @@ export interface AeDepartment {
   pages: string[];
   /** Inactive departments keep only the base pages. */
   active: boolean;
+  /**
+   * The department this one maps to in each project, by project id, e.g.
+   * { "ae-hub": "developers" }. Staff changes here are applied there too.
+   */
+  projectLinks: Record<string, string>;
   memberCount: number;
   createdAt: string | null;
   updatedAt: string | null;
@@ -55,6 +60,7 @@ export interface SaveDepartmentDto {
   description?: string;
   pages: string[];
   active: boolean;
+  projectLinks?: Record<string, string>;
 }
 
 export interface AssignMemberDto {

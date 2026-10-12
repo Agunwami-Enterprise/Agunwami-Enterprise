@@ -35,6 +35,16 @@ function slugify(name: string): string {
   return name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 }
 
+function projectLinksOf(value: unknown): Record<string, string> {
+  const links: Record<string, string> = {};
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [projectId, departmentId] of Object.entries(value as Record<string, unknown>)) {
+      if (isSafeId(projectId) && isSafeId(departmentId) && departmentId.toLowerCase() !== 'ceo') links[projectId] = departmentId;
+    }
+  }
+  return links;
+}
+
 function toDepartment(doc: Record<string, unknown>, memberCount = 0): AeDepartment {
   return {
     id: String(doc._id),
@@ -42,6 +52,7 @@ function toDepartment(doc: Record<string, unknown>, memberCount = 0): AeDepartme
     description: String(doc.description || ''),
     pages: normalizePages(doc.pages),
     active: doc.active !== false,
+    projectLinks: projectLinksOf(doc.projectLinks),
     memberCount,
     createdAt: typeof doc.createdAt === 'string' ? doc.createdAt : null,
     updatedAt: typeof doc.updatedAt === 'string' ? doc.updatedAt : null,
@@ -80,6 +91,7 @@ function validate(dto: SaveDepartmentDto) {
     description: text(dto.description, MAX_DESCRIPTION),
     pages: normalizePages(dto.pages),
     active: dto.active !== false,
+    projectLinks: projectLinksOf(dto.projectLinks),
   };
 }
 
@@ -191,6 +203,12 @@ export class DepartmentsService {
   static async unassign(uid: string): Promise<void> {
     requireSafeId(uid, 'person');
     if (!(await deleteDoc(MEMBERS, uid))) throw new DepartmentError('That person could not be removed. Please try again.', 503);
+  }
+
+  static async getMember(uid: string): Promise<AeDepartmentMember | null> {
+    if (!isSafeId(uid)) return null;
+    const doc = await getDoc(MEMBERS, uid);
+    return doc ? toMember(doc) : null;
   }
 
   /** The department a person belongs to, if any. */

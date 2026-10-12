@@ -3,13 +3,15 @@
  *
  * PATCH: change a member's position, shift, page access or admin rights,
  * suspend or reactivate them, or transfer them to another department.
- * DELETE: remove them from their AE department. CEO only.
+ * DELETE: remove them from their AE department.
+ * Changes are also applied in linked project departments (department-sync). CEO only.
  */
 
 import { NextResponse } from 'next/server';
 import { requireCeoSession } from '@/lib/workstation/api-auth';
 import { invalidateAccess } from '@/lib/workstation/access';
 import { DepartmentsService, type UpdateMemberDto } from '@/backend/modules/departments';
+import { syncRemoved, syncUpdated } from '@/lib/workstation/department-sync';
 import { departmentErrorResponse, readJson } from '../../shared';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ uid: string }> }) {
@@ -27,9 +29,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ui
     if (body.status === 'active' || body.status === 'suspended') dto.status = body.status;
     if (typeof body.suspendedReason === 'string') dto.suspendedReason = body.suspendedReason;
     if (typeof body.departmentId === 'string') dto.departmentId = body.departmentId;
+    const before = await DepartmentsService.getMember(uid);
     const member = await DepartmentsService.updateMember(uid, dto, auth.session.uid);
     invalidateAccess(uid);
-    return NextResponse.json({ member });
+    const sync = before ? await syncUpdated(before, member, await DepartmentsService.get(member.departmentId)) : [];
+    return NextResponse.json({ member, sync });
   } catch (err) {
     return departmentErrorResponse(err, 'PATCH /api/ceo/departments/members/[uid]');
   }
@@ -40,9 +44,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (auth.error) return auth.error;
   try {
     const { uid } = await params;
+    const before = await DepartmentsService.getMember(uid);
     await DepartmentsService.unassign(uid);
     invalidateAccess(uid);
-    return NextResponse.json({ removed: true });
+    const sync = before ? await syncRemoved(before, await DepartmentsService.get(before.departmentId)) : [];
+    return NextResponse.json({ removed: true, sync });
   } catch (err) {
     return departmentErrorResponse(err, 'DELETE /api/ceo/departments/members/[uid]');
   }

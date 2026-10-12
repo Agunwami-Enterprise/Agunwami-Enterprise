@@ -120,8 +120,21 @@ function PagePicker({ selected, onChange, limitTo }: {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-type Draft = { name: string; description: string; pages: string[]; active: boolean };
-const EMPTY_DRAFT: Draft = { name: '', description: '', pages: [...BASE_PAGE_IDS], active: true };
+type Draft = { name: string; description: string; pages: string[]; active: boolean; projectLinks: Record<string, string> };
+const EMPTY_DRAFT: Draft = { name: '', description: '', pages: [...BASE_PAGE_IDS], active: true, projectLinks: {} };
+
+interface ProjectOptions { projectId: string; projectName: string; departments: Array<{ id: string; name: string }> }
+
+interface SyncResult { projectId: string; projectName: string; action: string; ok: boolean; skipped?: string; error?: string }
+
+/** Tells the CEO what happened in linked projects after an AE staff change. */
+function reportSync(sync: SyncResult[] | undefined) {
+  for (const result of sync ?? []) {
+    if (!result.ok) toast.warn(`Saved in AE, but ${result.projectName} wasn't updated: ${result.error}`, { autoClose: 9000 });
+    else if (result.skipped) toast.info(`${result.projectName}: nothing to change (${result.skipped.replace(/-/g, ' ')}).`);
+    else toast.success(`Also applied in ${result.projectName}.`);
+  }
+}
 
 type MemberDialog =
   | { kind: 'add' }
@@ -138,6 +151,7 @@ export default function DepartmentsPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [dialog, setDialog] = useState<MemberDialog | null>(null);
+  const [projectOptions, setProjectOptions] = useState<ProjectOptions[] | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -157,13 +171,21 @@ export default function DepartmentsPage() {
     return () => clearTimeout(first);
   }, [reload]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api<{ projects: ProjectOptions[] }>('/api/ceo/departments/project-departments')
+      .then(data => { if (!cancelled) setProjectOptions(data.projects); })
+      .catch(() => { if (!cancelled) setProjectOptions([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   const selected = departments.find(d => d.id === selectedId) ?? null;
   const deptMembers = useMemo(() => members.filter(m => m.departmentId === selectedId), [members, selectedId]);
 
   function select(id: string | 'new' | 'ceo') {
     setSelectedId(id);
     const dept = departments.find(d => d.id === id);
-    setDraft(dept ? { name: dept.name, description: dept.description, pages: dept.pages, active: dept.active } : EMPTY_DRAFT);
+    setDraft(dept ? { name: dept.name, description: dept.description, pages: dept.pages, active: dept.active, projectLinks: dept.projectLinks ?? {} } : EMPTY_DRAFT);
   }
 
   async function saveDepartment() {
@@ -202,8 +224,9 @@ export default function DepartmentsPage() {
 
   async function memberAction(uid: string, body: Record<string, unknown>, success: string) {
     try {
-      await api(`/api/ceo/departments/members/${encodeURIComponent(uid)}`, { method: 'PATCH', body: JSON.stringify(body) });
+      const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/members/${encodeURIComponent(uid)}`, { method: 'PATCH', body: JSON.stringify(body) });
       toast.success(success);
+      reportSync(result.sync);
       setDialog(null);
       await reload();
     } catch (err) {
@@ -214,8 +237,9 @@ export default function DepartmentsPage() {
   async function removeMember(member: AeDepartmentMember) {
     if (!confirm(`Remove ${member.name || member.email} from ${selected?.name}? They keep their account but lose their workstation until added to a department.`)) return;
     try {
-      await api(`/api/ceo/departments/members/${encodeURIComponent(member.uid)}`, { method: 'DELETE' });
+      const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/members/${encodeURIComponent(member.uid)}`, { method: 'DELETE' });
       toast.success('Removed from the department.');
+      reportSync(result.sync);
       await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'That person could not be removed.');
@@ -303,6 +327,41 @@ export default function DepartmentsPage() {
 
                 <h3 className="mb-2 mt-5 text-[13px] font-bold text-gray-800 dark:text-white">Pages this department can open</h3>
                 <PagePicker selected={draft.pages} onChange={pages => setDraft({ ...draft, pages })} />
+
+                <h3 className="mb-1 mt-5 text-[13px] font-bold text-gray-800 dark:text-white">Linked project departments</h3>
+                <p className="mb-2 text-[11px] text-gray-500 dark:text-gray-400">
+                  When someone in this department is added, transferred, repositioned, suspended, reactivated or removed, the same
+                  change is applied in the linked department of each project, e.g. AE Hub.
+                </p>
+                {projectOptions === null ? (
+                  <p className="text-[12px] text-gray-400">Loading projects…</p>
+                ) : projectOptions.length === 0 ? (
+                  <p className="text-[12px] text-gray-400">No projects with a metrics endpoint yet.</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {projectOptions.map(project => {
+                      const linked = draft.projectLinks[project.projectId] ?? '';
+                      const options = project.departments.some(d => d.id === linked) || !linked
+                        ? project.departments
+                        : [...project.departments, { id: linked, name: linked }];
+                      return (
+                        <label key={project.projectId} className="block">
+                          <span className="mb-1 block text-[11px] font-semibold text-gray-500">{project.projectName}</span>
+                          <select className={input} value={linked} aria-label={`${project.projectName} department`}
+                            onChange={e => {
+                              const projectLinks = { ...draft.projectLinks };
+                              if (e.target.value) projectLinks[project.projectId] = e.target.value;
+                              else delete projectLinks[project.projectId];
+                              setDraft({ ...draft, projectLinks });
+                            }}>
+                            <option value="">Not linked</option>
+                            {options.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                          </select>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
                   {selected ? <button onClick={() => void deleteDepartment()} className="text-[12px] font-semibold text-red-600 hover:underline dark:text-red-400">Delete department</button> : <span />}
@@ -411,11 +470,12 @@ function AddPeopleDialog({ department, members, deptName, onClose, onAdded }: {
     if (current && !confirm(`${account.name} is in ${deptName(current)}. Move them to ${department.name}?`)) return;
     setBusy(account.uid);
     try {
-      await api(`/api/ceo/departments/${encodeURIComponent(department.id)}/members`, {
+      const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/${encodeURIComponent(department.id)}/members`, {
         method: 'POST',
         body: JSON.stringify({ uid: account.uid, name: account.name, email: account.email, title: account.position }),
       });
       toast.success(`${account.name} added to ${department.name}.`);
+      reportSync(result.sync);
       await onAdded();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'That person could not be added.');

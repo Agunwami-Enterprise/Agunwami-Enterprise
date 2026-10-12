@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       description: String(body.description ?? ''),
       pages: Array.isArray(body.pages) ? body.pages as string[] : [],
       active: body.active !== false,
+      projectLinks: body.projectLinks && typeof body.projectLinks === 'object' ? body.projectLinks as Record<string, string> : {},
     }, auth.session.uid);
     return NextResponse.json({ department }, { status: 201 });
   } catch (err) {
