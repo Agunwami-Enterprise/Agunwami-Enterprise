@@ -6,12 +6,17 @@ import CeoSidebar from './CeoSidebar';
 import CeoNavbar from './CeoNavbar';
 import SuspendedBanner from './SuspendedBanner';
 import { ToastContainer } from 'react-toastify';
+import { applyReduceMotion, useReduceMotion } from '@/lib/workstation/preferences';
 
 export default function CeoShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const pathname = usePathname();
   const prevPath = useRef(pathname);
+  const reduceMotion = useReduceMotion();
+
+  // Settings → Preferences → Reduce animations.
+  useEffect(() => { applyReduceMotion(reduceMotion); }, [reduceMotion]);
 
   useEffect(() => {
     if (pathname !== prevPath.current) {
