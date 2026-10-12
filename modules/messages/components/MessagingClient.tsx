@@ -35,7 +35,7 @@ import {
   Smile, Paperclip, Calendar, Zap, Hash, Trash2, Shield, Clock,
   LogOut, Settings, UserPlus, ClipboardList, Edit3, Crown,
   Camera, Upload, Sticker, Image as ImageIcon, FileText, AtSign, AlertTriangle, AlertCircle, Bookmark, Reply,
-  Bell, BellOff, SlidersHorizontal,
+  Bell, BellOff, SlidersHorizontal, MessagesSquare,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import {
@@ -47,6 +47,13 @@ import {
 import AttendeeInviteSelector from "./AttendeeInviteSelector";
 import MessageSettings from "./MessageSettings";
 import {
+  AddThreadPeopleModal, CreateThreadModal, LinkTasksModal, ThreadBar, ThreadNotice, ThreadsPanel,
+} from "./Threads";
+import {
+  addThreadMembers, createThread, deleteThread, joinThread, leaveThread, setTaskLinked, setThreadStatus,
+  type ThreadFields, type ThreadRef, type ThreadSender, type ThreadSummary,
+} from "../threads";
+import {
   DRAFT_STORAGE_KEYS, playMessageChime, setConversationMuted, showDesktopAlert, useMessagePreferences,
   type MessagePreferences,
 } from "../preferences";
@@ -57,10 +64,10 @@ const LiveKitMeetingModal = dynamic(() => import("./LiveKitMeetingModal"), { ssr
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-interface Conversation {
+interface Conversation extends ThreadFields {
   id: string;
   name?: string;
-  type?: "direct" | "group" | "community";
+  type?: "direct" | "group" | "community" | "thread";
   memberIds: Record<string, boolean>;
   adminIds?: Record<string, boolean>;
   createdById?: string;
@@ -74,6 +81,8 @@ interface Conversation {
   avatarColor?: string;
   initials?: string;
   photoURL?: string;
+  /** Summaries of this group's threads (see ../threads). */
+  threads?: Record<string, ThreadSummary>;
 }
 
 interface Message {
@@ -100,6 +109,8 @@ interface Message {
     text: string;
     type?: string;
   };
+  /** Set on the note a thread leaves in its parent chat. */
+  threadRef?: ThreadRef;
 }
 
 interface StaffMember {
@@ -709,10 +720,12 @@ function DateSeparator({ ms }: { ms: number }) {
 
 // ─── Assign Task Modal (Communities) ───────────────────────────────────────────
 
-function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves = [] }: {
+function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves = [], onCreated }: {
   isOpen: boolean; onClose: () => void;
   convo: Conversation | null; myUid: string; myName: string;
   approvedLeaves?: ApprovedLeaveRecord[];
+  /** Called with the new task, e.g. to link it to the thread it was created in. */
+  onCreated?: (task: { id: string; title: string }) => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -753,7 +766,7 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
     }
     setSaving(true);
     try {
-      await addDoc(collection(db, "staffTasks"), {
+      const created = await addDoc(collection(db, "staffTasks"), {
         task: title.trim(),
         title: title.trim(),
         description: description.trim(),
@@ -764,11 +777,12 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
         status: "Pending",
         createdById: myUid,
         createdByName: myName,
-        sourceType: "community",
+        sourceType: convo?.type === "thread" ? "thread" : "community",
         sourceConvId: convo?.id,
         createdAt: fsTimestamp(),
       });
       toast.success("Task assigned!");
+      onCreated?.({ id: created.id, title: title.trim() });
       onClose(); setTitle(""); setDescription(""); setDueDate(""); setAssigneeId("");
     } catch { toast.error("Failed to assign task."); }
     finally { setSaving(false); }
@@ -4085,6 +4099,61 @@ export default function MessagingClient() {
     }
   };
 
+  // ── Threads (see ../threads) ──────────────────────────────────────────────
+  const [threadsPanelFor, setThreadsPanelFor] = useState<string | null>(null);
+  const [createThreadCtx, setCreateThreadCtx] = useState<{
+    parentId: string;
+    source?: { id: string; senderId: string; senderName: string; text: string };
+  } | null>(null);
+  const [threadDialog, setThreadDialog] = useState<null | "people" | "tasks">(null);
+  const threadSender: ThreadSender = { uid: myUid, name: myName, initials: myInitials, color: myColor, photoURL: myPhotoURL };
+  const findConvo = (id?: string | null) => (id ? conversations.find(c => c.id === id) : undefined);
+  const myThreads = conversations.filter(c => c.type === "thread");
+  const myThreadIds = new Set(myThreads.map(c => c.id));
+  const unreadByThread = Object.fromEntries(myThreads.map(c => [c.id, c.unreadCount?.[myUid] || 0]));
+  const myThreadsByParent: Record<string, Conversation[]> = {};
+  for (const t of myThreads) {
+    const show = t.status !== "resolved" || (t.unreadCount?.[myUid] || 0) > 0 || t.id === activeConvId;
+    if (t.parentId && show) (myThreadsByParent[t.parentId] ??= []).push(t);
+  }
+  const activeThread = myThreads.find(c => c.id === activeConvId) ?? null;
+  const activeThreadParent = activeThread ? findConvo(activeThread.parentId) ?? null : null;
+  const canModerateThread = (t: Conversation) =>
+    t.createdById === myUid || !!t.adminIds?.[myUid] || isDeptAdmin || !!findConvo(t.parentId)?.adminIds?.[myUid];
+
+  const openThread = (threadId: string, parentType?: string) => {
+    setActiveTab(parentType === "community" ? "communities" : "chat");
+    setActiveConvId(threadId);
+    setShowMobileChat(true);
+    setThreadsPanelFor(null);
+  };
+  const threadAction = async (action: () => Promise<void>, success?: string) => {
+    try {
+      await action();
+      if (success) toast.success(success);
+    } catch (err) {
+      console.error("Thread action failed:", err);
+      toast.error(err instanceof Error && err.message ? err.message : "That didn't work. Please try again.");
+    }
+  };
+  const handleJoinThread = (threadId: string, summary: ThreadSummary, parent: Conversation) =>
+    threadAction(async () => {
+      await joinThread(threadId, summary, parent.id, threadSender);
+      openThread(threadId, parent.type);
+    }, "You joined the thread.");
+  const handleCreateThread = async (input: { title: string; memberIds: string[]; tasks: { id: string; title: string }[] }) => {
+    const parent = findConvo(createThreadCtx?.parentId);
+    if (!parent) throw new Error("This chat is no longer available.");
+    const source = createThreadCtx?.source;
+    const threadId = await createThread({
+      parent, ...input, sender: threadSender,
+      source: source ? { id: source.id, senderName: source.senderName, text: source.text } : null,
+    });
+    setCreateThreadCtx(null);
+    toast.success("Thread started.");
+    openThread(threadId, parent.type);
+  };
+
   // Filter by tab
   const tabConvos = conversations.filter(c => {
     if (activeTab === "communities") return c.type === "community";
@@ -4319,7 +4388,8 @@ export default function MessagingClient() {
                       : Object.keys(convo.memberIds || {}).some(uid => onlinePresence[uid]);
 
                     return (
-                      <button key={convo.id} aria-current={isActive ? "true" : undefined} onClick={() => { setActiveConvId(convo.id); setShowMobileChat(false); }}
+                      <React.Fragment key={convo.id}>
+                      <button aria-current={isActive ? "true" : undefined} onClick={() => { setActiveConvId(convo.id); setShowMobileChat(false); }}
                         className={`w-full flex items-center gap-3 px-4 py-3 transition-all text-left relative ${isActive ? "bg-amber-50 dark:bg-amber-950/20" : "hover:bg-gray-50 dark:hover:bg-zinc-800/60"}`}>
                         {isActive && <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-amber-500 rounded-r-full" />}
                         {/* Avatar + type badge */}
@@ -4357,6 +4427,25 @@ export default function MessagingClient() {
                           </div>
                         </div>
                       </button>
+                      {/* This group's threads that the person is in */}
+                      {myThreadsByParent[convo.id]?.map(t => {
+                        const threadUnread = t.unreadCount?.[myUid] || 0;
+                        const threadActive = activeConvId === t.id;
+                        return (
+                          <button key={t.id} onClick={() => openThread(t.id, convo.type)} aria-current={threadActive ? "true" : undefined}
+                            className={`w-full flex items-center gap-2 pl-14 pr-4 py-1.5 text-left transition-all relative ${threadActive ? "bg-amber-50 dark:bg-amber-950/20" : "hover:bg-gray-50 dark:hover:bg-zinc-800/60"}`}>
+                            {threadActive && <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-amber-500 rounded-r-full" />}
+                            <MessagesSquare className={`w-3.5 h-3.5 shrink-0 ${t.status === "resolved" ? "text-emerald-500" : "text-amber-500"}`} />
+                            <span className={`flex-1 text-xs truncate ${threadUnread > 0 ? "font-bold text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-300"}`}>{t.name || "Thread"}</span>
+                            {threadUnread > 0 && (
+                              <span className={`min-w-[16px] h-4 px-1 ${msgPrefs.mutedConversations[t.id] ? "bg-gray-300 dark:bg-zinc-600" : "bg-rose-500"} text-white text-[9px] font-bold rounded-full flex items-center justify-center`}>
+                                {threadUnread > 9 ? "9+" : threadUnread}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -4412,6 +4501,7 @@ export default function MessagingClient() {
                               <p className="text-sm font-bold text-gray-900 dark:text-white">{displayName}</p>
                               {activeConvo.type === "community" && <span className="text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-full">Community</span>}
                               {activeConvo.type === "group" && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full">Group</span>}
+                              {activeConvo.type === "thread" && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full">Thread</span>}
                               {isAdmin && activeConvo.type !== "direct" && <Crown className="w-3 h-3 text-amber-500" />}
                             </div>
                             <div className="flex items-center gap-1">
@@ -4428,12 +4518,24 @@ export default function MessagingClient() {
                     })()}
                   </div>
                   <div className="flex items-center gap-1">
-                    {activeConvo.type === "community" && (
+                    {(activeConvo.type === "community" || activeConvo.type === "thread") && (
                       <button onClick={() => setIsAssignTaskOpen(true)} title="Assign task" aria-label="Assign task"
                         className="p-2 text-gray-400 hover:text-emerald-600 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-all">
                         <ClipboardList className="w-4 h-4" />
                       </button>
                     )}
+                    {(activeConvo.type === "group" || activeConvo.type === "community") && (() => {
+                      const openThreads = Object.values(activeConvo.threads ?? {}).filter(t => t.status !== "resolved").length;
+                      return (
+                        <button onClick={() => setThreadsPanelFor(activeConvo.id)} title="Threads" aria-label={`Threads (${openThreads} open)`}
+                          className="relative p-2 text-gray-400 hover:text-amber-600 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all">
+                          <MessagesSquare className="w-4 h-4" />
+                          {openThreads > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">{openThreads}</span>
+                          )}
+                        </button>
+                      );
+                    })()}
                     <button onClick={() => void toggleActiveMute()}
                       title={activeMuted ? "Unmute conversation" : "Mute conversation"}
                       aria-label={activeMuted ? "Unmute conversation" : "Mute conversation"}
@@ -4476,6 +4578,29 @@ export default function MessagingClient() {
                     )}
                   </div>
                 </div>
+
+                {activeThread && (
+                  <ThreadBar
+                    thread={activeThread}
+                    canModerate={canModerateThread(activeThread)}
+                    onBack={() => setActiveConvId(activeThread.parentId ?? null)}
+                    onAddPeople={() => setThreadDialog("people")}
+                    onLinkTasks={() => setThreadDialog("tasks")}
+                    onUnlinkTask={task => void threadAction(() => setTaskLinked(activeThread, task, false, threadSender))}
+                    onResolve={() => void threadAction(() => setThreadStatus(activeThread, activeThreadParent, "resolved", threadSender), "Thread resolved.")}
+                    onReopen={() => void threadAction(() => setThreadStatus(activeThread, activeThreadParent, "open", threadSender), "Thread reopened.")}
+                    onLeave={() => {
+                      if (!confirm("Leave this thread? While it's open you can join again from the group.")) return;
+                      const parentId = activeThread.parentId ?? null;
+                      void threadAction(async () => { await leaveThread(activeThread, threadSender); setActiveConvId(parentId); }, "You left the thread.");
+                    }}
+                    onDelete={() => {
+                      if (!confirm(`Delete the thread "${activeThread.name || "Thread"}" and all its messages for everyone? This can't be undone.`)) return;
+                      const parentId = activeThread.parentId ?? null;
+                      void threadAction(async () => { await deleteThread(activeThread, activeThreadParent, threadSender); setActiveConvId(parentId); }, "Thread deleted.");
+                    }}
+                  />
+                )}
 
                 {/* 30-minute Live Meeting Banner */}
                 {upcomingMeetingBanner && (
@@ -4540,6 +4665,17 @@ export default function MessagingClient() {
                     <div key={date} className="space-y-1">
                       {date > 0 && <DateSeparator ms={date} />}
                       {msgs.map((msg, idx) => {
+                        if (msg.threadRef && !msg.deleted) {
+                          const threadRef = msg.threadRef;
+                          const summary = activeConvo.threads?.[threadRef.id];
+                          return (
+                            <ThreadNotice key={msg.id} threadRef={threadRef} text={msg.text}
+                              time={formatTimestamp(msg.sentAt, msgPrefs.timeFormat)}
+                              summary={summary} isMember={myThreadIds.has(threadRef.id)}
+                              onOpen={() => openThread(threadRef.id, activeConvo.type)}
+                              onJoin={() => { if (summary) void handleJoinThread(threadRef.id, summary, activeConvo); }} />
+                          );
+                        }
                         const isMe = msg.senderId === myUid;
                         const prevMsg = idx > 0 ? msgs[idx - 1] : null;
                         const showAvatar = !isMe && msg.senderId !== prevMsg?.senderId;
@@ -4598,6 +4734,22 @@ export default function MessagingClient() {
                                     >
                                       <Reply className="w-3.5 h-3.5" />
                                     </button>
+                                    {(activeConvo.type === "group" || activeConvo.type === "community") && !msg.deleted && (
+                                      <button
+                                        onClick={() => setCreateThreadCtx({
+                                          parentId: activeConvo.id,
+                                          source: {
+                                            id: msg.id, senderId: msg.senderId, senderName: msg.senderName,
+                                            text: msg.text || (msg.type === "image" ? "Photo" : msg.type === "sticker" ? "Sticker" : msg.fileName || "Attachment"),
+                                          },
+                                        })}
+                                        title="Start a thread from this message"
+                                        aria-label="Start a thread from this message"
+                                        className="p-1 rounded-lg text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all"
+                                      >
+                                        <MessagesSquare className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                     {canDelete && (
                                       <button
                                         onClick={() => handleDeleteMessage(msg.id, msg.senderId)}
@@ -5211,7 +5363,60 @@ export default function MessagingClient() {
         convo={activeConvo || null} myUid={myUid} myName={myName} myDept={profile?.department} />
 
       <AssignTaskModal isOpen={isAssignTaskOpen} onClose={() => setIsAssignTaskOpen(false)}
-        convo={activeConvo || null} myUid={myUid} myName={myName} approvedLeaves={approvedLeaves} />
+        convo={activeConvo || null} myUid={myUid} myName={myName} approvedLeaves={approvedLeaves}
+        onCreated={task => { if (activeThread) void threadAction(() => setTaskLinked(activeThread, task, true, threadSender)); }} />
+
+      {threadsPanelFor && (() => {
+        const parent = findConvo(threadsPanelFor);
+        return parent ? (
+          <ThreadsPanel
+            parent={parent}
+            myThreadIds={myThreadIds}
+            unreadByThread={unreadByThread}
+            onOpen={id => openThread(id, parent.type)}
+            onJoin={(id, summary) => handleJoinThread(id, summary, parent)}
+            onNew={() => { setThreadsPanelFor(null); setCreateThreadCtx({ parentId: parent.id }); }}
+            onClose={() => setThreadsPanelFor(null)}
+          />
+        ) : null;
+      })()}
+
+      {createThreadCtx && (() => {
+        const parent = findConvo(createThreadCtx.parentId);
+        return parent ? (
+          <CreateThreadModal
+            parent={parent}
+            people={memberProfiles}
+            myUid={myUid}
+            source={createThreadCtx.source}
+            onClose={() => setCreateThreadCtx(null)}
+            onCreate={handleCreateThread}
+          />
+        ) : null;
+      })()}
+
+      {activeThread && threadDialog === "people" && (
+        <AddThreadPeopleModal
+          thread={activeThread}
+          parent={activeThreadParent}
+          people={memberProfiles}
+          onClose={() => setThreadDialog(null)}
+          onAdd={async uids => {
+            const names = uids.map(uid => memberProfiles[uid]?.displayName || memberProfiles[uid]?.email || "Team member");
+            await threadAction(() => addThreadMembers(activeThread, uids, names, threadSender), "People added.");
+            setThreadDialog(null);
+          }}
+        />
+      )}
+
+      {activeThread && threadDialog === "tasks" && (
+        <LinkTasksModal
+          thread={activeThread}
+          onClose={() => setThreadDialog(null)}
+          onToggle={(task, on) => threadAction(() => setTaskLinked(activeThread, task, on, threadSender))}
+          onCreateTask={() => { setThreadDialog(null); setIsAssignTaskOpen(true); }}
+        />
+      )}
 
       <ShareActivityModal
         isOpen={!!shareActivityPrompt}

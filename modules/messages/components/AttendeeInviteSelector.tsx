@@ -34,7 +34,7 @@ export interface StaffMember {
 export interface Conversation {
   id: string;
   name?: string;
-  type?: "direct" | "group" | "community";
+  type?: "direct" | "group" | "community" | "thread";
   memberIds: Record<string, boolean>;
   adminIds?: Record<string, boolean>;
   createdById?: string;
