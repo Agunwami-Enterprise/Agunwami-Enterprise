@@ -7,7 +7,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { NextResponse } from 'next/server';
-import { canEditWebsite } from './content-access';
+import { canEditWebsite, canUseTechWorkstation } from './content-access';
 
 const DEFAULT_SESSION_SECRET = 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
 const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET);
@@ -62,6 +62,18 @@ export async function requireContentSession(): Promise<SessionResult> {
   if (result.error) return result;
   if (!canEditWebsite(result.session)) {
     return { error: NextResponse.json({ error: 'Website editing access required.' }, { status: 403 }) };
+  }
+  return result;
+}
+
+/**
+ * Verifies the session belongs to the Technical team (or the CEO).
+ */
+export async function requireTechSession(): Promise<SessionResult> {
+  const result = await readApiSession();
+  if (result.error) return result;
+  if (!canUseTechWorkstation(result.session)) {
+    return { error: NextResponse.json({ error: 'Technical team access required.' }, { status: 403 }) };
   }
   return result;
 }

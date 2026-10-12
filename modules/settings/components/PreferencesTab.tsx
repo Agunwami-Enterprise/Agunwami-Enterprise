@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { usePathname } from 'next/navigation';
 import { useTheme as useAppTheme } from '@/app/components/common/ThemeProvider';
 import {
   DEFAULT_START_PAGE, START_PAGES, allTimeZones, cityName, deviceTimeZone, getStartPage,
@@ -39,6 +40,8 @@ export default function PreferencesTab({ uid, timeZone, profileLoaded, onTimeZon
   status: Status;
 }) {
   const { theme, setTheme } = useAppTheme();
+  // The start page lists CEO workstation pages; other workstations have their own home.
+  const showStartPage = !usePathname().startsWith('/tech');
   const reduceMotion = useReduceMotion();
   const device = useSyncExternalStore(noSubscribe, deviceTimeZone, () => null);
   const zones = useSyncExternalStore(noSubscribe, zoneList, () => null);
@@ -169,7 +172,7 @@ export default function PreferencesTab({ uid, timeZone, profileLoaded, onTimeZon
       </div>
 
       {/* Start page */}
-      <Row title="Start page" desc="Where you land after signing in">
+      {showStartPage && <Row title="Start page" desc="Where you land after signing in">
         <div className="relative">
           <select
             value={startPage ?? DEFAULT_START_PAGE}
@@ -184,7 +187,7 @@ export default function PreferencesTab({ uid, timeZone, profileLoaded, onTimeZon
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="2,4 6,8 10,4"/></svg>
           </span>
         </div>
-      </Row>
+      </Row>}
 
       {/* Language */}
       <div className="flex items-center justify-between pt-5">
