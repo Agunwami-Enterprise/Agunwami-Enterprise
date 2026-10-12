@@ -1,34 +1,12 @@
 /**
- * Who may use the website C-panel (/cpanel): the CEO and the content
- * departments.
+ * Legacy C-panel access from AE Hub departments. The C-panel is now a page
+ * the CEO gives to an AE department (Departments page, "Website C-Panel");
+ * until the content team is put in such a department, staff in these AE Hub
+ * departments keep their access. See lib/workstation/access.ts.
  */
 
 export const CONTENT_DEPARTMENTS = ['content-admin', 'content-staff'];
 
-export function canEditWebsite(session: { role?: string; department?: string } | null | undefined): boolean {
-  if (!session) return false;
-  if (session.role?.toLowerCase() === 'ceo') return true;
-  return CONTENT_DEPARTMENTS.includes(session.department?.toLowerCase() ?? '');
-}
-
-/**
- * The Technical team's workstation (/tech): staff in AE Hub's technical
- * departments, and the CEO.
- */
-export const TECH_DEPARTMENTS = ['developers', 'it'];
-
-export function isTechnicalStaff(session: { role?: string; department?: string } | null | undefined): boolean {
-  return TECH_DEPARTMENTS.includes(session?.department?.toLowerCase() ?? '');
-}
-
-export function canUseTechWorkstation(session: { role?: string; department?: string } | null | undefined): boolean {
-  if (!session) return false;
-  return session.role?.toLowerCase() === 'ceo' || isTechnicalStaff(session);
-}
-
-/** Where a user lands after signing in to AE-WS. */
-export function workstationHome(session: { role?: string; department?: string }): string {
-  if (session.role?.toLowerCase() === 'ceo') return '/ceo/dashboard';
-  if (isTechnicalStaff(session)) return '/tech/dashboard';
-  return canEditWebsite(session) ? '/cpanel/dashboard' : '/ceo/dashboard';
+export function isLegacyContentStaff(session: { role?: string; department?: string } | null | undefined): boolean {
+  return CONTENT_DEPARTMENTS.includes(session?.department?.toLowerCase() ?? '');
 }

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createSession, deleteSession, verifyFirebaseToken } from '@/lib/workstation/session';
-import { workstationHome } from '@/lib/workstation/content-access';
+import { getWorkstationAccess } from '@/lib/workstation/access';
 import {
   TwoFactorError, maskEmail, readSecuritySettings, verifySecondFactor,
 } from '@/lib/workstation/two-factor';
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     const session = await createSession(idToken);
-    return NextResponse.json({ role: session.role, home: workstationHome(session) });
+    return NextResponse.json({ role: session.role, home: (await getWorkstationAccess(session)).home });
   } catch (err) {
     if (err instanceof TwoFactorError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

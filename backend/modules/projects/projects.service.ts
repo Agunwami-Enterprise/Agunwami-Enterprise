@@ -960,13 +960,13 @@ function normalizeMetricsUrl(endpoint: string): string {
 }
 
 /** Derives a sibling action endpoint, e.g. `/api/enterprise/metrics` → `/api/enterprise/tasks`. */
-function projectActionUrl(project: StoredProject | undefined, action: 'leave-requests' | 'tasks'): URL {
+function projectActionUrl(project: StoredProject | undefined, action: 'leave-requests' | 'tasks' | 'staff'): URL {
   if (!project || typeof project.apiEndpoint !== 'string' || !project.apiEndpoint.trim()) {
     throw new Error('The selected project has no configured metrics endpoint.');
   }
   const url = new URL(normalizeMetricsUrl(project.apiEndpoint));
   if (!url.pathname.endsWith('/metrics')) {
-    throw new Error(`The selected project endpoint does not support ${action === 'tasks' ? 'project task creation' : 'leave-request updates'}.`);
+    throw new Error(`The selected project endpoint does not support ${action === 'tasks' ? 'project task creation' : action === 'staff' ? 'staff changes' : 'leave-request updates'}.`);
   }
   url.pathname = `${url.pathname.slice(0, -'metrics'.length)}${action}`;
   return url;
@@ -1221,6 +1221,23 @@ export async function listProjectRecords(): Promise<ProjectRecord[]> {
   });
 }
 
+/** A staff change AE sends to a project for someone in a linked department. */
+export interface ProjectStaffAction {
+  action: 'transfer' | 'position' | 'suspend' | 'reactivate' | 'remove';
+  uid: string;
+  email?: string;
+  /** The project's department id (transfer). */
+  department?: string;
+  position?: string;
+  reason?: string;
+}
+
+export interface ProjectDepartmentOptions {
+  projectId: string;
+  projectName: string;
+  departments: Array<{ id: string; name: string }>;
+}
+
 export class ProjectsService {
   /**
    * Project cards with endpoint data. Responses are cached for a minute;
@@ -1334,6 +1351,35 @@ export class ProjectsService {
    * endpoint and token; the website C-panel creates projects without them
    * (`requireMetrics: false`) and adds them later from the dashboard.
    */
+  /**
+   * Each project's departments (from its metrics), for linking AE departments
+   * to project departments on the Departments page.
+   */
+  static async getProjectDepartmentOptions(): Promise<ProjectDepartmentOptions[]> {
+    const projects = await ProjectsService.getProjectsOverview();
+    return projects
+      .filter(project => project.apiEndpoint && project.hasApiToken !== false)
+      .map(project => ({
+        projectId: project.id,
+        projectName: project.name,
+        departments: (project.departments ?? [])
+          .filter(department => department.id && department.id.toLowerCase() !== 'ceo')
+          .map(department => ({ id: department.id, name: department.name || department.id })),
+      }));
+  }
+
+  /** Sends a staff change to a project's staff endpoint (next to its metrics endpoint). */
+  static async sendStaffAction(projectId: string, payload: ProjectStaffAction): Promise<{ skipped?: string }> {
+    const project = (await listProjectRecords()).find(record => record.id === projectId);
+    if (!project) throw new Error('That project no longer exists.');
+    const url = projectActionUrl(project, 'staff');
+    const { response, body } = await callProjectEndpoint(url, storedApiToken(project), { method: 'POST', body: payload });
+    if (!response.ok) throw new Error(httpErrorMessage('Project staff endpoint', response, body));
+    const record = asRecord(body);
+    if (record?.success !== true) throw new Error('Project staff endpoint did not confirm the change.');
+    return typeof record.skipped === 'string' ? { skipped: record.skipped } : {};
+  }
+
   static async createProject(dto: CreateProjectDto, { requireMetrics = true } = {}): Promise<ProjectCardData> {
     const endpoint = dto.apiEndpoint?.trim() || null;
     if (!endpoint && requireMetrics) {

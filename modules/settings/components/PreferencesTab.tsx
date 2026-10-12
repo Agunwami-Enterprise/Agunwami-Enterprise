@@ -41,7 +41,7 @@ export default function PreferencesTab({ uid, timeZone, profileLoaded, onTimeZon
 }) {
   const { theme, setTheme } = useAppTheme();
   // The start page lists CEO workstation pages; other workstations have their own home.
-  const showStartPage = !usePathname().startsWith('/tech');
+  const showStartPage = !usePathname().startsWith('/ws');
   const reduceMotion = useReduceMotion();
   const device = useSyncExternalStore(noSubscribe, deviceTimeZone, () => null);
   const zones = useSyncExternalStore(noSubscribe, zoneList, () => null);

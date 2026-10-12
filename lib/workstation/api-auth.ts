@@ -7,7 +7,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { NextResponse } from 'next/server';
-import { canEditWebsite, canUseTechWorkstation } from './content-access';
+import { canOpenPage, getWorkstationAccess } from './access';
 
 const DEFAULT_SESSION_SECRET = 'agunwami_enterprise_ae_workstation_secret_key_2026_super_secure';
 const getSecret = () => new TextEncoder().encode(process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET);
@@ -54,26 +54,28 @@ export async function requireCeoSession(): Promise<SessionResult> {
 }
 
 /**
- * Verifies the session belongs to someone allowed to edit the website
- * (the CEO or the content departments).
+ * Verifies the session belongs to someone allowed to edit the website: the
+ * CEO, or a department given the Website C-panel page.
  */
 export async function requireContentSession(): Promise<SessionResult> {
   const result = await readApiSession();
   if (result.error) return result;
-  if (!canEditWebsite(result.session)) {
+  if (!(await getWorkstationAccess(result.session)).canEditWebsite) {
     return { error: NextResponse.json({ error: 'Website editing access required.' }, { status: 403 }) };
   }
   return result;
 }
 
 /**
- * Verifies the session belongs to the Technical team (or the CEO).
+ * Verifies the session belongs to someone whose AE department (or the CEO)
+ * has the given workstation page.
  */
-export async function requireTechSession(): Promise<SessionResult> {
+export async function requireWorkstationPage(pageId: string): Promise<SessionResult> {
   const result = await readApiSession();
   if (result.error) return result;
-  if (!canUseTechWorkstation(result.session)) {
-    return { error: NextResponse.json({ error: 'Technical team access required.' }, { status: 403 }) };
+  const access = await getWorkstationAccess(result.session);
+  if (!canOpenPage(access, pageId)) {
+    return { error: NextResponse.json({ error: 'Your department does not have this page.' }, { status: 403 }) };
   }
   return result;
 }
