@@ -35,6 +35,7 @@ import {
   Smile, Paperclip, Calendar, Zap, Hash, Trash2, Shield, Clock,
   LogOut, Settings, UserPlus, ClipboardList, Edit3, Crown,
   Camera, Upload, Sticker, Image as ImageIcon, FileText, AtSign, AlertTriangle, AlertCircle, Bookmark, Reply,
+  Bell, BellOff, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import {
@@ -44,6 +45,11 @@ import {
   StaffArrangementStatus,
 } from "@/utils/staffArrangementUtils";
 import AttendeeInviteSelector from "./AttendeeInviteSelector";
+import MessageSettings from "./MessageSettings";
+import {
+  DRAFT_STORAGE_KEYS, playMessageChime, setConversationMuted, showDesktopAlert, useMessagePreferences,
+  type MessagePreferences,
+} from "../preferences";
 import UserScheduleDrawer from "./UserScheduleDrawer";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
@@ -454,15 +460,17 @@ function getInitials(name?: string | null) {
     : name.slice(0, 2).toUpperCase();
 }
 
-function formatTimestamp(ms?: number) {
+function formatTimestamp(ms?: number, timeFormat: MessagePreferences["timeFormat"] = "12h") {
   if (!ms) return "";
-  return new Date(ms).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  return new Date(ms).toLocaleTimeString("en-US", timeFormat === "24h"
+    ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
+    : { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function formatDate(ms?: number) {
+function formatDate(ms?: number, timeFormat: MessagePreferences["timeFormat"] = "12h") {
   if (!ms) return "";
   const diff = Date.now() - ms;
-  if (diff < 86_400_000) return formatTimestamp(ms);
+  if (diff < 86_400_000) return formatTimestamp(ms, timeFormat);
   if (diff < 604_800_000) return new Date(ms).toLocaleDateString("en-US", { weekday: "short" });
   return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -3203,8 +3211,18 @@ const TABS = [
   { id: "activity", label: "Activity", icon: Zap },
 ];
 
+const BUBBLE_TEXT: Record<MessagePreferences["textSize"], string> = {
+  small: "text-[13px]",
+  normal: "text-sm",
+  large: "text-base",
+};
+
 export default function MessagingClient() {
   const { user } = useAuth();
+  const msgPrefs = useMessagePreferences(user?.uid);
+  const msgPrefsRef = useRef(msgPrefs);
+  useEffect(() => { msgPrefsRef.current = msgPrefs; }, [msgPrefs]);
+  const [isMessageSettingsOpen, setIsMessageSettingsOpen] = useState(false);
   const [profile, setProfile] = useState<{
     displayName?: string;
     photoURL?: string;
@@ -3377,22 +3395,25 @@ export default function MessagingClient() {
   });
 
   // Sync draft text to localStorage whenever drafts change
+  // (Settings → Messages → Keep drafts off: nothing is stored, and old drafts are removed.)
   useEffect(() => {
     try {
-      localStorage.setItem("aehub_chat_drafts", JSON.stringify(drafts));
+      if (msgPrefs.saveDrafts) localStorage.setItem(DRAFT_STORAGE_KEYS[0], JSON.stringify(drafts));
+      else localStorage.removeItem(DRAFT_STORAGE_KEYS[0]);
     } catch (e) {
       console.error("Failed to save drafts to localStorage", e);
     }
-  }, [drafts]);
+  }, [drafts, msgPrefs.saveDrafts]);
 
   // Sync draft reply contexts to localStorage whenever they change
   useEffect(() => {
     try {
-      localStorage.setItem("aehub_chat_draft_replies", JSON.stringify(draftReplies));
+      if (msgPrefs.saveDrafts) localStorage.setItem(DRAFT_STORAGE_KEYS[1], JSON.stringify(draftReplies));
+      else localStorage.removeItem(DRAFT_STORAGE_KEYS[1]);
     } catch (e) {
       console.error("Failed to save draft replies to localStorage", e);
     }
-  }, [draftReplies]);
+  }, [draftReplies, msgPrefs.saveDrafts]);
 
   // Load draft text AND pending reply context when switching active conversation
   useEffect(() => {
@@ -3575,14 +3596,51 @@ export default function MessagingClient() {
     return () => off(presenceRef, "value", handler);
   }, []);
 
+  // Sound and desktop alerts for messages that arrive in conversations not on screen
+  // (Settings → Messages). A conversation's unread count only goes up when someone
+  // else sends to it, so a rise is a new incoming message.
+  const conversationsRef = useRef<Conversation[]>([]);
+  const activeConvIdRef = useRef<string | null>(null);
+  useEffect(() => { activeConvIdRef.current = activeConvId; }, [activeConvId]);
+
   // Conversations RTDB listener
   useEffect(() => {
     if (!myUid) return;
+    const alertNewMessages = (previous: Conversation[], next: Conversation[]) => {
+      const prefs = msgPrefsRef.current;
+      if (!prefs.sound && !prefs.desktopAlerts) return;
+      const before = new Map(previous.map(c => [c.id, c.unreadCount?.[myUid] || 0]));
+      const arrived = next.filter(c => {
+        if (prefs.mutedConversations[c.id] || c.lastMessageSenderId === myUid) return false;
+        if (c.id === activeConvIdRef.current && document.visibilityState === "visible") return false;
+        return (c.unreadCount?.[myUid] || 0) > (before.get(c.id) ?? 0);
+      });
+      if (arrived.length === 0) return;
+      if (prefs.sound) playMessageChime();
+      if (prefs.desktopAlerts && document.visibilityState !== "visible") {
+        for (const c of arrived.slice(0, 3)) {
+          const title = c.type === "direct"
+            ? (c.lastMessageSenderName || "New message")
+            : `${c.lastMessageSenderName ? `${c.lastMessageSenderName} in ` : ""}${c.name || "a group"}`;
+          const body = prefs.showPreviews && c.lastMessage ? c.lastMessage.slice(0, 140) : "New message";
+          showDesktopAlert(title, body, `message-${c.id}`, () => {
+            setActiveTab(c.type === "community" ? "communities" : "chat");
+            setActiveConvId(c.id);
+            setShowMobileChat(true);
+          });
+        }
+      }
+    };
     const q = rtdbQuery(ref(rtdb, "conversations"), orderByChild(`memberIds/${myUid}`), equalTo(true));
+    let firstSnapshot = true;
     const handler = onValue(q, snap => {
       const val = snap.val() || {};
-      setConversations(Object.entries(val).map(([id, d]: [string, any]) => ({ id, ...d }))
-        .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0)));
+      const next: Conversation[] = Object.entries(val).map(([id, d]: [string, any]) => ({ id, ...d }))
+        .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+      if (!firstSnapshot) alertNewMessages(conversationsRef.current, next);
+      firstSnapshot = false;
+      conversationsRef.current = next;
+      setConversations(next);
       setLoadingConvos(false);
     }, (err) => {
       console.error("Failed to load conversations:", err);
@@ -3831,15 +3889,20 @@ export default function MessagingClient() {
       setMessages(rawMsgs);
       setLoadingMessages(false);
 
-      // Mark unread messages as read (only if there are actual unread messages from others)
+      // Mark unread messages as read (only if there are actual unread messages from others).
+      // With read receipts off, only this person's unread count is cleared; no receipt is written.
       const updates: Record<string, boolean> = {};
       rawMsgs.forEach((d) => {
         if (d.senderId !== myUid && !d.readBy?.[myUid]) {
           updates[`messages/${activeConvId}/${d.id}/readBy/${myUid}`] = true;
         }
       });
-      if (Object.keys(updates).length > 0) {
-        update(ref(rtdb), updates).catch(() => {});
+      if (msgPrefsRef.current.readReceipts) {
+        if (Object.keys(updates).length > 0) {
+          update(ref(rtdb), updates).catch(() => {});
+          update(ref(rtdb, `conversations/${activeConvId}/unreadCount`), { [myUid]: 0 }).catch(() => {});
+        }
+      } else if ((conversationsRef.current.find(c => c.id === activeConvId)?.unreadCount?.[myUid] || 0) > 0) {
         update(ref(rtdb, `conversations/${activeConvId}/unreadCount`), { [myUid]: 0 }).catch(() => {});
       }
     });
@@ -4000,14 +4063,27 @@ export default function MessagingClient() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    const sends = msgPrefs.enterToSend ? !e.shiftKey : (e.ctrlKey || e.metaKey);
+    if (sends) { e.preventDefault(); handleSend(); }
   };
 
   const activeConvo = conversations.find(c => c.id === activeConvId);
   const userDept = (profile?.department || "").toLowerCase();
   const isDeptAdmin = ["ceo", "hr", "operation", "operations", "opm"].includes(userDept);
   const isAdmin = isDeptAdmin || !!(activeConvo?.adminIds?.[myUid]);
-  const totalUnread = conversations.reduce((s, c) => s + (c.unreadCount?.[myUid] || 0), 0);
+  const totalUnread = conversations.reduce((s, c) => s + (msgPrefs.mutedConversations[c.id] ? 0 : (c.unreadCount?.[myUid] || 0)), 0);
+  const activeMuted = !!(activeConvId && msgPrefs.mutedConversations[activeConvId]);
+  const toggleActiveMute = async () => {
+    if (!activeConvId || !myUid) return;
+    try {
+      await setConversationMuted(myUid, activeConvId, !activeMuted);
+      toast.success(activeMuted ? "Conversation unmuted." : "Conversation muted. No sound or alerts from it.");
+    } catch (err) {
+      console.error("Failed to change mute setting:", err);
+      toast.error("Could not change the mute setting. Please try again.");
+    }
+  };
 
   // Filter by tab
   const tabConvos = conversations.filter(c => {
@@ -4133,6 +4209,11 @@ export default function MessagingClient() {
               )}
             </button>
           ))}
+          <button type="button" onClick={() => setIsMessageSettingsOpen(true)}
+            title="Message settings" aria-label="Message settings"
+            className="ml-auto flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all">
+            <SlidersHorizontal className="w-4 h-4" /> <span className="hidden sm:inline">Settings</span>
+          </button>
         </div>
 
         <div className="flex-1 flex min-h-0">
@@ -4219,6 +4300,7 @@ export default function MessagingClient() {
                 <div className="py-1">
                   {tabConvos.map(convo => {
                     const unread = convo.unreadCount?.[myUid] || 0;
+                    const isMuted = !!msgPrefs.mutedConversations[convo.id];
                     const isActive = activeConvId === convo.id;
                     const isDirect = convo.type === "direct";
                     const otherUid = isDirect
@@ -4248,7 +4330,10 @@ export default function MessagingClient() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
                             <p className={`text-sm truncate ${unread > 0 ? "font-bold text-gray-900 dark:text-white" : "font-semibold text-gray-700 dark:text-gray-200"}`}>{name}</p>
-                            <span className="text-[10px] text-gray-400 shrink-0 ml-2">{formatDate(convo.lastMessageAt)}</span>
+                            <span className="flex items-center gap-1 text-[10px] text-gray-400 shrink-0 ml-2">
+                              {isMuted && <BellOff className="w-3 h-3" aria-label="Muted" />}
+                              {formatDate(convo.lastMessageAt, msgPrefs.timeFormat)}
+                            </span>
                           </div>
                           <div className="flex items-center justify-between">
                             {drafts[convo.id] ? (
@@ -4257,11 +4342,15 @@ export default function MessagingClient() {
                               </p>
                             ) : (
                               <p className={`text-xs truncate ${unread > 0 ? "text-gray-600 dark:text-gray-300 font-medium" : "text-gray-400"}`}>
-                                {senderPrefix}{convo.lastMessage || "No messages yet"}
+                                {!convo.lastMessage
+                                  ? "No messages yet"
+                                  : msgPrefs.showPreviews
+                                    ? `${senderPrefix}${convo.lastMessage}`
+                                    : unread > 0 ? `${unread} new message${unread === 1 ? "" : "s"}` : "Open to view messages"}
                               </p>
                             )}
                             {unread > 0 && (
-                              <span className="ml-2 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
+                              <span className={`ml-2 min-w-[18px] h-[18px] px-1 ${isMuted ? "bg-gray-300 dark:bg-zinc-600" : "bg-rose-500"} text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0`}>
                                 {unread > 9 ? "9+" : unread}
                               </span>
                             )}
@@ -4345,6 +4434,13 @@ export default function MessagingClient() {
                         <ClipboardList className="w-4 h-4" />
                       </button>
                     )}
+                    <button onClick={() => void toggleActiveMute()}
+                      title={activeMuted ? "Unmute conversation" : "Mute conversation"}
+                      aria-label={activeMuted ? "Unmute conversation" : "Mute conversation"}
+                      aria-pressed={activeMuted}
+                      className={`p-2 rounded-xl transition-all ${activeMuted ? "text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800"}`}>
+                      {activeMuted ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                    </button>
                     {[Phone, Video].map((Icon, i) => (
                       <button key={i} disabled title="Coming soon" aria-label={i === 0 ? "Voice call (coming soon)" : "Video call (coming soon)"}
                         className="p-2 text-gray-300 dark:text-zinc-600 cursor-not-allowed rounded-xl transition-all">
@@ -4448,7 +4544,8 @@ export default function MessagingClient() {
                         const prevMsg = idx > 0 ? msgs[idx - 1] : null;
                         const showAvatar = !isMe && msg.senderId !== prevMsg?.senderId;
                         const showName = showAvatar && (activeConvo.type === "group" || activeConvo.type === "community");
-                        const isRead = Object.keys(msg.readBy || {}).some(uid => uid !== myUid);
+                        // Read receipts are mutual: with them off, other people's aren't shown either.
+                        const isRead = msgPrefs.readReceipts && Object.keys(msg.readBy || {}).some(uid => uid !== myUid);
                         const canDelete = msg.senderId === myUid || isAdmin;
                         const isHovered = hoveredMsgId === msg.id;
                         const isSenderOnline = !!onlinePresence[msg.senderId];
@@ -4522,8 +4619,8 @@ export default function MessagingClient() {
                                       : msg.type === "sticker"
                                         ? "p-1 bg-transparent"
                                         : isMe
-                                          ? "px-4 py-2.5 bg-amber-500 text-white rounded-br-md text-sm"
-                                          : "px-4 py-2.5 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white rounded-bl-md text-sm shadow-sm border border-gray-100 dark:border-zinc-700"
+                                          ? `px-4 py-2.5 bg-amber-500 text-white rounded-br-md ${BUBBLE_TEXT[msgPrefs.textSize]}`
+                                          : `px-4 py-2.5 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white rounded-bl-md ${BUBBLE_TEXT[msgPrefs.textSize]} shadow-sm border border-gray-100 dark:border-zinc-700`
                                   }`}
                                 >
                                   {/* Quoted Reply Banner */}
@@ -4717,7 +4814,7 @@ export default function MessagingClient() {
                                 </div>
                               </div>
                               <div className={`flex items-center gap-1 mt-0.5 px-1 ${isMe ? "flex-row-reverse" : ""}`}>
-                                <span className="text-[10px] text-gray-400">{formatTimestamp(msg.sentAt)}</span>
+                                <span className="text-[10px] text-gray-400">{formatTimestamp(msg.sentAt, msgPrefs.timeFormat)}</span>
                                 {isMe && !msg.deleted && (isRead ? <CheckCheck className="w-3 h-3 text-blue-400" /> : <Check className="w-3 h-3 text-gray-400" />)}
                               </div>
                             </div>
@@ -5041,7 +5138,7 @@ export default function MessagingClient() {
                         setShowMentionList(false);
                       }}
                       onKeyDown={handleKeyDown}
-                      placeholder={activeConvo?.type === "direct" ? "Type a message..." : "Type a message... (Use @ to mention)"}
+                      placeholder={`${activeConvo?.type === "direct" ? "Type a message..." : "Type a message... (Use @ to mention)"}${msgPrefs.enterToSend ? "" : " · Ctrl+Enter to send"}`}
                       className="flex-1 bg-transparent resize-none focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 max-h-32 py-1" style={{ minHeight: "24px" }} />
                     
                     {/* Emoji & Custom Sticker Modal Toggle Button */}
@@ -5081,6 +5178,34 @@ export default function MessagingClient() {
       {/* Modals */}
       <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)}
         myUid={myUid} myName={myName} myDept={profile?.department} onCreated={id => { setActiveConvId(id); setShowMobileChat(true); }} />
+
+      {isMessageSettingsOpen && myUid && (
+        <div role="dialog" aria-modal="true" aria-labelledby="message-settings-title"
+          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
+          onClick={() => setIsMessageSettingsOpen(false)}
+          onKeyDown={e => { if (e.key === "Escape") setIsMessageSettingsOpen(false); }}>
+          <div className="ae-pop-in flex h-full w-full max-w-md flex-col bg-gray-50 shadow-2xl dark:bg-zinc-950"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div>
+                <h2 id="message-settings-title" className="text-sm font-bold text-gray-900 dark:text-white">Message settings</h2>
+                <p className="text-xs text-gray-400">Saved to your account · also in Settings → Messages</p>
+              </div>
+              <button onClick={() => setIsMessageSettingsOpen(false)} aria-label="Close message settings" autoFocus
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <MessageSettings
+                uid={myUid}
+                prefs={msgPrefs}
+                onDraftsCleared={() => { setDrafts({}); setDraftReplies({}); }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <GroupSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}
         convo={activeConvo || null} myUid={myUid} myName={myName} myDept={profile?.department} />

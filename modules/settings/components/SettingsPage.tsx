@@ -21,10 +21,12 @@ import { useTheme } from '@/lib/workstation/theme-context';
 import { auth } from '@/lib/workstation/firebase';
 import { seedDatabase } from '@/lib/workstation/seed-client';
 import TwoFactorModal from '@/modules/settings/components/TwoFactorModal';
+import MessageSettings from '@/modules/messages/components/MessageSettings';
+import { useMessagePreferences } from '@/modules/messages/preferences';
 
-type SettingsTab = 'profile' | 'preferences' | 'notifications' | 'security' | 'system';
+type SettingsTab = 'profile' | 'preferences' | 'notifications' | 'messages' | 'security' | 'system';
 
-const VALID_TABS: SettingsTab[] = ['profile', 'preferences', 'notifications', 'security', 'system'];
+const VALID_TABS: SettingsTab[] = ['profile', 'preferences', 'notifications', 'messages', 'security', 'system'];
 // The demo-data seeder rewrites shared collections; never offer it in production.
 const SHOW_SEED_TOOL = process.env.NODE_ENV !== 'production';
 
@@ -66,6 +68,7 @@ export default function SettingsPage() {
   const [profileError, setProfileError] = useState('');
   const [security, setSecurity] = useState<SecuritySettings | null>(null);
   const inApp = useInAppPreferences();
+  const messagePrefs = useMessagePreferences(user?.uid);
 
   // Profile form
   const [form, setForm] = useState({ displayName: '', phone: '', location: '', bio: '' });
@@ -205,6 +208,7 @@ export default function SettingsPage() {
     { key:'profile',       label:'Profile',               icon:<UserIcon />   },
     { key:'preferences',   label:'Preferences',           icon:<CogIcon />    },
     { key:'notifications', label:'Notifications',         icon:<BellIcon />   },
+    { key:'messages',      label:'Messages',              icon:<ChatIcon />   },
     { key:'security',      label:'Security',              icon:<ShieldIcon /> },
     { key:'system',        label:'System Configuration',  icon:<CogIcon />    },
   ];
@@ -478,15 +482,23 @@ export default function SettingsPage() {
             <div className="mb-2 flex items-center gap-2">
               <span className="text-[#f5bd02]"><EmailIcon /></span>
               <div>
-                <p className="flex items-center gap-2 text-[13px] font-bold text-gray-800 dark:text-white">Email, Sound &amp; Push Notifications <ComingSoon /></p>
+                <p className="flex items-center gap-2 text-[13px] font-bold text-gray-800 dark:text-white">Email &amp; Push Notifications <ComingSoon /></p>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                  Email alerts from AE Hub can&apos;t be switched off by category yet, and the workstation doesn&apos;t play sounds or send push
-                  notifications. Choices for these will appear here once they can be honoured.
+                  Email alerts from AE Hub can&apos;t be switched off by category yet, and the workstation doesn&apos;t send push
+                  notifications to your phone. Sounds and desktop alerts for new messages are in{' '}
+                  <button type="button" onClick={() => setTab('messages')} className="font-semibold text-[#d4a300] underline dark:text-[#f5bd02]">Messages settings</button>.
                 </p>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* MESSAGES TAB */}
+      {tab === 'messages' && (
+        user?.uid
+          ? <MessageSettings uid={user.uid} prefs={messagePrefs} />
+          : <p className="text-[12px] text-gray-500 dark:text-gray-400">Sign in to change your message settings.</p>
       )}
 
       {/* SECURITY TAB */}
@@ -704,6 +716,7 @@ function Row({ label, desc, last = false, children }: { label: string; desc: str
 function PencilIcon() { return <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M11.5 2.5l2 2-9 9H2.5v-2l9-9z"/><path d="M9.5 4.5l2 2"/></svg>; }
 function UserIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>; }
 function CogIcon()   { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>; }
+function ChatIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>; }
 function BellIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>; }
 function ShieldIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>; }
 function SunIcon()   { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>; }
