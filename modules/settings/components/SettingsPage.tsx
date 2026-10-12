@@ -19,6 +19,7 @@ import { useInAppPreferences } from '@/modules/settings/use-in-app-preferences';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { useTheme } from '@/lib/workstation/theme-context';
 import { auth } from '@/lib/workstation/firebase';
+import { formatAehubId, formatEmployeeId } from '@/lib/workstation/employee-id';
 import { seedDatabase } from '@/lib/workstation/seed-client';
 import TwoFactorModal from '@/modules/settings/components/TwoFactorModal';
 import MessageSettings from '@/modules/messages/components/MessageSettings';
@@ -216,7 +217,10 @@ export default function SettingsPage() {
   const displayName = profile?.displayName || user?.displayName || 'Your name';
   const email = profile?.email || user?.email || '—';
   const position = profile?.departmentPosition || 'CEO';
-  const employeeId = profile?.aehubId || (profile?.staffNumber != null ? `#${profile.staffNumber}` : '—');
+  // Employee ID is AE-{employee number}; the AE Hub ID (AEHUB-{dept}-{number})
+  // is AE Hub's own ID and only shows for people who have one.
+  const employeeId = formatEmployeeId(profile);
+  const aehubId = formatAehubId(profile);
   const photoURL = profile?.photoURL || user?.photoURL || '';
   const timeZone = profile?.timeZone || 'Africa/Lagos';
   const lastSignIn = auth.currentUser?.metadata.lastSignInTime;
@@ -262,7 +266,12 @@ export default function SettingsPage() {
             <p className="text-[18px] font-bold text-gray-800 dark:text-white">{profileLoaded || !user ? displayName : 'Loading…'}</p>
             <p className="text-[12px] text-gray-500 dark:text-gray-400">{position}</p>
             <p className="text-[12px] text-gray-400 dark:text-gray-500">{titleCase(profile?.department)}</p>
-            <span className="mt-1 inline-block rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/8 dark:text-gray-300">Employee ID: {employeeId}</span>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <span className="inline-block rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/8 dark:text-gray-300">Employee ID: {employeeId ?? 'Not assigned'}</span>
+              {aehubId && (
+                <span className="inline-block rounded-md bg-[#f5bd02]/15 px-2 py-0.5 text-[10px] font-medium text-[#8a6a00] dark:text-[#f5bd02]">AE Hub ID: {aehubId}</span>
+              )}
+            </div>
           </div>
         </div>
         {editing ? (
@@ -323,7 +332,8 @@ export default function SettingsPage() {
               <InfoField label="Join Date"     value={formatDate(profile?.joinDate)} bold />
               <InfoField label="Work Schedule" value={profile?.shiftStartTime && profile?.shiftEndTime ? `${profile.shiftStartTime} – ${profile.shiftEndTime}` : '—'} bold />
               <InfoField label="Time Zone"     value={TIME_ZONES.find(z => z.value === timeZone)?.label ?? timeZone} bold />
-              <InfoField label="Employee ID"   value={employeeId} bold />
+              <InfoField label="Employee ID"   value={employeeId ?? 'Not assigned'} bold />
+              {aehubId && <InfoField label="AE Hub ID" value={aehubId} bold />}
             </div>
           </div>
         </div>
