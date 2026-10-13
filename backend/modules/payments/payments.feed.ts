@@ -32,6 +32,8 @@ export interface PaymentFeedItem {
   processed: string | null;
   /** Only the enterprise's own pending payments can be approved here. */
   reviewable: boolean;
+  /** An enterprise payment that is approved and waiting to be marked paid. */
+  payable: boolean;
 }
 
 export interface PaymentsFeed {
@@ -74,11 +76,12 @@ function enterpriseItem(raw: Raw): PaymentFeedItem {
     category: text(raw.category) || text(raw.purpose) || text(raw.type) || 'Payment',
     description: text(raw.description) || text(raw.purpose) || 'Enterprise payment',
     ...(text(raw.reference) ? { reference: text(raw.reference) } : {}),
-    requestedBy: text(raw.staffName) || text(raw.requestedBy) || text(raw.recipientName) || '-',
+    requestedBy: text(raw.party) || text(raw.staffName) || text(raw.requestedBy) || text(raw.recipientName) || '-',
     approvedBy: text(raw.approvedBy) || '-',
     created,
     processed: isoOf(raw.processedAt) ?? isoOf(raw.approvedAt) ?? (status === 'Completed' ? created : null),
     reviewable: status === 'Pending',
+    payable: status === 'Approved',
   };
 }
 
@@ -115,6 +118,7 @@ export async function getPaymentsFeed(): Promise<PaymentsFeed> {
         created: payment.createdAt,
         processed: status === 'Completed' ? payment.createdAt : null,
         reviewable: false,
+        payable: false,
       } satisfies PaymentFeedItem;
     })),
   ].sort((a, b) => (b.created ?? '').localeCompare(a.created ?? ''));

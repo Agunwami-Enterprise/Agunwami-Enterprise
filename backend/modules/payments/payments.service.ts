@@ -5,12 +5,13 @@
  * Fetches real financial vouchers and transactions from AEHub Firestore payments collection.
  */
 
-import { listDocs, getDoc, updateDoc } from '../../core/firestore';
+import { listDocs, getDoc, createDoc, updateDoc } from '../../core/firestore';
 import type {
   PaymentRecord,
   PaymentStats,
   PaymentFilter,
   ApprovePaymentDto,
+  NewPaymentDto,
   PaymentStatus,
   PaymentCategory,
 } from './payments.types';
@@ -98,19 +99,56 @@ export class PaymentsService {
   }
 
   /**
-   * Approves or rejects a payment voucher.
+   * Approves or rejects a pending payment, or marks an approved one as paid.
+   * Returns an error message when the change isn't allowed.
    */
   static async updatePaymentStatus(
     id: string,
     dto: ApprovePaymentDto
-  ): Promise<boolean> {
-    const updated = await updateDoc('payments', id, {
-      status: dto.status,
-      approvedBy: dto.approvedBy || 'Agunwami CEO',
-      approvedAt: new Date().toISOString(),
-      notes: dto.notes || '',
-    });
+  ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+    const current = await getDoc('payments', id);
+    if (!current) return { ok: false, error: 'That payment no longer exists.', status: 404 };
+    const currentStatus = String(current.status || 'PENDING').toUpperCase();
+    if (dto.status === 'COMPLETED' ? currentStatus !== 'APPROVED' : currentStatus !== 'PENDING') {
+      return { ok: false, error: `This payment is already ${currentStatus.toLowerCase()}.`, status: 409 };
+    }
 
-    return !!updated;
+    const now = new Date().toISOString();
+    const updated = await updateDoc('payments', id, dto.status === 'COMPLETED'
+      ? { status: 'COMPLETED', processedAt: now, paidBy: dto.approvedBy || 'Agunwami CEO' }
+      : {
+        status: dto.status,
+        approvedBy: dto.approvedBy || 'Agunwami CEO',
+        approvedAt: now,
+        notes: dto.notes || '',
+      });
+
+    return updated ? { ok: true } : { ok: false, error: 'The payment could not be updated. Please try again.', status: 502 };
+  }
+
+  /** Records a payment in the enterprise's books. Returns the new payment's id, or null. */
+  static async createPayment(dto: NewPaymentDto, createdBy: string): Promise<string | null> {
+    const now = new Date();
+    const date = dto.date ? new Date(dto.date) : now;
+    const createdAt = (Number.isNaN(date.getTime()) ? now : date).toISOString();
+    const stamp = createdAt.slice(0, 10).replace(/-/g, '');
+    const reference = `AE-PAY-${stamp}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+
+    const doc = await createDoc('payments', {
+      type: dto.type,
+      amount: dto.amount,
+      currency: dto.currency,
+      category: dto.category,
+      description: dto.description,
+      party: dto.party,
+      status: dto.status,
+      reference,
+      requestedBy: createdBy,
+      createdBy,
+      createdAt,
+      recordedAt: now.toISOString(),
+      ...(dto.status === 'COMPLETED' ? { processedAt: createdAt } : {}),
+    });
+    return doc?._id ?? null;
   }
 }
