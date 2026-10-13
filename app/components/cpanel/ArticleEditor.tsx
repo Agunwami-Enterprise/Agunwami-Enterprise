@@ -3,34 +3,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import TextAlign from '@tiptap/extension-text-align';
-import Highlight from '@tiptap/extension-highlight';
+import { CellSelection } from '@tiptap/pm/tables';
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, ChevronDown, Code, ExternalLink, Highlighter, ImagePlus, Italic,
-  Keyboard, Link2, List, ListOrdered, Loader2, Minus, PanelRightClose, PanelRightOpen, Pencil, Redo2, RemoveFormatting,
-  Replace, Strikethrough, Trash2, Underline, Undo2, Unlink,
+  ArrowLeft, BetweenHorizontalEnd, BetweenHorizontalStart, BetweenVerticalEnd, BetweenVerticalStart, Bold, ChevronDown, ExternalLink,
+  Highlighter, Italic, Link2, Loader2, PaintBucket, PanelRightClose, PanelRightOpen, Pencil, RemoveFormatting, Replace, Rows3, Settings2,
+  TableCellsMerge, TableCellsSplit, Trash2, Underline, Unlink,
 } from 'lucide-react';
-import AeModal from '@/app/components/common/AeModal';
+import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import {
-  Button, Card, ErrorNote, ImageField, Select, TextArea, TextInput, cpanelFetch, cx, uploadImage, usePersistentToggle,
+  Button, Card, ErrorNote, ImageField, TextArea, TextInput, cpanelFetch, cx, uploadImage, usePersistentToggle,
 } from './ui';
-import { ARTICLE_CATEGORIES, type SiteArticle } from '@/backend/modules/site-content/site-content.types';
-import { FigureImage } from './article/FigureImage';
+import type { ArticleCategoryInfo, SiteArticle } from '@/backend/modules/site-content/site-content.types';
+import { articleExtensions } from './article/extensions';
+import Toolbar, { Divider, ToolButton, applyFontSize, clearFormatting, currentFontSize } from './article/Toolbar';
+import FindReplace from './article/FindReplace';
+import { SpecialCharsDialog, WordCountDialog } from './article/ToolDialogs';
+import SeoSettings, { type SeoValue } from './article/SeoSettings';
+import CategoryManager from './article/CategoryManager';
 import LinkDialog, { type LinkTarget, type SiteLink } from './article/LinkDialog';
 import ImageDialog, { type ArticleImage } from './article/ImageDialog';
 import AuthorPicker, { photoOf } from './article/AuthorPicker';
 import type { AuthorOption } from '@/app/api/cpanel/people/route';
 import { useAuth } from '@/lib/workstation/auth-context';
 
-type Meta = Omit<SiteArticle, 'id' | 'slug' | 'body' | 'published'> & { showToc: boolean };
+type Meta = Omit<SiteArticle, 'id' | 'body' | 'published' | 'showToc' | keyof SeoValue> & SeoValue & {
+  showToc: boolean;
+  /** The hero image is the feature image (heroImage is then saved as the feature image). */
+  sameHero: boolean;
+};
 
 function initialMeta(article?: SiteArticle): Meta {
+  const sameHero = !article?.heroImage || article.heroImage === article.image;
   return {
     title: article?.title ?? '',
+    slug: article?.slug ?? '',
     category: article?.category ?? 'Insights',
     excerpt: article?.excerpt ?? '',
     date: article?.date ?? new Date().toISOString().slice(0, 10),
@@ -39,144 +47,114 @@ function initialMeta(article?: SiteArticle): Meta {
     authorRole: article?.authorRole ?? '',
     authorImage: article?.authorImage ?? '',
     image: article?.image ?? '',
-    heroImage: article?.heroImage && article.heroImage !== article.image ? article.heroImage : '',
+    heroImage: sameHero ? '' : article?.heroImage ?? '',
+    sameHero,
     pullQuote: article?.pullQuote ?? '',
     showToc: article?.showToc !== false,
+    seoTitle: article?.seoTitle ?? '',
+    seoDescription: article?.seoDescription ?? '',
+    seoImage: article?.seoImage ?? '',
+    noIndex: article?.noIndex === true,
   };
 }
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 type LinkState = { from: number; to: number; href: string; newTab: boolean; selectedText: string; editing: boolean };
-type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string } };
+type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string; showCaption: boolean } };
 interface Heading { level: 2 | 3; text: string; pos: number }
-
-// ── Toolbar ─────────────────────────────────────────────────────────────────
-
-function ToolButton({ label, active, disabled, onClick, children, dark }: {
-  label: string; active?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode; dark?: boolean;
-}) {
-  return (
-    <button type="button" title={label} aria-label={label} aria-pressed={active} disabled={disabled}
-      onMouseDown={e => e.preventDefault()} onClick={onClick}
-      className={cx('rounded-md p-2 transition-colors disabled:opacity-30',
-        dark
-          ? (active ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white')
-          : (active ? 'bg-[#1F1F1F] text-white' : 'text-[#4A4A4A] hover:bg-[#F3F1EA]'))}>
-      {children}
-    </button>
-  );
-}
-
-const Divider = ({ dark }: { dark?: boolean }) => <span className={cx('mx-1 h-6 w-px', dark ? 'bg-white/15' : 'bg-[#E5E2D9]')} aria-hidden="true" />;
-
-const BLOCKS = [
-  { id: 'p', label: 'Paragraph' },
-  { id: 'h2', label: 'Section heading' },
-  { id: 'h3', label: 'Subheading' },
-  { id: 'quote', label: 'Quote' },
-  { id: 'code', label: 'Code block' },
-] as const;
-
-function Toolbar({ editor, onLink, onImage, onShortcuts }: { editor: Editor; onLink: () => void; onImage: () => void; onShortcuts: () => void }) {
-  const state = useEditorState({
-    editor,
-    selector: ({ editor: e }) => ({
-      block: e.isActive('heading', { level: 2 }) ? 'h2' : e.isActive('heading', { level: 3 }) ? 'h3'
-        : e.isActive('blockquote') ? 'quote' : e.isActive('codeBlock') ? 'code' : 'p',
-      bold: e.isActive('bold'),
-      italic: e.isActive('italic'),
-      underline: e.isActive('underline'),
-      strike: e.isActive('strike'),
-      highlight: e.isActive('highlight'),
-      code: e.isActive('code'),
-      bullet: e.isActive('bulletList'),
-      ordered: e.isActive('orderedList'),
-      link: e.isActive('link'),
-      left: e.isActive({ textAlign: 'left' }),
-      center: e.isActive({ textAlign: 'center' }),
-      right: e.isActive({ textAlign: 'right' }),
-      canUndo: e.can().undo(),
-      canRedo: e.can().redo(),
-    }),
-  });
-  const chain = () => editor.chain().focus();
-  const s = 'h-4 w-4';
-
-  function setBlock(id: string) {
-    const c = chain();
-    if (id === 'h2') c.setHeading({ level: 2 }).run();
-    else if (id === 'h3') c.setHeading({ level: 3 }).run();
-    else if (id === 'quote') c.setParagraph().toggleBlockquote().run();
-    else if (id === 'code') c.setCodeBlock().run();
-    else c.clearNodes().setParagraph().run();
-  }
-
-  return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 rounded-t-xl border-b border-[#ECEAE3] bg-white/95 px-3 py-2 backdrop-blur" role="toolbar" aria-label="Formatting">
-      <label className="relative mr-1">
-        <span className="sr-only">Text style</span>
-        <select value={state.block} onChange={e => setBlock(e.target.value)}
-          className="appearance-none rounded-md border border-[#E5E2D9] bg-white py-1.5 pl-3 pr-8 text-[13px] font-medium text-[#1A1A1A] outline-none hover:bg-[#FBFAF6] focus:border-[#C89B3C]">
-          {BLOCKS.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B6B6B]" aria-hidden="true" />
-      </label>
-      <Divider />
-      <ToolButton label="Bold (Ctrl+B)" active={state.bold} onClick={() => chain().toggleBold().run()}><Bold className={s} /></ToolButton>
-      <ToolButton label="Italic (Ctrl+I)" active={state.italic} onClick={() => chain().toggleItalic().run()}><Italic className={s} /></ToolButton>
-      <ToolButton label="Underline (Ctrl+U)" active={state.underline} onClick={() => chain().toggleUnderline().run()}><Underline className={s} /></ToolButton>
-      <ToolButton label="Strikethrough" active={state.strike} onClick={() => chain().toggleStrike().run()}><Strikethrough className={s} /></ToolButton>
-      <ToolButton label="Highlight" active={state.highlight} onClick={() => chain().toggleHighlight().run()}><Highlighter className={s} /></ToolButton>
-      <ToolButton label="Inline code" active={state.code} onClick={() => chain().toggleCode().run()}><Code className={s} /></ToolButton>
-      <Divider />
-      <ToolButton label="Bulleted list" active={state.bullet} onClick={() => chain().toggleBulletList().run()}><List className={s} /></ToolButton>
-      <ToolButton label="Numbered list" active={state.ordered} onClick={() => chain().toggleOrderedList().run()}><ListOrdered className={s} /></ToolButton>
-      <ToolButton label="Divider line" onClick={() => chain().setHorizontalRule().run()}><Minus className={s} /></ToolButton>
-      <Divider />
-      <ToolButton label="Link (Ctrl+K)" active={state.link} onClick={onLink}><Link2 className={s} /></ToolButton>
-      <ToolButton label="Image" onClick={onImage}><ImagePlus className={s} /></ToolButton>
-      <Divider />
-      <ToolButton label="Align left" active={state.left} onClick={() => chain().setTextAlign('left').run()}><AlignLeft className={s} /></ToolButton>
-      <ToolButton label="Align center" active={state.center} onClick={() => chain().setTextAlign('center').run()}><AlignCenter className={s} /></ToolButton>
-      <ToolButton label="Align right" active={state.right} onClick={() => chain().setTextAlign('right').run()}><AlignRight className={s} /></ToolButton>
-      <ToolButton label="Clear formatting" onClick={() => chain().unsetAllMarks().clearNodes().run()}><RemoveFormatting className={s} /></ToolButton>
-      <Divider />
-      <ToolButton label="Undo (Ctrl+Z)" disabled={!state.canUndo} onClick={() => chain().undo().run()}><Undo2 className={s} /></ToolButton>
-      <ToolButton label="Redo (Ctrl+Shift+Z)" disabled={!state.canRedo} onClick={() => chain().redo().run()}><Redo2 className={s} /></ToolButton>
-      <span className="ml-auto" />
-      <ToolButton label="Keyboard shortcuts" onClick={onShortcuts}><Keyboard className={s} /></ToolButton>
-    </div>
-  );
-}
 
 const SHORTCUTS: Array<[string, string]> = [
   ['Ctrl + B / I / U', 'Bold, italic, underline'],
+  ['Ctrl + Shift + S', 'Strikethrough'],
+  ['Ctrl + . / Ctrl + ,', 'Superscript / subscript'],
+  ['Ctrl + Shift + . / ,', 'Bigger / smaller text'],
   ['Ctrl + K', 'Add or edit a link'],
+  ['Ctrl + Shift + L / E / R / J', 'Align left, center, right, justify'],
+  ['Ctrl + ] / Ctrl + [', 'Indent / outdent'],
+  ['Ctrl + Shift + 7 / 8 / 9', 'Numbered list, bullets, checklist'],
+  ['Ctrl + \\', 'Clear formatting'],
+  ['Ctrl + F / Ctrl + H', 'Find / find and replace'],
+  ['Ctrl + Shift + C', 'Word count'],
   ['Ctrl + S', 'Save'],
   ['Ctrl + Z / Ctrl + Shift + Z', 'Undo / redo'],
-  ['## then space', 'Section heading'],
-  ['### then space', 'Subheading'],
+  ['Tab / Shift + Tab', 'Next / previous table cell'],
+  ['## then space', 'Heading 1'],
+  ['### then space', 'Heading 2'],
   ['- or * then space', 'Bulleted list'],
   ['1. then space', 'Numbered list'],
+  ['[ ] then space', 'Checklist'],
   ['> then space', 'Quote'],
   ['``` then space', 'Code block'],
   ['---', 'Divider line'],
   ['Paste or drop an image', 'Uploads it where you are'],
 ];
 
+/** The table the cursor is in, for placing the table menu above it. */
+function tableElement(editor: Editor): HTMLElement | null {
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    if ($from.node(depth).type.name === 'table') {
+      const dom = editor.view.nodeDOM($from.before(depth));
+      return dom instanceof HTMLElement ? dom : null;
+    }
+  }
+  return null;
+}
+
+const CELL_COLORS = ['#FFF2CC', '#FCE5CD', '#F4CCCC', '#EAD1DC', '#D9D2E9', '#C9DAF8', '#D0E0E3', '#D9EAD3', '#FBEEC9', '#EFEFEF'];
+
+/** Rows, columns, merging, header row, cell colour and delete, for the table at the cursor. */
+function TableMenu({ editor }: { editor: Editor }) {
+  const [colors, setColors] = useState(false);
+  const run = (fn: (c: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => fn(editor.chain().focus()).run();
+  const i = 'h-4 w-4';
+  if (colors) {
+    return (
+      <div className="flex items-center gap-1 px-1">
+        {CELL_COLORS.map(color => (
+          <button key={color} type="button" title={color} aria-label={`Cell colour ${color}`} onMouseDown={e => e.preventDefault()}
+            onClick={() => { run(c => c.setCellAttribute('backgroundColor', color)); setColors(false); }}
+            className="h-5 w-5 rounded-full border border-white/30 hover:scale-110" style={{ backgroundColor: color }} />
+        ))}
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { run(c => c.setCellAttribute('backgroundColor', null)); setColors(false); }}
+          className="rounded-md px-2 py-1 text-[12px] font-medium text-white/90 hover:bg-white/10">None</button>
+      </div>
+    );
+  }
+  return (
+    <>
+      <ToolButton dark label="Insert row above" onClick={() => run(c => c.addRowBefore())}><BetweenHorizontalStart className={i} /></ToolButton>
+      <ToolButton dark label="Insert row below" onClick={() => run(c => c.addRowAfter())}><BetweenHorizontalEnd className={i} /></ToolButton>
+      <ToolButton dark label="Insert column left" onClick={() => run(c => c.addColumnBefore())}><BetweenVerticalStart className={i} /></ToolButton>
+      <ToolButton dark label="Insert column right" onClick={() => run(c => c.addColumnAfter())}><BetweenVerticalEnd className={i} /></ToolButton>
+      <Divider dark />
+      <ToolButton dark label="Merge cells (select cells first)" disabled={!editor.can().mergeCells()} onClick={() => run(c => c.mergeCells())}><TableCellsMerge className={i} /></ToolButton>
+      <ToolButton dark label="Unmerge cells" disabled={!editor.can().splitCell()} onClick={() => run(c => c.splitCell())}><TableCellsSplit className={i} /></ToolButton>
+      <ToolButton dark label="Header row on/off" onClick={() => run(c => c.toggleHeaderRow())}><Rows3 className={i} /></ToolButton>
+      <ToolButton dark label="Cell background colour" onClick={() => setColors(true)}><PaintBucket className={i} /></ToolButton>
+      <Divider dark />
+      <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => run(c => c.deleteRow())} className="rounded-md px-2 py-1.5 text-[12px] font-medium text-white/85 hover:bg-white/10">Delete row</button>
+      <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => run(c => c.deleteColumn())} className="rounded-md px-2 py-1.5 text-[12px] font-medium text-white/85 hover:bg-white/10">Delete column</button>
+      <ToolButton dark label="Delete table" onClick={() => run(c => c.deleteTable())}><Trash2 className={i} /></ToolButton>
+    </>
+  );
+}
+
 /** A collapsible group in the details panel. */
-function Section({ title, children, defaultOpen = true, extra }: { title: string; children: React.ReactNode; defaultOpen?: boolean; extra?: React.ReactNode }) {
+function Section({ title, children, defaultOpen = true, extra, id }: { title: string; children: React.ReactNode; defaultOpen?: boolean; extra?: React.ReactNode; id?: string }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <Card className="p-0">
-      <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-5 py-3.5 text-left">
-        <span className="flex items-center gap-2 text-[14px] font-semibold text-[#1A1A1A]">{title}{extra}</span>
-        <ChevronDown className={cx('h-4 w-4 text-[#6B6B6B] transition-transform', open ? 'rotate-180' : '')} aria-hidden="true" />
-      </button>
-      {open && <div className="space-y-4 border-t border-[#F0EEE8] px-5 pb-5 pt-4">{children}</div>}
-    </Card>
+    <div id={id}>
+      <Card className="p-0">
+        <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open}
+          className="flex w-full items-center justify-between gap-2 px-5 py-3.5 text-left">
+          <span className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-[#1A1A1A]">{title}{extra}</span>
+          <ChevronDown className={cx('h-4 w-4 shrink-0 text-[#6B6B6B] transition-transform', open ? 'rotate-180' : '')} aria-hidden="true" />
+        </button>
+        {open && <div className="space-y-4 border-t border-[#F0EEE8] px-5 pb-5 pt-4">{children}</div>}
+      </Card>
+    </div>
   );
 }
 
@@ -193,6 +171,13 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
   const [linkDialog, setLinkDialog] = useState<LinkState | null>(null);
   const [imageDialog, setImageDialog] = useState<ImageState | null>(null);
   const [shortcuts, setShortcuts] = useState(false);
+  const [find, setFind] = useState<{ replace: boolean } | null>(null);
+  const [specialChars, setSpecialChars] = useState(false);
+  const [wordCount, setWordCount] = useState(false);
+  const [categories, setCategories] = useState<ArticleCategoryInfo[] | null>(null);
+  const [managingCategories, setManagingCategories] = useState(false);
+  const [zoom, setZoom] = useState(100);
+  const [spellcheck, setSpellcheck] = useState(true);
   const [uploads, setUploads] = useState(0);
   const [lastImagePos, setLastImagePos] = useState<number | null>(null);
   const [words, setWords] = useState(0);
@@ -200,10 +185,16 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
   const [siteLinks, setSiteLinks] = useState<SiteLink[]>([]);
   const [panelHidden, setPanelHidden] = usePersistentToggle('article-panel-hidden');
   const [people, setPeople] = useState<AuthorOption[] | null>(null);
+  // Photos authors already have on other articles (lowercased name → photo).
+  const [authorPhotos, setAuthorPhotos] = useState<Map<string, string>>(() => new Map());
+  const authorPhotosRef = useRef(authorPhotos);
+  const confirm = useConfirm();
   const [me, setMe] = useState<AuthorOption | null>(null);
   const { user } = useAuth();
   const savingRef = useRef(false);
   const dropRef = useRef<(files: File[], pos: number) => void>(() => undefined);
+  // Read by the editor's attributes (zoom and spell check) on each update.
+  const viewRef = useRef({ zoom: 100, spellcheck: true });
 
   const readOutline = useCallback((e: Editor) => {
     setWords(e.getText().split(/\s+/).filter(Boolean).length);
@@ -218,20 +209,15 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3] },
-        // Links open in the same tab unless "Open in a new tab" is ticked.
-        link: { openOnClick: false, autolink: true, defaultProtocol: 'https', HTMLAttributes: { target: null, rel: null } },
-      }),
-      FigureImage,
-      Highlight,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Placeholder.configure({ placeholder: 'Start writing… Type ## and a space for a section heading, or paste an image.' }),
-    ],
+    extensions: articleExtensions('Start writing… Type ## and a space for a heading, or paste an image.'),
     content: article?.body ?? '',
     editorProps: {
-      attributes: { class: 'article-content article-editor ProseMirror px-8 py-7', 'aria-label': 'Article body' },
+      attributes: () => ({
+        class: 'article-content article-editor ProseMirror px-6 py-7 md:px-12',
+        'aria-label': 'Article body',
+        spellcheck: String(viewRef.current.spellcheck),
+        style: viewRef.current.zoom === 100 ? '' : `zoom: ${viewRef.current.zoom / 100}`,
+      }),
       handleDrop: (view, event, _slice, moved) => {
         const files = [...(event.dataTransfer?.files ?? [])].filter(f => IMAGE_TYPES.includes(f.type));
         if (moved || files.length === 0) return false;
@@ -262,13 +248,29 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
         setMe(data.me);
         if (article) return;
         const name = data.me.name || user?.displayName || '';
-        const photo = user?.photoURL && /^https?:\/\//.test(user.photoURL) ? user.photoURL : await photoOf(data.me.uid);
+        const photo = (user?.photoURL && /^https?:\/\//.test(user.photoURL) ? user.photoURL : await photoOf(data.me.uid))
+          || authorPhotosRef.current.get(name.trim().toLowerCase()) || '';
         if (cancelled || !name) return;
         setMeta(m => (m.author ? m : { ...m, author: name, authorRole: m.authorRole || data.me.role, authorImage: m.authorImage || photo }));
       })
       .catch(() => { if (!cancelled) setPeople([]); });
     return () => { cancelled = true; };
   }, [article, user?.displayName, user?.photoURL]);
+
+  // Categories to choose from.
+  useEffect(() => {
+    let cancelled = false;
+    cpanelFetch<ArticleCategoryInfo[]>('/api/cpanel/article-categories')
+      .then(list => { if (!cancelled) setCategories(list); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  // Zoom and spell check live in the editor's attributes; an empty update re-reads them.
+  useEffect(() => {
+    viewRef.current = { zoom, spellcheck };
+    if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta('addToHistory', false));
+  }, [editor, zoom, spellcheck]);
 
   // Pages and articles to link to.
   useEffect(() => {
@@ -279,6 +281,15 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
         setSiteLinks(list.filter(a => a.id !== article?.id).map(a => ({
           label: a.title || 'Untitled article', href: `/insights/${a.slug}`, detail: a.published ? 'Article' : 'Draft article',
         })));
+        const photos = new Map<string, string>();
+        for (const a of list) if (a.author && a.authorImage) photos.set(a.author.trim().toLowerCase(), a.authorImage);
+        setAuthorPhotos(photos);
+        authorPhotosRef.current = photos;
+        // An author without a photo here gets the one they have on another article.
+        setMeta(m => {
+          const photo = m.author && !m.authorImage ? photos.get(m.author.trim().toLowerCase()) : undefined;
+          return photo ? { ...m, authorImage: photo } : m;
+        });
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
@@ -295,12 +306,13 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
     setSaving(publish ? 'publish' : 'draft');
     setError('');
     try {
-      const json = { ...meta, heroImage: meta.heroImage || meta.image, body: editor.getHTML(), published: publish };
+      const { sameHero, ...fields } = meta;
+      const json = { ...fields, heroImage: sameHero ? meta.image : meta.heroImage || meta.image, body: editor.getHTML(), published: publish };
       const saved = article
         ? await cpanelFetch<SiteArticle>(`/api/cpanel/articles/${article.id}`, { method: 'PATCH', json })
         : await cpanelFetch<SiteArticle>('/api/cpanel/articles', { method: 'POST', json });
       setPublished(saved.published);
-      setMeta(m => ({ ...m, readTime: saved.readTime }));
+      setMeta(m => ({ ...m, readTime: saved.readTime, slug: saved.slug }));
       setDirty(false);
       setSavedAt(new Date());
       if (!article) router.replace(`/cpanel/insights/${saved.id}`);
@@ -312,6 +324,28 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
       setSaving(null);
     }
   }, [article, editor, meta, router]);
+
+  /** Publishing without an author photo asks first, offering to add one. */
+  async function publish() {
+    if (meta.author.trim() && !meta.authorImage) {
+      const anyway = await confirm({
+        title: 'Add the author’s photo?',
+        message: `There’s no photo for ${meta.author.trim()}. It shows beside their name on the article. You can add one now or publish without it.`,
+        confirmLabel: published ? 'Update without a photo' : 'Publish without a photo',
+        cancelLabel: 'Add a photo',
+      });
+      if (!anyway) {
+        setPanelHidden(false);
+        setTimeout(() => {
+          const section = document.getElementById('article-author');
+          section?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          section?.querySelector<HTMLInputElement>('[data-author-photo] input')?.focus({ preventScroll: true });
+        }, 50);
+        return;
+      }
+    }
+    void save(true);
+  }
 
   // ── Links ──
 
@@ -352,12 +386,24 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
     setLinkDialog(null);
   }
 
-  // Ctrl/Cmd+S saves (keeping the current published state); Ctrl/Cmd+K adds a link.
+  // Shortcuts beyond the editor's own: Ctrl/Cmd+S saves (keeping the published state) anywhere;
+  // in the article, Ctrl+K links, Ctrl+F / Ctrl+H find, Ctrl+Shift+. / , resize text, Ctrl+\ clears
+  // formatting, Ctrl+Shift+C counts words and Ctrl+/ lists the shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key.toLowerCase() === 's') { e.preventDefault(); void save(published); }
-      if (e.key.toLowerCase() === 'k' && editor?.isFocused) { e.preventDefault(); openLink(); }
+      const key = e.key.toLowerCase();
+      if (key === 's') { e.preventDefault(); void save(published); return; }
+      if (!editor?.isFocused) return;
+      const run = (action: () => void) => { e.preventDefault(); action(); };
+      if (key === 'k') run(openLink);
+      else if (key === 'f' && !e.shiftKey) run(() => setFind({ replace: false }));
+      else if (key === 'h') run(() => setFind({ replace: true }));
+      else if (e.shiftKey && (key === '>' || key === '.')) run(() => applyFontSize(editor, currentFontSize(editor) + 1));
+      else if (e.shiftKey && (key === '<' || key === ',')) run(() => applyFontSize(editor, currentFontSize(editor) - 1));
+      else if (key === '\\') run(() => clearFormatting(editor));
+      else if (e.shiftKey && key === 'c') run(() => setWordCount(true));
+      else if (key === '/') run(() => setShortcuts(true));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -377,19 +423,20 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
     setImageDialog({ mode: 'insert', pos: editor.state.selection.from });
   }
 
-  function selectedImage(): { pos: number; alt: string; caption: string } | null {
+  function selectedImage(): { pos: number; alt: string; caption: string; showCaption: boolean } | null {
     if (!editor || !editor.isActive('image')) return null;
     const attrs = editor.getAttributes('image');
-    return { pos: editor.state.selection.from, alt: String(attrs.alt ?? ''), caption: String(attrs.caption ?? '') };
+    return { pos: editor.state.selection.from, alt: String(attrs.alt ?? ''), caption: String(attrs.caption ?? ''), showCaption: attrs.showCaption !== false };
   }
 
   function placeImage(image: ArticleImage) {
     if (!editor || !imageDialog) return;
     const { mode, pos } = imageDialog;
     if (mode === 'insert') {
-      editor.chain().focus().setTextSelection(pos).insertContent({ type: 'image', attrs: { src: image.src, alt: image.alt, caption: image.caption } }).scrollIntoView().run();
+      editor.chain().focus().setTextSelection(pos).insertContent({ type: 'image', attrs: { src: image.src, alt: image.alt, caption: image.caption, showCaption: image.showCaption } }).scrollIntoView().run();
     } else {
-      const attrs = mode === 'details' ? { alt: image.alt, caption: image.caption } : { src: image.src, alt: image.alt, caption: image.caption };
+      const details = { alt: image.alt, caption: image.caption, showCaption: image.showCaption };
+      const attrs = mode === 'details' ? details : { src: image.src, ...details };
       editor.chain().focus().setNodeSelection(pos).updateAttributes('image', attrs).scrollIntoView().run();
     }
     setImageDialog(null);
@@ -426,9 +473,10 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
   const status = dirty ? 'Unsaved changes' : savedAt ? `Saved ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : published ? 'Published' : article ? 'Draft' : 'New article';
   const sections = headings.filter(h => h.level === 2);
   const bubble = 'flex items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
+  const categoryNames = categories?.map(c => c.name) ?? [meta.category];
 
   return (
-    <div className={cx('mx-auto', panelHidden ? 'max-w-[900px]' : 'max-w-[1240px]')}>
+    <div className="w-full">
       {/* Top bar */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Link href="/cpanel/insights" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#6B6B6B] hover:text-[#1A1A1A]">
@@ -452,14 +500,14 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
           <Button variant="outline" busy={saving === 'draft'} disabled={!!saving} onClick={() => save(false)}>
             {published ? 'Unpublish' : 'Save draft'}
           </Button>
-          <Button variant="gold" busy={saving === 'publish'} disabled={!!saving} onClick={() => save(true)}>
+          <Button variant="gold" busy={saving === 'publish'} disabled={!!saving} onClick={() => void publish()}>
             {published ? 'Update' : 'Publish'}
           </Button>
         </div>
       </div>
       <ErrorNote message={error} />
 
-      <div className={cx('mt-2 grid grid-cols-1 gap-6', !panelHidden && 'lg:grid-cols-[minmax(0,1fr)_320px]')}>
+      <div className={cx('mt-2 grid grid-cols-1 gap-6', !panelHidden && 'lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]')}>
         {/* Writing column */}
         <div className="min-w-0 space-y-4">
           <textarea value={meta.title} onChange={e => set('title')(e.target.value)} rows={1} placeholder="Article title"
@@ -471,18 +519,28 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
           <Card className="overflow-visible">
             {editor && (
               <>
-                <Toolbar editor={editor} onLink={openLink} onImage={openImage} onShortcuts={() => setShortcuts(true)} />
+                <Toolbar editor={editor} onLink={openLink} onImage={openImage} onShortcuts={() => setShortcuts(true)}
+                  onFind={replace => setFind({ replace })} onSpecialChars={() => setSpecialChars(true)} onWordCount={() => setWordCount(true)}
+                  zoom={zoom} onZoom={setZoom} spellcheck={spellcheck} onSpellcheck={setSpellcheck}
+                  panelHidden={panelHidden} onTogglePanel={() => setPanelHidden(v => !v)} />
 
                 {/* On selected text */}
                 <BubbleMenu editor={editor} pluginKey="textMenu" className={bubble}
-                  shouldShow={({ editor: e, from, to }) => from !== to && !e.isActive('image') && !e.isActive('codeBlock')}>
+                  shouldShow={({ editor: e, from, to, state }) => from !== to && !(state.selection instanceof CellSelection) && !e.isActive('image') && !e.isActive('codeBlock')}>
                   <ToolButton dark label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><Bold className="h-4 w-4" /></ToolButton>
                   <ToolButton dark label="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><Italic className="h-4 w-4" /></ToolButton>
                   <ToolButton dark label="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}><Underline className="h-4 w-4" /></ToolButton>
-                  <ToolButton dark label="Highlight" active={editor.isActive('highlight')} onClick={() => editor.chain().focus().toggleHighlight().run()}><Highlighter className="h-4 w-4" /></ToolButton>
+                  <ToolButton dark label="Highlight" active={editor.isActive('highlight')} onClick={() => editor.chain().focus().toggleHighlight({ color: '#FBEEC9' }).run()}><Highlighter className="h-4 w-4" /></ToolButton>
                   <Divider dark />
                   <ToolButton dark label="Link" active={editor.isActive('link')} onClick={openLink}><Link2 className="h-4 w-4" /></ToolButton>
                   <ToolButton dark label="Clear formatting" onClick={() => editor.chain().focus().unsetAllMarks().run()}><RemoveFormatting className="h-4 w-4" /></ToolButton>
+                </BubbleMenu>
+
+                {/* In a table: shown above it */}
+                <BubbleMenu editor={editor} pluginKey="tableMenu" className={bubble} options={{ placement: 'top-start' }}
+                  getReferencedVirtualElement={() => tableElement(editor)}
+                  shouldShow={({ editor: e, from, to, state }) => e.isActive('table') && (from === to || state.selection instanceof CellSelection)}>
+                  <TableMenu editor={editor} />
                 </BubbleMenu>
 
                 {/* In a link */}
@@ -501,18 +559,24 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
                 <BubbleMenu editor={editor} pluginKey="imageMenu" className={bubble}
                   shouldShow={({ editor: e }) => e.isActive('image')}>
                   <button type="button" onMouseDown={e => e.preventDefault()} className="rounded-md px-2.5 py-1.5 text-[13px] font-medium text-white hover:bg-white/10"
-                    onClick={() => { const img = selectedImage(); if (img) setImageDialog({ mode: 'details', pos: img.pos, initial: { alt: img.alt, caption: img.caption } }); }}>
+                    onClick={() => { const img = selectedImage(); if (img) setImageDialog({ mode: 'details', pos: img.pos, initial: { alt: img.alt, caption: img.caption, showCaption: img.showCaption } }); }}>
                     Alt text & description
                   </button>
-                  <ToolButton dark label="Replace image" onClick={() => { const img = selectedImage(); if (img) setImageDialog({ mode: 'replace', pos: img.pos, initial: { alt: img.alt, caption: img.caption } }); }}><Replace className="h-4 w-4" /></ToolButton>
+                  {String(editor.getAttributes('image').caption ?? '').trim() && (
+                    <button type="button" onMouseDown={e => e.preventDefault()} className="rounded-md px-2.5 py-1.5 text-[13px] font-medium text-white/85 hover:bg-white/10"
+                      onClick={() => editor.chain().focus().updateAttributes('image', { showCaption: editor.getAttributes('image').showCaption === false }).run()}>
+                      {editor.getAttributes('image').showCaption === false ? 'Show description' : 'Hide description'}
+                    </button>
+                  )}
+                  <ToolButton dark label="Replace image" onClick={() => { const img = selectedImage(); if (img) setImageDialog({ mode: 'replace', pos: img.pos, initial: { alt: img.alt, caption: img.caption, showCaption: img.showCaption } }); }}><Replace className="h-4 w-4" /></ToolButton>
                   <ToolButton dark label="Remove image" onClick={() => editor.chain().focus().deleteSelection().run()}><Trash2 className="h-4 w-4" /></ToolButton>
                 </BubbleMenu>
               </>
             )}
             <EditorContent editor={editor} />
             <div className="flex justify-between border-t border-[#F0EEE8] px-5 py-2.5 text-[12px] text-[#9A9A9A]">
-              <span>{words} words · about {Math.max(1, Math.round(words / 220))} min read</span>
-              <span>Ctrl+S to save · Ctrl+K to link</span>
+              <button type="button" onClick={() => setWordCount(true)} className="hover:text-[#1A1A1A] hover:underline">{words} words · about {Math.max(1, Math.round(words / 220))} min read</button>
+              <span>Ctrl+S to save · Ctrl+/ for shortcuts</span>
             </div>
           </Card>
         </div>
@@ -522,7 +586,7 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
           <aside className="space-y-4 lg:sticky lg:top-0 lg:max-h-[calc(100vh-160px)] lg:self-start lg:overflow-y-auto lg:pb-4">
             <Section title="Contents" extra={<span className="rounded-full bg-[#F3F1EA] px-2 text-[12px] font-medium text-[#6B6B6B]">{sections.length}</span>}>
               {headings.length === 0 ? (
-                <p className="text-[13px] text-[#6B6B6B]">Add section headings (Text style → Section heading, or type ## and a space) to build the table of contents.</p>
+                <p className="text-[13px] text-[#6B6B6B]">Add headings (Styles → Heading 1 or 2, or type ## and a space) to build the table of contents.</p>
               ) : (
                 <nav aria-label="Article outline">
                   <ol className="space-y-1">
@@ -545,17 +609,55 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
               </label>
             </Section>
             <Section title="Details">
-              <Select label="Category" value={meta.category} onChange={v => set('category')(v as Meta['category'])} options={ARTICLE_CATEGORIES} />
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label htmlFor="article-category" className="text-[13px] font-medium text-[#3A3A3A]">Category</label>
+                  <button type="button" onClick={() => setManagingCategories(true)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#8A6A1F] hover:underline">
+                    <Settings2 className="h-3.5 w-3.5" aria-hidden="true" /> Add or edit
+                  </button>
+                </div>
+                <div className="relative">
+                  <select id="article-category" value={meta.category} onChange={e => set('category')(e.target.value)}
+                    className="w-full cursor-pointer appearance-none rounded-lg border border-[#E5E2D9] bg-white py-2 pl-3 pr-9 text-[14px] text-[#1A1A1A] outline-none focus:border-[#C89B3C]">
+                    {!categoryNames.includes(meta.category) && <option value={meta.category}>{meta.category}</option>}
+                    {categoryNames.map(name => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B6B6B]" aria-hidden="true" />
+                </div>
+              </div>
               <TextInput label="Publish date" type="date" value={meta.date} onChange={set('date')} />
               <TextInput label="Read time" hint="blank = automatic" value={meta.readTime} onChange={set('readTime')} placeholder="7 min read" />
             </Section>
             <Section title="Images">
-              <ImageField label="Card image" value={meta.image} onChange={set('image')} />
-              <ImageField label="Hero image" value={meta.heroImage} onChange={set('heroImage')} />
-              <p className="text-[12px] text-[#9A9A9A]">The hero image falls back to the card image.</p>
+              <div>
+                <ImageField label="Feature image" value={meta.image} onChange={set('image')} />
+                <p className="mt-1 text-[12px] text-[#6B6B6B]">The article’s picture on the Insights page, in related articles and when it’s shared.</p>
+              </div>
+              <label className="flex items-start gap-2 text-[13px] text-[#4A4A4A]">
+                <input type="checkbox" checked={meta.sameHero} onChange={e => set('sameHero')(e.target.checked)} className="mt-0.5 accent-[#C89B3C]" />
+                <span>Use the feature image as the hero image<span className="block text-[12px] text-[#9A9A9A]">The hero is the large image at the top of the article.</span></span>
+              </label>
+              {!meta.sameHero && (
+                <div>
+                  <ImageField label="Hero image" value={meta.heroImage} onChange={set('heroImage')} />
+                  {!meta.heroImage && <p className="mt-1 text-[12px] text-[#6B6B6B]">Until you add one, the feature image is used.</p>}
+                </div>
+              )}
             </Section>
-            <Section title="Author" extra={meta.author ? <span className="max-w-[140px] truncate text-[12px] font-normal text-[#6B6B6B]">{meta.author}</span> : undefined}>
-              <AuthorPicker value={{ author: meta.author, authorRole: meta.authorRole, authorImage: meta.authorImage }} people={people} me={me}
+            <Section title="SEO" defaultOpen={false} extra={meta.noIndex ? <span className="rounded-full bg-amber-50 px-2 text-[11px] font-semibold text-amber-700">Hidden</span> : undefined}>
+              <SeoSettings
+                value={{ seoTitle: meta.seoTitle, seoDescription: meta.seoDescription, seoImage: meta.seoImage, noIndex: meta.noIndex, slug: meta.slug }}
+                fallback={{ title: meta.title, excerpt: meta.excerpt, image: meta.image }}
+                savedSlug={article?.slug} published={published}
+                onChange={next => { setMeta(m => ({ ...m, ...next })); setDirty(true); }} />
+            </Section>
+            <Section title="Author" id="article-author" extra={meta.author ? (
+              <>
+                <span className="max-w-[140px] truncate text-[12px] font-normal text-[#6B6B6B]">{meta.author}</span>
+                {!meta.authorImage && <span className="rounded-full bg-amber-50 px-2 text-[11px] font-semibold text-amber-700">Photo needed</span>}
+              </>
+            ) : undefined}>
+              <AuthorPicker value={{ author: meta.author, authorRole: meta.authorRole, authorImage: meta.authorImage }} people={people} me={me} knownPhotos={authorPhotos}
                 onChange={next => { setMeta(m => ({ ...m, ...next })); setDirty(true); }} />
             </Section>
             <Section title="Pull quote" defaultOpen={false}>
@@ -578,7 +680,7 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
                 const node = editor.state.doc.nodeAt(lastImagePos);
                 if (node?.type.name === 'image') {
                   editor.chain().setNodeSelection(lastImagePos).scrollIntoView().run();
-                  setImageDialog({ mode: 'details', pos: lastImagePos, initial: { alt: String(node.attrs.alt ?? ''), caption: String(node.attrs.caption ?? '') } });
+                  setImageDialog({ mode: 'details', pos: lastImagePos, initial: { alt: String(node.attrs.alt ?? ''), caption: String(node.attrs.caption ?? ''), showCaption: node.attrs.showCaption !== false } });
                 }
                 setLastImagePos(null);
               }}>Add alt text & description</button>
@@ -596,8 +698,15 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
         <ImageDialog mode={imageDialog.mode} initial={imageDialog.initial} onInsert={placeImage}
           onClose={() => { setImageDialog(null); editor?.commands.focus(); }} />
       )}
+      {find && editor && <FindReplace editor={editor} showReplace={find.replace} onClose={() => { setFind(null); editor.commands.focus(); }} />}
+      {specialChars && editor && <SpecialCharsDialog editor={editor} onClose={() => { setSpecialChars(false); editor.commands.focus(); }} />}
+      {wordCount && editor && <WordCountDialog editor={editor} onClose={() => { setWordCount(false); editor.commands.focus(); }} />}
+      {managingCategories && (
+        <CategoryManager categories={categories ?? []} onChange={setCategories} onClose={() => setManagingCategories(false)}
+          onPick={name => set('category')(name)} />
+      )}
       {shortcuts && (
-        <AeModal title="Keyboard shortcuts" size="sm" onClose={() => setShortcuts(false)}>
+        <AeModal title="Keyboard shortcuts" onClose={() => setShortcuts(false)}>
           <dl className="divide-y divide-[#F0EEE8] text-[14px]">
             {SHORTCUTS.map(([keys, what]) => (
               <div key={keys} className="flex items-center justify-between gap-4 py-2">

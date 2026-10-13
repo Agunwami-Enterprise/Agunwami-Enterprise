@@ -97,8 +97,26 @@ export interface SiteTeamMember {
   linkedin: string;
 }
 
-export const ARTICLE_CATEGORIES = ['Infrastructure', 'Design', 'Technology', 'Partnerships', 'Insights'] as const;
-export type SiteArticleCategory = (typeof ARTICLE_CATEGORIES)[number];
+/** The categories a site starts with; writers add, rename and remove them in the C-panel (settings.articleCategories). */
+export const ARTICLE_CATEGORIES: readonly string[] = ['Infrastructure', 'Design', 'Technology', 'Partnerships', 'Insights'];
+export type SiteArticleCategory = string;
+export const MAX_CATEGORY_LENGTH = 40;
+
+export const SEO_TITLE_MAX = 70;
+export const SEO_DESCRIPTION_MAX = 160;
+
+/** A category with the number of articles in it (C-panel). */
+export interface ArticleCategoryInfo { name: string; articles: number }
+
+/** Fonts the article editor offers; the site's HTML cleaner allows exactly these. */
+export const ARTICLE_FONTS: Array<{ label: string; css: string }> = [
+  { label: 'Georgia', css: 'Georgia, serif' },
+  { label: 'Times New Roman', css: '"Times New Roman", Times, serif' },
+  { label: 'Arial', css: 'Arial, Helvetica, sans-serif' },
+  { label: 'Verdana', css: 'Verdana, Geneva, sans-serif' },
+  { label: 'Trebuchet MS', css: '"Trebuchet MS", sans-serif' },
+  { label: 'Courier New', css: '"Courier New", Courier, monospace' },
+];
 
 /** An Expert Insights article (/insights and /insights/[slug]). */
 export interface SiteArticle {
@@ -113,15 +131,23 @@ export interface SiteArticle {
   author: string;
   authorRole: string;
   authorImage: string;
-  /** Card image on the list page. */
+  /** Feature image: the article's card on the list page and in shares. */
   image: string;
-  /** Hero image on the article page; falls back to `image`. */
+  /** Hero image at the top of the article; the same as `image` unless a different one is chosen. */
   heroImage: string;
   /** Article content as HTML from the C-panel editor, sanitized on save. */
   body: string;
   pullQuote: string;
   /** Show the table of contents (the article's section headings) beside it; on unless turned off. */
   showToc?: boolean;
+  /** SEO: the title in search results and the browser tab; the article title when blank. */
+  seoTitle?: string;
+  /** SEO: the description in search results; the excerpt when blank. */
+  seoDescription?: string;
+  /** SEO: the image shown when the article is shared; the feature image when blank. */
+  seoImage?: string;
+  /** SEO: ask search engines not to list the article. */
+  noIndex?: boolean;
   /** Drafts are only visible in the C-panel. */
   published: boolean;
 }
@@ -194,6 +220,8 @@ export interface SiteSocialLink {
 
 /** Company details and footer content (single record). */
 export interface SiteSettings {
+  /** Article categories, in the order the Insights page shows them. */
+  articleCategories: string[];
   companyName: string;
   tagline: string;
   location: string;

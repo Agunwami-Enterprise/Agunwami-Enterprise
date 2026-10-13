@@ -9,6 +9,7 @@
 import { partnershipCategories, projects } from '@/lib/dummy';
 import { defaultTeam } from '@/lib/data/teamData';
 import { ARTICLES } from '@/lib/data/insightsData';
+import { ARTICLE_CATEGORIES } from './site-content.types';
 import type {
   SiteArticle,
   SiteIconName,
@@ -141,6 +142,7 @@ export function defaultPartnershipCategories(): SitePartnershipCategory[] {
 
 export function defaultSettings(): SiteSettings {
   return {
+    articleCategories: [...ARTICLE_CATEGORIES],
     companyName: 'Agunwami Enterprise',
     tagline: 'Platform Infrastructure Partner',
     location: 'Atlanta, Georgia, US',

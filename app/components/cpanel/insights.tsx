@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ExternalLink, Pencil, Plus, Tags, Trash2 } from 'lucide-react';
 import { Card, ConfirmDelete, EmptyState, IconButton, PageHeader, cpanelFetch, cx, useMutation } from './ui';
-import type { SiteArticle } from '@/backend/modules/site-content/site-content.types';
+import type { ArticleCategoryInfo, SiteArticle } from '@/backend/modules/site-content/site-content.types';
+import CategoryManager from './article/CategoryManager';
 
 const CATEGORY_STYLES: Record<string, string> = {
   Infrastructure: 'bg-blue-50 text-blue-600',
@@ -13,6 +15,7 @@ const CATEGORY_STYLES: Record<string, string> = {
   Partnerships: 'bg-green-50 text-green-600',
   Insights: 'bg-amber-50 text-amber-700',
 };
+const categoryStyle = (name: string) => CATEGORY_STYLES[name] ?? 'bg-[#F3F1EA] text-[#4A4A4A]';
 
 export function formatArticleDate(iso: string): string {
   const date = new Date(`${iso}T12:00:00Z`);
@@ -20,20 +23,33 @@ export function formatArticleDate(iso: string): string {
 }
 
 export function InsightsManager({ articles }: { articles: SiteArticle[] }) {
+  const router = useRouter();
   const [deleting, setDeleting] = useState<SiteArticle | null>(null);
+  const [categories, setCategories] = useState<ArticleCategoryInfo[] | null>(null);
+  const [categoryError, setCategoryError] = useState('');
   const del = useMutation();
   const published = articles.filter(a => a.published).length;
   const drafts = articles.length - published;
 
   return (
-    <div className="mx-auto max-w-[1075px]">
+    <div className="w-full">
       <PageHeader title="Expert Insights"
         subtitle={`${published} article${published === 1 ? '' : 's'} published${drafts ? ` · ${drafts} draft${drafts === 1 ? '' : 's'}` : ''}`}
         action={(
-          <Link href="/cpanel/insights/new" className="inline-flex items-center gap-2 rounded-lg bg-[#1F1F1F] px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-black">
-            <Plus className="h-4 w-4" aria-hidden="true" /> New Article
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => { setCategoryError(''); cpanelFetch<ArticleCategoryInfo[]>('/api/cpanel/article-categories').then(setCategories).catch(err => setCategoryError(err instanceof Error ? err.message : 'Could not load the categories.')); }}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#E5E2D9] bg-white px-4 py-2.5 text-[14px] font-semibold text-[#1A1A1A] hover:bg-[#F3F1EA]">
+              <Tags className="h-4 w-4" aria-hidden="true" /> Categories
+            </button>
+            <Link href="/cpanel/insights/new" className="inline-flex items-center gap-2 rounded-lg bg-[#1F1F1F] px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-black">
+              <Plus className="h-4 w-4" aria-hidden="true" /> New Article
+            </Link>
+          </div>
         )} />
+      {categoryError && <p role="alert" className="mb-4 text-[13px] text-red-600">{categoryError}</p>}
+      {categories && (
+        <CategoryManager categories={categories} onChange={setCategories} onClose={() => { setCategories(null); router.refresh(); }} />
+      )}
       <Card className="overflow-hidden">
         {articles.length === 0 ? <EmptyState>No articles yet. Write your first one.</EmptyState> : (
           <div className="overflow-x-auto">
@@ -60,7 +76,7 @@ export function InsightsManager({ articles }: { articles: SiteArticle[] }) {
                       </Link>
                     </td>
                     <td className="px-4 py-5">
-                      <span className={cx('rounded-full px-2 py-0.5 text-[12px] font-semibold', CATEGORY_STYLES[article.category])}>{article.category}</span>
+                      <span className={cx('rounded-full px-2 py-0.5 text-[12px] font-semibold', categoryStyle(article.category))}>{article.category}</span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-5 text-[13px] text-[#8A8A8A]">{formatArticleDate(article.date)}</td>
                     <td className="px-4 py-5">

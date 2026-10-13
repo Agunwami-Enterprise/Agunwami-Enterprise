@@ -29,26 +29,32 @@ export async function generateMetadata({
   if (!article) return {};
   const canonicalUrl = `/insights/${slug}`;
   const fullUrl = `https://agunwamienterprise.com${canonicalUrl}`;
+  // SEO settings from the C-panel, falling back to the article's own title, excerpt and feature image.
+  const title = article.seoTitle || article.title;
+  const description = article.seoDescription || article.excerpt;
+  const image = article.seoImage || article.image;
   return {
-    title: `${article.title} | Expert Insights — Agunwami Enterprise`,
-    description: article.excerpt,
+    // A custom meta title is used as written; otherwise the site name is added.
+    title: article.seoTitle ? { absolute: article.seoTitle } : `${article.title} | Expert Insights — Agunwami Enterprise`,
+    description,
     alternates: {
       canonical: canonicalUrl,
     },
+    robots: article.noIndex ? { index: false, follow: true } : undefined,
     openGraph: {
-      title: article.title,
-      description: article.excerpt,
+      title,
+      description,
       url: fullUrl,
       type: "article",
       publishedTime: article.date,
       authors: [article.author],
-      images: article.image ? [{ url: article.image }] : undefined,
+      images: image ? [{ url: image }] : undefined,
     },
     twitter: {
       card: "summary_large_image",
-      title: article.title,
-      description: article.excerpt,
-      images: article.image ? [article.image] : undefined,
+      title,
+      description,
+      images: image ? [image] : undefined,
     },
   };
 }

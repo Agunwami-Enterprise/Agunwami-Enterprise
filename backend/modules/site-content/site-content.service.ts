@@ -26,13 +26,16 @@ import {
 } from '../projects/projects.service';
 import {
   APPLICATION_STATUSES,
-  ARTICLE_CATEGORIES,
+  ARTICLE_FONTS,
+  MAX_CATEGORY_LENGTH,
+  SEO_DESCRIPTION_MAX,
+  SEO_TITLE_MAX,
   PROJECT_KINDS,
   SITE_ICON_NAMES,
   type ApplicationStatus,
+  type ArticleCategoryInfo,
   type PartnershipApplication,
   type SiteArticle,
-  type SiteArticleCategory,
   type SiteIconName,
   type SitePartnershipCategory,
   type ProjectKind,
@@ -104,20 +107,57 @@ function uniqueSlug(base: string, taken: Iterable<string>, fallback: string): st
   return slug;
 }
 
+const COLOR = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+)\s*)?\))$/i;
+const FONT_FAMILIES = new Set(ARTICLE_FONTS.map(f => f.css.replace(/\s+/g, ' ').trim()));
+
+// What the C-panel article editor produces (see app/components/cpanel/article/extensions.ts).
 const ARTICLE_HTML: sanitizeHtml.IOptions = {
   allowedTags: [
-    'p', 'br', 'h2', 'h3', 'h4', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'code', 'pre',
+    'p', 'br', 'h2', 'h3', 'h4', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'code', 'pre', 'span', 'sub', 'sup',
     'blockquote', 'ul', 'ol', 'li', 'a', 'img', 'hr', 'figure', 'figcaption',
+    'table', 'colgroup', 'col', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+    // Checklists: <ul data-type="taskList"><li data-checked><label><input type="checkbox"></label><div>…</div></li>
+    'label', 'input', 'div',
   ],
   allowedAttributes: {
     a: ['href', 'target', 'rel'],
-    img: ['src', 'alt', 'title'],
+    // data-description: the image's description when the writer chose not to show it.
+    img: ['src', 'alt', 'title', 'data-description'],
     p: ['style'], h2: ['style'], h3: ['style'], h4: ['style'],
+    span: ['style'], mark: ['style', 'data-color'],
+    ul: ['data-type'], li: ['data-type', 'data-checked'],
+    input: ['type', 'checked', 'disabled'],
+    th: ['colspan', 'rowspan', 'style'], td: ['colspan', 'rowspan', 'style'],
+    table: ['style'], col: ['style'],
   },
-  allowedStyles: { '*': { 'text-align': [/^(left|right|center|justify)$/] } },
+  allowedStyles: {
+    '*': {
+      'text-align': [/^(left|right|center|justify)$/],
+      color: [COLOR],
+      'background-color': [COLOR],
+      'font-size': [/^([89]|[1-6]\d|7[0-2])(\.\d)?px$/],
+      'font-family': [/^[\w\s,"'-]{1,80}$/],
+      'line-height': [/^(1|1\.15|1\.5|1\.85|2|2\.5)$/],
+      'margin-left': [/^(2|4|6|8|10|12)em$/],
+      'min-width': [/^\d{1,4}px$/],
+      width: [/^\d{1,4}px$/],
+    },
+  },
   allowedSchemes: ['http', 'https', 'mailto'],
+  // Only checkboxes (checklists) among inputs, always read-only on the site.
+  exclusiveFilter: frame => frame.tag === 'input' && frame.attribs.type !== 'checkbox',
   transformTags: {
     a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer' }),
+    input: (tagName, attribs) => ({ tagName, attribs: { ...attribs, disabled: '' } }),
+    span: (tagName, attribs) => {
+      // Fonts outside the editor's list are dropped.
+      const style = (attribs.style ?? '').split(';').filter(rule => {
+        const [prop, ...rest] = rule.split(':');
+        if (prop?.trim().toLowerCase() !== 'font-family') return true;
+        return FONT_FAMILIES.has(rest.join(':').replace(/\s+/g, ' ').trim());
+      }).join(';');
+      return { tagName, attribs: { ...attribs, style } };
+    },
   },
 };
 
@@ -455,8 +495,9 @@ function estimateReadTime(html: string): string {
 
 export async function saveArticle(input: Input, id?: string): Promise<SiteArticle> {
   const title = text(input, 'title', { required: true, max: 160, label: 'Title' });
-  const category = input.category as SiteArticleCategory;
-  if (!ARTICLE_CATEGORIES.includes(category)) throw new SiteContentValidationError('Choose a category.');
+  const requested = text(input, 'category', { max: MAX_CATEGORY_LENGTH, label: 'Category' });
+  const category = (await listArticleCategories()).find(c => sameName(c.name, requested))?.name;
+  if (!category) throw new SiteContentValidationError('Choose a category.');
   const body = sanitizeArticleHtml(typeof input.body === 'string' ? input.body : '');
   if (body.length > 200_000) throw new SiteContentValidationError('The article is too long.');
   const published = input.published === true;
@@ -470,8 +511,13 @@ export async function saveArticle(input: Input, id?: string): Promise<SiteArticl
   await updateCollection('articles', defaultArticles, articles => {
     const existing = id ? articles.find(a => a.id === id) : undefined;
     if (id && !existing) throw new SiteContentNotFoundError('Article');
-    const slug = existing?.slug ?? uniqueSlug(title, articles.map(a => a.slug), 'article');
-    const image = url(input, 'image', { label: 'Card image URL' });
+    // The URL slug can be changed in SEO settings; otherwise it's made from the first title and kept.
+    const requestedSlug = slugify(text(input, 'slug', { max: 120, label: 'URL slug' }));
+    const others = articles.filter(a => a.id !== existing?.id).map(a => a.slug);
+    const slug = requestedSlug && requestedSlug !== existing?.slug
+      ? uniqueSlug(requestedSlug, others, 'article')
+      : existing?.slug ?? uniqueSlug(title, others, 'article');
+    const image = url(input, 'image', { label: 'Feature image URL' });
     saved = {
       id: existing?.id ?? slug,
       slug,
@@ -488,6 +534,10 @@ export async function saveArticle(input: Input, id?: string): Promise<SiteArticl
       body,
       pullQuote: text(input, 'pullQuote', { max: 400, label: 'Pull quote' }),
       showToc: input.showToc !== false,
+      seoTitle: text(input, 'seoTitle', { max: SEO_TITLE_MAX, label: 'Meta title' }),
+      seoDescription: text(input, 'seoDescription', { max: SEO_DESCRIPTION_MAX, label: 'Meta description' }),
+      seoImage: url(input, 'seoImage', { label: 'Social share image URL' }),
+      noIndex: input.noIndex === true,
       published,
     };
     return existing ? articles.map(a => (a.id === existing.id ? saved! : a)) : [...articles, saved];
@@ -609,13 +659,81 @@ export async function deleteApplication(id: string): Promise<void> {
   });
 }
 
+// ── Article categories (kept in the site settings) ─────────────────────────
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function categoryName(input: Input, key: string): string {
+  return text(input, key, { required: true, max: MAX_CATEGORY_LENGTH, label: 'Category name' }).replace(/\s+/g, ' ');
+}
+
+/** The categories in order, with how many articles each has; includes any category an article still uses. */
+export async function listArticleCategories(): Promise<ArticleCategoryInfo[]> {
+  const [{ articleCategories }, articles] = await Promise.all([getSettings(), listArticles()]);
+  const names = [...articleCategories];
+  for (const article of articles) {
+    if (article.category && !names.some(n => sameName(n, article.category))) names.push(article.category);
+  }
+  return names.map(name => ({ name, articles: articles.filter(a => sameName(a.category, name)).length }));
+}
+
+async function writeArticleCategories(names: string[]): Promise<void> {
+  await writeSettings({ ...await getSettings(), articleCategories: names });
+}
+
+export async function addArticleCategory(input: Input): Promise<ArticleCategoryInfo[]> {
+  const name = categoryName(input, 'name');
+  const current = await listArticleCategories();
+  if (current.some(c => sameName(c.name, name))) throw new SiteContentValidationError(`There is already a "${name}" category.`);
+  if (current.length >= 50) throw new SiteContentValidationError('There can be up to 50 categories.');
+  await writeArticleCategories([...current.map(c => c.name), name]);
+  return listArticleCategories();
+}
+
+/** Renames a category, moving its articles with it. */
+export async function renameArticleCategory(input: Input): Promise<ArticleCategoryInfo[]> {
+  const from = text(input, 'from', { required: true, max: 200, label: 'Category' });
+  const to = categoryName(input, 'to');
+  const current = await listArticleCategories();
+  const existing = current.find(c => sameName(c.name, from));
+  if (!existing) throw new SiteContentNotFoundError('Category');
+  if (!sameName(from, to) && current.some(c => sameName(c.name, to))) throw new SiteContentValidationError(`There is already a "${to}" category.`);
+  if (existing.articles > 0) {
+    await updateCollection('articles', defaultArticles, articles =>
+      articles.map(a => (sameName(a.category, existing.name) ? { ...a, category: to } : a)));
+  }
+  await writeArticleCategories(current.map(c => (c.name === existing.name ? to : c.name)));
+  return listArticleCategories();
+}
+
+/** Removes an empty category; one with articles must be emptied (or renamed) first. */
+export async function removeArticleCategory(name: string): Promise<ArticleCategoryInfo[]> {
+  const current = await listArticleCategories();
+  const existing = current.find(c => sameName(c.name, name));
+  if (!existing) throw new SiteContentNotFoundError('Category');
+  if (existing.articles > 0) {
+    throw new SiteContentValidationError(`${existing.articles} article${existing.articles === 1 ? ' is' : 's are'} in "${existing.name}". Move ${existing.articles === 1 ? 'it' : 'them'} to another category first.`);
+  }
+  if (current.length <= 1) throw new SiteContentValidationError('Keep at least one category.');
+  await writeArticleCategories(current.filter(c => c !== existing).map(c => c.name));
+  return listArticleCategories();
+}
+
 // ── Settings ────────────────────────────────────────────────────────────────
 
 export async function getSettings(): Promise<SiteSettings> {
   const defaults = defaultSettings();
   const stored = await readSettings();
   if (!stored) return defaults;
-  return { ...defaults, ...stored, footer: { ...defaults.footer, ...(stored.footer ?? {}) } };
+  const categories = Array.isArray(stored.articleCategories)
+    ? stored.articleCategories.filter((c): c is string => typeof c === 'string' && !!c.trim())
+    : [];
+  return {
+    ...defaults,
+    ...stored,
+    articleCategories: categories.length ? categories : defaults.articleCategories,
+    footer: { ...defaults.footer, ...(stored.footer ?? {}) },
+  };
 }
 
 function color(input: Input, key: string, label: string): string {
@@ -642,6 +760,8 @@ export async function saveSettings(input: Input): Promise<SiteSettings> {
   const opacity = Number(footerInput.backgroundOpacity);
 
   const settings: SiteSettings = {
+    // Managed on their own (article categories), so kept as they are.
+    articleCategories: (await getSettings()).articleCategories,
     companyName: text(input, 'companyName', { required: true, max: 80, label: 'Company name' }),
     tagline: text(input, 'tagline', { max: 120, label: 'Tagline' }),
     location: text(input, 'location', { max: 120, label: 'Location' }),
