@@ -6,3 +6,4 @@
 
 export * from './departments.types';
 export * from './departments.service';
+export * from './ceos.service';

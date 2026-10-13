@@ -5,6 +5,12 @@
  * workstation pages its members can open. Stored in the enterprise project.
  */
 
+/** The built-in department for the CEO's own staff (assistants, PAs, chief of staff). */
+export const CEO_OFFICE_ID = 'ceo-office';
+export const CEO_OFFICE_NAME = 'CEO Office';
+/** A project's CEO department; only CEO Office links to it. */
+export const PROJECT_CEO_DEPARTMENT = 'ceo';
+
 export interface AeDepartment {
   id: string;
   name: string;
@@ -19,6 +25,8 @@ export interface AeDepartment {
    */
   projectLinks: Record<string, string>;
   memberCount: number;
+  /** CEO Office: built in, can't be deleted or renamed. */
+  builtIn: boolean;
   createdAt: string | null;
   updatedAt: string | null;
 }

@@ -63,13 +63,70 @@ export function subscribeStaffAccounts(
   );
 }
 
-/** AE Hub's departments, for placing a new account in AE Hub. */
+/** AE Hub's departments, for placing a new account in AE Hub. `ceo` is AE Hub's CEO office. */
 export async function loadAehubDepartments(): Promise<Array<{ id: string; name: string }>> {
   const snap = await getDocs(collection(authDb, 'departments'));
   return snap.docs
-    .filter(d => d.id !== 'ceo')
-    .map(d => ({ id: d.id, name: String(d.data().name || d.data().displayName || d.id) }))
+    .map(d => ({ id: d.id, name: String(d.data().name || d.data().displayName || (d.id === 'ceo' ? 'CEO Office' : d.id)) }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Someone AE Hub lists as CEO: the CEO role itself, or its CEO office. */
+export interface CeoCandidate {
+  uid: string;
+  name: string;
+  email: string;
+  claim: 'ceo' | 'ceo-office';
+  aehubPosition: string;
+}
+
+/** Live list of AE Hub accounts with the CEO role, the isCEO flag or in the CEO office. */
+export function subscribeCeoCandidates(
+  cb: (candidates: CeoCandidate[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const users = collection(authDb, 'users');
+  const sources = [
+    query(users, where('role', '==', 'ceo')),
+    query(users, where('isCEO', '==', true)),
+    query(users, where('department', '==', 'ceo')),
+  ];
+  const results: Array<Map<string, CeoCandidate>> = sources.map(() => new Map());
+  const emit = () => {
+    const merged = new Map<string, CeoCandidate>();
+    for (const result of results) {
+      for (const [uid, candidate] of result) {
+        const existing = merged.get(uid);
+        // The CEO role outranks the CEO office.
+        if (!existing || candidate.claim === 'ceo') merged.set(uid, candidate);
+      }
+    }
+    cb([...merged.values()].sort((a, b) => a.name.localeCompare(b.name)));
+  };
+  const unsubscribes = sources.map((source, index) => onSnapshot(
+    source,
+    snap => {
+      results[index] = new Map(snap.docs
+        .filter(d => d.data().isDeleted !== true && String(d.data().accountStatus || '').toLowerCase() !== 'fired')
+        .map(d => {
+          const data = d.data();
+          const claim: CeoCandidate['claim'] = String(data.role || '').toLowerCase() === 'ceo' || data.isCEO === true ? 'ceo' : 'ceo-office';
+          return [d.id, {
+            uid: d.id,
+            name: String(data.displayName || data.fullName || data.name || data.email || 'Unnamed'),
+            email: String(data.email || ''),
+            claim,
+            aehubPosition: String(data.departmentPosition || data.position || ''),
+          }];
+        }));
+      emit();
+    },
+    error => {
+      console.warn('[staff] CEO candidates snapshot error:', error);
+      onError?.(error);
+    },
+  ));
+  return () => unsubscribes.forEach(unsubscribe => unsubscribe());
 }
 
 export interface NewStaffInput {

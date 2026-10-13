@@ -35,6 +35,16 @@ export default async function WorkstationLayout({ children }: { children: React.
       </Holding>
     );
   }
+  if (access.kind === 'pending') {
+    return (
+      <Holding title="Waiting for the CEO's approval">
+        <p>
+          A project lists you as a CEO. CEO access to the AE Workstation is given by the official CEO; they&apos;ll see
+          you on the Staff Management page. Reload this page once they&apos;ve approved you or added you to a department.
+        </p>
+      </Holding>
+    );
+  }
   if (access.kind === 'suspended') {
     return (
       <Holding title="Your workstation access is suspended">

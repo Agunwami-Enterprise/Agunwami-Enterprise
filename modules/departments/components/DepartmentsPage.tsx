@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
+import Link from 'next/link';
 import { BASE_PAGE_IDS, normalizePages } from '@/lib/workstation/pages';
 import type { AeDepartment, AeDepartmentMember } from '@/backend/modules/departments/departments.types';
 import {
@@ -22,7 +23,7 @@ import {
 type Draft = { name: string; description: string; pages: string[]; active: boolean; projectLinks: Record<string, string> };
 const EMPTY_DRAFT: Draft = { name: '', description: '', pages: [...BASE_PAGE_IDS], active: true, projectLinks: {} };
 
-interface ProjectOptions { projectId: string; projectName: string; departments: Array<{ id: string; name: string }> }
+interface ProjectOptions { projectId: string; projectName: string; departments: Array<{ id: string; name: string; ceo: boolean }> }
 
 type MemberDialog =
   | { kind: 'add' }
@@ -142,7 +143,7 @@ export default function DepartmentsPage() {
         <h1 className="text-[20px] font-bold text-gray-800 dark:text-white">Departments</h1>
         <p className="text-[12px] text-gray-500 dark:text-gray-400">
           Create AE departments, choose the workstation pages each one can open, and manage their people. People sign in with
-          their existing account; the CEO department is built in.
+          their existing account. CEO access is given on the Staff Management page; CEO Office is built in for the CEO&apos;s own staff.
         </p>
       </div>
 
@@ -158,7 +159,7 @@ export default function DepartmentsPage() {
           <button onClick={() => select('new')} className={`${btnPrimary} w-full`}>+ New department</button>
           <button onClick={() => select('ceo')}
             className={`w-full rounded-2xl p-4 text-left shadow-sm transition-colors ${selectedId === 'ceo' ? 'bg-[#fef3c7] dark:bg-[#f5bd02]/15' : 'bg-white hover:bg-gray-50 dark:bg-[#1e1e1e] dark:hover:bg-white/5'}`}>
-            <p className="text-[13px] font-bold text-gray-800 dark:text-white">CEO <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-gray-500 dark:bg-white/8">Built in</span></p>
+            <p className="text-[13px] font-bold text-gray-800 dark:text-white">CEO <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-gray-500 dark:bg-white/8">Approved list</span></p>
             <p className="text-[11px] text-gray-500 dark:text-gray-400">Every page · the executive workstation</p>
           </button>
           {loading ? (
@@ -170,6 +171,7 @@ export default function DepartmentsPage() {
               className={`w-full rounded-2xl p-4 text-left shadow-sm transition-colors ${selectedId === dept.id ? 'bg-[#fef3c7] dark:bg-[#f5bd02]/15' : 'bg-white hover:bg-gray-50 dark:bg-[#1e1e1e] dark:hover:bg-white/5'}`}>
               <p className="flex items-center gap-2 text-[13px] font-bold text-gray-800 dark:text-white">
                 {dept.name}
+                {dept.builtIn && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-gray-500 dark:bg-white/8">Built in</span>}
                 {!dept.active && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-gray-500 dark:bg-white/8">Inactive</span>}
               </p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">{dept.pages.length} pages · {dept.memberCount} {dept.memberCount === 1 ? 'person' : 'people'}</p>
@@ -187,8 +189,10 @@ export default function DepartmentsPage() {
             <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-[#1e1e1e]">
               <h2 className="text-[15px] font-bold text-gray-800 dark:text-white">CEO</h2>
               <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">
-                The CEO department is built in and can open every page, including the executive workstation, projects and
-                this Departments page. It can&apos;t be edited or deleted.
+                CEOs open every page, including the executive workstation, projects and this Departments page. CEO access
+                isn&apos;t a department: the official CEO gives it, approves people other projects list as CEO, and hands it
+                over on the <Link href="/ceo/staff" className="font-semibold text-[#b38a00] hover:underline dark:text-[#f5bd02]">Staff Management</Link> page
+                (CEO Access). For assistants, PAs and a chief of staff, use the CEO Office department.
               </p>
             </div>
           ) : (
@@ -198,15 +202,16 @@ export default function DepartmentsPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="mb-1 block text-[11px] font-semibold text-gray-500">Name *</span>
-                    <input className={input} value={draft.name} maxLength={60} placeholder="e.g. Technical" onChange={e => setDraft({ ...draft, name: e.target.value })} />
+                    <input className={input} value={draft.name} maxLength={60} placeholder="e.g. Technical" disabled={selected?.builtIn}
+                      title={selected?.builtIn ? 'CEO Office can’t be renamed' : undefined} onChange={e => setDraft({ ...draft, name: e.target.value })} />
                   </label>
-                  <div className="flex items-end justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 dark:border-white/10">
+                  {!selected?.builtIn && <div className="flex items-end justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 dark:border-white/10">
                     <div>
                       <p className="text-[12px] font-semibold text-gray-700 dark:text-gray-200">Active</p>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400">Inactive departments keep only the basic pages</p>
                     </div>
                     <Switch on={draft.active} onChange={active => setDraft({ ...draft, active })} label="Active" />
-                  </div>
+                  </div>}
                   <label className="block sm:col-span-2">
                     <span className="mb-1 block text-[11px] font-semibold text-gray-500">Description</span>
                     <input className={input} value={draft.description} maxLength={240} placeholder="What this department does" onChange={e => setDraft({ ...draft, description: e.target.value })} />
@@ -220,6 +225,7 @@ export default function DepartmentsPage() {
                 <p className="mb-2 text-[11px] text-gray-500 dark:text-gray-400">
                   When someone in this department is added, transferred, repositioned, suspended, reactivated or removed, the same
                   change is applied in the linked department of each project, e.g. AE Hub.
+                  {selected?.builtIn ? ' CEO Office links only to each project’s CEO department.' : ' A project’s CEO department links only to CEO Office.'}
                 </p>
                 {projectOptions === null ? (
                   <p className="text-[12px] text-gray-400">Loading projects…</p>
@@ -229,9 +235,10 @@ export default function DepartmentsPage() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {projectOptions.map(project => {
                       const linked = draft.projectLinks[project.projectId] ?? '';
-                      const options = project.departments.some(d => d.id === linked) || !linked
-                        ? project.departments
-                        : [...project.departments, { id: linked, name: linked }];
+                      const allowed = project.departments.filter(d => d.ceo === Boolean(selected?.builtIn));
+                      const options = allowed.some(d => d.id === linked) || !linked
+                        ? allowed
+                        : [...allowed, { id: linked, name: linked, ceo: false }];
                       return (
                         <label key={project.projectId} className="block">
                           <span className="mb-1 block text-[11px] font-semibold text-gray-500">{project.projectName}</span>
@@ -252,7 +259,7 @@ export default function DepartmentsPage() {
                 )}
 
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
-                  {selected ? <button onClick={() => void deleteDepartment()} className="text-[12px] font-semibold text-red-600 hover:underline dark:text-red-400">Delete department</button> : <span />}
+                  {selected && !selected.builtIn ? <button onClick={() => void deleteDepartment()} className="text-[12px] font-semibold text-red-600 hover:underline dark:text-red-400">Delete department</button> : <span />}
                   <button onClick={() => void saveDepartment()} disabled={saving || !draft.name.trim()} className={btnPrimary}>
                     {saving ? 'Saving…' : selectedId === 'new' ? 'Create department' : 'Save changes'}
                   </button>

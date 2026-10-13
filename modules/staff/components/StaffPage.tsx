@@ -8,7 +8,7 @@
  * actions (and the same sync to linked projects such as AE Hub) as the
  * Departments page. New staff get one account for AE and AE Hub. External
  * Staff lists people in project departments that no AE department is linked
- * to, so AE changes don't reach them.
+ * to, so AE changes don't reach them. CEO Access is the approved-CEO list.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,17 +18,18 @@ import { useAuth } from '@/lib/workstation/auth-context';
 import { formatAehubId, formatEmployeeId } from '@/lib/workstation/employee-id';
 import { subscribeLiveTeam } from '@/modules/time-tracking/services';
 import {
-  createStaffAccount, loadAehubDepartments, reviewStaffRequest, subscribeStaffAccounts, subscribeStaffRequests,
-  type StaffAccount, type StaffRequest,
+  createStaffAccount, loadAehubDepartments, reviewStaffRequest, subscribeCeoCandidates, subscribeStaffAccounts, subscribeStaffRequests,
+  type CeoCandidate, type StaffAccount, type StaffRequest,
 } from '@/modules/staff/services';
 import {
   EditMemberDialog, Modal, SuspendDialog, TransferDialog, api, btnGhost, btnPrimary, input, reportSync,
   type SyncResult,
 } from '@/modules/departments/components/shared';
-import type { AeDepartment, AeDepartmentMember } from '@/backend/modules/departments/departments.types';
+import { CEO_OFFICE_ID, type AeDepartment, type AeDepartmentMember } from '@/backend/modules/departments/departments.types';
 import type { ExternalStaffProject } from '@/modules/staff/types';
+import CeoAccessTab, { type CeoAccessData } from './CeoAccessTab';
 
-type Tab = 'directory' | 'requests' | 'external';
+type Tab = 'directory' | 'requests' | 'external' | 'ceo';
 type Shift = 'onshift' | 'onbreak' | 'offshift';
 
 const NO_DEPARTMENT = '__none__';
@@ -68,6 +69,22 @@ export default function StaffPage() {
     setShifts(map);
   }), []);
   useEffect(() => subscribeStaffRequests(setRequests, () => setRequests([])), []);
+  const [candidates, setCandidates] = useState<CeoCandidate[]>([]);
+  useEffect(() => subscribeCeoCandidates(setCandidates, () => setCandidates([])), []);
+  const [ceoData, setCeoData] = useState<CeoAccessData | null>(null);
+  const [ceoError, setCeoError] = useState('');
+  const reloadCeo = useCallback(async () => {
+    try {
+      setCeoData(await api<CeoAccessData>('/api/ceo/ceo-access'));
+      setCeoError('');
+    } catch (err) {
+      setCeoError(err instanceof Error ? err.message : 'CEO access could not be loaded.');
+    }
+  }, []);
+  useEffect(() => {
+    const first = setTimeout(() => void reloadCeo(), 0);
+    return () => clearTimeout(first);
+  }, [reloadCeo]);
 
   const reload = useCallback(async () => {
     try {
@@ -108,6 +125,11 @@ export default function StaffPage() {
     { label: 'Suspended', value: rows.filter(a => memberByUid.get(a.uid)?.status === 'suspended' || a.accountStatus === 'suspended').length },
   ];
   const pendingRequests = (requests ?? []).filter(r => r.status === 'pending').length;
+  const ceoUids = new Set((ceoData?.records ?? []).filter(r => r.status === 'approved').map(r => r.uid));
+  const decided = new Set((ceoData?.records ?? []).filter(r => r.status !== 'pending').map(r => r.uid));
+  const waitingCeo = ceoData?.approvalsOn
+    ? new Set([...candidates.map(c => c.uid), ...(ceoData.records.filter(r => r.status === 'pending').map(r => r.uid))].filter(uid => !decided.has(uid))).size
+    : 0;
 
   async function memberAction(uid: string, body: Record<string, unknown>, success: string) {
     try {
@@ -161,7 +183,7 @@ export default function StaffPage() {
       </div>
 
       <div className="mb-5 flex border-b border-gray-200 dark:border-white/6">
-        {([['directory', 'Staff Directory', 0], ['requests', 'Staff Requests', pendingRequests], ['external', 'External Staff', 0]] as const).map(([key, label, badge]) => (
+        {([['directory', 'Staff Directory', 0], ['requests', 'Staff Requests', pendingRequests], ['external', 'External Staff', 0], ['ceo', 'CEO Access', waitingCeo]] as const).map(([key, label, badge]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`relative flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium transition-colors ${tab === key ? 'text-gray-800 dark:text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}>
             {label}
@@ -218,6 +240,7 @@ export default function StaffPage() {
                   key={account.uid}
                   account={account}
                   member={memberByUid.get(account.uid) ?? null}
+                  isCeo={ceoUids.has(account.uid)}
                   department={deptById.get(memberByUid.get(account.uid)?.departmentId ?? '') ?? null}
                   shift={shifts[account.uid] ?? 'offshift'}
                   canTransfer={departments.length > 1}
@@ -234,8 +257,19 @@ export default function StaffPage() {
         </>
       ) : tab === 'requests' ? (
         <RequestsTab requests={requests} reviewerUid={user?.uid ?? 'ceo'} />
-      ) : (
+      ) : tab === 'external' ? (
         <ExternalTab />
+      ) : (
+        <CeoAccessTab
+          data={ceoData}
+          error={ceoError}
+          candidates={candidates}
+          accounts={accounts ?? []}
+          departments={departments}
+          members={members}
+          onReload={reloadCeo}
+          onDepartmentsChanged={reload}
+        />
       )}
 
       {dialog?.kind === 'add' && (
@@ -278,9 +312,10 @@ const SHIFT_STYLE: Record<Shift, { label: string; className: string }> = {
   offshift: { label: 'Off shift', className: 'bg-gray-100 text-gray-500 dark:bg-white/8 dark:text-gray-400' },
 };
 
-function StaffCard({ account, member, department, shift, canTransfer, onAssign, onEdit, onTransfer, onSuspend, onReactivate, onRemove }: {
+function StaffCard({ account, member, isCeo, department, shift, canTransfer, onAssign, onEdit, onTransfer, onSuspend, onReactivate, onRemove }: {
   account: StaffAccount;
   member: AeDepartmentMember | null;
+  isCeo: boolean;
   department: AeDepartment | null;
   shift: Shift;
   canTransfer: boolean;
@@ -320,6 +355,7 @@ function StaffCard({ account, member, department, shift, canTransfer, onAssign, 
         ) : (
           <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500 dark:bg-white/8 dark:text-gray-400">Not in a department</span>
         )}
+        {isCeo && <span className="rounded-md bg-[#fef3c7] px-2 py-0.5 text-[10px] font-bold text-[#806013] dark:bg-[#f5bd02]/15 dark:text-[#f5bd02]">CEO access</span>}
         {member?.isDepartmentAdmin && <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">Dept admin</span>}
         {suspended && <span className="rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:bg-red-500/15 dark:text-red-300">Suspended</span>}
         {!suspended && account.accountStatus === 'suspended' && (
@@ -419,9 +455,11 @@ function AddStaffDialog({ departments, onClose, onCreated }: {
     loadAehubDepartments().then(setAehubDepartments).catch(() => setAehubDepartments([]));
   }, []);
 
+  // AE Hub's CEO office goes with CEO Office; every other AE department uses the rest.
+  const aehubOptions = (aehubDepartments ?? []).filter(d => (d.id === 'ceo') === (departmentId === CEO_OFFICE_ID));
   // The AE Hub department linked to the chosen AE department, if any.
   const linked = Object.values(departments.find(d => d.id === departmentId)?.projectLinks ?? {})
-    .find(id => aehubDepartments?.some(option => option.id === id)) ?? '';
+    .find(id => aehubOptions.some(option => option.id === id)) ?? '';
   const effectiveAehubDepartment = aehubDepartment || linked;
 
   async function submit() {
@@ -485,7 +523,7 @@ function AddStaffDialog({ departments, onClose, onCreated }: {
           <span className="mb-1 block text-[11px] font-semibold text-gray-500">AE Hub department *</span>
           <select className={input} value={effectiveAehubDepartment} onChange={e => setAehubDepartment(e.target.value)} disabled={aehubDepartments === null}>
             <option value="">{aehubDepartments === null ? 'Loading…' : 'Choose…'}</option>
-            {(aehubDepartments ?? []).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {aehubOptions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
           {linked && !aehubDepartment && <span className="mt-1 block text-[11px] text-gray-500">Linked to the chosen AE department.</span>}
         </label>

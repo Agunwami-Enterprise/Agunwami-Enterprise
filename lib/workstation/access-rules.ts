@@ -4,10 +4,12 @@
  */
 
 import type { AeDepartment, AeDepartmentMember } from '@/backend/modules/departments/departments.types';
+import type { CeoAccess } from '@/backend/modules/departments/ceos.service';
 import { BASE_PAGE_IDS, WORKSTATION_PAGES } from './pages';
 
 export interface WorkstationAccess {
-  kind: 'ceo' | 'department' | 'suspended' | 'unassigned';
+  /** pending: a project lists them as CEO and AE's official CEO hasn't approved them yet. */
+  kind: 'ceo' | 'department' | 'suspended' | 'unassigned' | 'pending';
   departmentId: string | null;
   departmentName: string | null;
   title: string;
@@ -26,8 +28,9 @@ export function computeAccess(
   session: SessionLike,
   membership: { member: AeDepartmentMember; department: AeDepartment } | null,
   legacyContent: boolean,
+  ceo: CeoAccess,
 ): WorkstationAccess {
-  if (session.role?.toLowerCase() === 'ceo') {
+  if (ceo === 'ceo') {
     return {
       kind: 'ceo', departmentId: 'ceo', departmentName: 'CEO', title: 'CEO',
       pages: WORKSTATION_PAGES.map(page => page.id), departmentActive: true,
@@ -56,6 +59,13 @@ export function computeAccess(
       title: member.title || 'Team Member', pages, departmentActive: department.active,
       isDepartmentAdmin: member.isDepartmentAdmin, suspendedReason: '',
       home: '/ws/dashboard', canEditWebsite: pages.includes('website') || legacyContent,
+    };
+  }
+  if (ceo === 'pending') {
+    return {
+      kind: 'pending', departmentId: null, departmentName: null, title: 'CEO', pages: [],
+      departmentActive: false, isDepartmentAdmin: false, suspendedReason: '',
+      home: '/ws/dashboard', canEditWebsite: false,
     };
   }
   return {

@@ -40,7 +40,26 @@ export interface PaymentFilter {
 }
 
 export interface ApprovePaymentDto {
-  status: 'APPROVED' | 'REJECTED';
+  status: 'APPROVED' | 'REJECTED' | 'COMPLETED';
   approvedBy?: string;
   notes?: string;
+}
+
+export const PAYMENT_TYPES = ['incoming', 'outgoing', 'payroll', 'refund'] as const;
+export type PaymentType = (typeof PAYMENT_TYPES)[number];
+export const PAYMENT_CURRENCIES = ['NGN', 'USD', 'GBP', 'EUR'] as const;
+
+/** A payment the CEO records from the Payments page. */
+export interface NewPaymentDto {
+  type: PaymentType;
+  amount: number;
+  currency: string;
+  category: string;
+  description: string;
+  /** Who paid (incoming) or who is paid (everything else). */
+  party: string;
+  /** Already paid or received, or still to be approved and paid. */
+  status: 'COMPLETED' | 'PENDING';
+  /** ISO date of the payment; today when left out. */
+  date?: string;
 }

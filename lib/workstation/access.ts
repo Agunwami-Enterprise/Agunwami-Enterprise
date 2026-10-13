@@ -1,7 +1,9 @@
 /**
  * What a signed-in person can open in the AE Workstation.
  *
- * - The CEO (the one predefined department) gets everything at /ceo.
+ * - Approved CEOs (ceos.service.ts) get everything at /ceo. Someone a project
+ *   lists as CEO waits for the official CEO's approval, unless they're in an
+ *   AE department.
  * - Everyone else gets the pages of the AE department the CEO put them in
  *   (Departments page), at /ws. An inactive department keeps only the base
  *   pages.
@@ -12,7 +14,7 @@
  */
 
 import 'server-only';
-import { DepartmentsService } from '@/backend/modules/departments';
+import { CeoApprovals, DepartmentsService, invalidateCeos } from '@/backend/modules/departments';
 import { isLegacyContentStaff } from './content-access';
 import { computeAccess, type SessionLike, type WorkstationAccess } from './access-rules';
 
@@ -24,14 +26,23 @@ const cache = new Map<string, { value: WorkstationAccess; expires: number }>();
 /** Drops cached access, e.g. after the CEO changes a department. */
 export function invalidateAccess(uid?: string): void {
   if (uid) cache.delete(uid);
-  else cache.clear();
+  else {
+    cache.clear();
+    invalidateCeos();
+  }
 }
 
 export async function getWorkstationAccess(session: SessionLike): Promise<WorkstationAccess> {
-  if (session.role?.toLowerCase() === 'ceo') return computeAccess(session, null, false);
-
   const cached = cache.get(session.uid);
   if (cached && cached.expires > Date.now()) return cached.value;
+
+  // A session role of "ceo" means a project lists them as CEO; AE's approved list decides.
+  const ceo = await CeoApprovals.accessOf(session.uid, session.role?.toLowerCase() === 'ceo');
+  if (ceo === 'ceo') {
+    const value = computeAccess(session, null, false, 'ceo');
+    cache.set(session.uid, { value, expires: Date.now() + CACHE_MS });
+    return value;
+  }
 
   const membership = await DepartmentsService.membershipOf(session.uid).catch(err => {
     console.error('[access] Department lookup failed:', err);
@@ -41,7 +52,7 @@ export async function getWorkstationAccess(session: SessionLike): Promise<Workst
   // C-panel page, their AE Hub department keeps their C-panel access.
   const legacyContent = isLegacyContentStaff(session);
 
-  const value = computeAccess(session, membership, legacyContent);
+  const value = computeAccess(session, membership, legacyContent, ceo);
 
   cache.set(session.uid, { value, expires: Date.now() + CACHE_MS });
   if (cache.size > 5000) cache.clear();

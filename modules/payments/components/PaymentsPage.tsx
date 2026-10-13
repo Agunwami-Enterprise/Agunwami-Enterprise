@@ -1,6 +1,15 @@
-﻿'use client';
+'use client';
+
+/**
+ * CEO → Payment Management: the enterprise's own payments plus every
+ * project's reported payments, labelled by project. The CEO records new
+ * enterprise payments, approves or rejects pending ones, marks approved ones
+ * as paid and exports the filtered list as CSV. Project payments are reviewed
+ * in their project.
+ */
 
 import { useState } from 'react';
+import { toast } from 'react-toastify';
 import { SkeletonPayments } from '@/app/components/ceo/Skeleton';
 import {
   ALL_SOURCES, FeedError, FeedNotices, SourceBadge, SourceFilter,
@@ -38,14 +47,8 @@ export default function PaymentsPage() {
   const payments = feed.data?.items ?? [];
   const sources = sourcesOf(payments);
 
-  /* new payment form */
-  const [nAmount,  setNAmount]  = useState('');
-  const [nType,    setNType]    = useState('Incoming');
-  const [nProject, setNProject] = useState('Agunwami Enterprise');
-  const [nDesc,    setNDesc]    = useState('');
-
-  /** Approves or rejects one of the enterprise's own pending payments. */
-  async function review(payment: Payment, decision: 'APPROVED' | 'REJECTED') {
+  /** Approves or rejects one of the enterprise's pending payments, or marks an approved one as paid. */
+  async function review(payment: Payment, decision: 'APPROVED' | 'REJECTED' | 'COMPLETED') {
     setReviewing(payment.key);
     setReviewError('');
     try {
@@ -56,11 +59,14 @@ export default function PaymentsPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((body as { error?: string }).error || `Request failed (${res.status}).`);
-      const status: PayStatus = decision === 'APPROVED' ? 'Approved' : 'Rejected';
+      const now = new Date().toISOString();
       feed.setData(prev => prev && {
         ...prev,
-        items: prev.items.map(p => p.key === payment.key ? { ...p, status, reviewable: false, approvedBy: 'Agunwami CEO' } : p),
+        items: prev.items.map(p => p.key !== payment.key ? p : decision === 'COMPLETED'
+          ? { ...p, status: 'Completed', payable: false, processed: now }
+          : { ...p, status: decision === 'APPROVED' ? 'Approved' : 'Rejected', reviewable: false, payable: decision === 'APPROVED', approvedBy: 'Agunwami CEO' }),
       });
+      if (detail?.key === payment.key) setDetail(null);
     } catch (err) {
       setReviewError(`Could not update "${payment.description}": ${err instanceof Error ? err.message : 'unknown error'}`);
     } finally {
@@ -83,6 +89,23 @@ export default function PaymentsPage() {
   const outgoing = settled.filter(p => p.type !== 'Incoming');
   const balance  = [...incoming, ...outgoing.map(p => ({ ...p, amount: -p.amount }))];
   const pending  = inSource.filter(p => p.status === 'Pending').length;
+
+  function exportCsv() {
+    const header = ['Project', 'Type', 'Status', 'Amount', 'Currency', 'Category', 'Description', 'From / to', 'Approved by', 'Reference', 'Created', 'Processed'];
+    const rows = filtered.map(p => [
+      p.source.name, p.type, p.status, p.amount.toFixed(2), p.currency, p.category, p.description,
+      p.requestedBy === '-' ? '' : p.requestedBy, p.approvedBy === '-' ? '' : p.approvedBy, p.reference ?? '', p.created ?? '', p.processed ?? '',
+    ]);
+    // Quote every cell; a leading =, +, - or @ is prefixed so spreadsheets don't run it as a formula.
+    const cell = (value: string) => `"${(/^[=+\-@]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
+    const csv = [header, ...rows].map(row => row.map(cell).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `payments-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
 
   const fmt = (p: { amount: number; currency: string }) => formatMoney(p.amount, p.currency);
 
@@ -144,7 +167,8 @@ export default function PaymentsPage() {
             className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[12px] text-gray-700 shadow-sm outline-none dark:border-white/8 dark:bg-[#1e1e1e] dark:text-gray-200">
             {['All Status','Pending','Approved','Completed','Rejected','Failed'].map(o => <option key={o}>{o}</option>)}
           </select>
-          <button className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[12px] font-medium text-gray-600 shadow-sm hover:bg-gray-50 dark:border-white/8 dark:bg-[#1e1e1e] dark:text-gray-300">
+          <button onClick={exportCsv} disabled={filtered.length === 0} title={filtered.length === 0 ? 'Nothing to export' : `Export ${filtered.length} payment${filtered.length === 1 ? '' : 's'} as CSV`}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[12px] font-medium text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-white/8 dark:bg-[#1e1e1e] dark:text-gray-300">
             <ExportIcon /> Export
           </button>
         </div>
@@ -163,7 +187,7 @@ export default function PaymentsPage() {
               const ss = STATUS_STYLE[p.status];
               return (
                 <div key={p.key} className="px-5 py-4 hover:bg-gray-50 dark:hover:bg-white/3">
-                  <div className="flex items-start justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex flex-col gap-1.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[16px] font-bold text-gray-800 dark:text-white">{fmt(p)}</span>
@@ -180,13 +204,16 @@ export default function PaymentsPage() {
                         {p.processed && <> &nbsp;·&nbsp; Processed: {formatDate(p.processed)}</>}
                       </p>
                     </div>
-                    <div className="flex flex-shrink-0 items-center gap-2 pl-4">
-                      <button onClick={() => setDetail(p)} className="text-gray-400 hover:text-gray-600"><EyeIcon /></button>
+                    <div className="flex flex-shrink-0 items-center gap-3 sm:pl-4">
+                      <button onClick={() => setDetail(p)} className="text-gray-400 hover:text-gray-600" aria-label="View payment details" title="Details"><EyeIcon /></button>
                       {p.reviewable && (
                         <>
                           <button disabled={reviewing === p.key} onClick={() => void review(p, 'APPROVED')} className="text-[12px] font-semibold text-green-600 hover:underline disabled:opacity-50">Approve</button>
                           <button disabled={reviewing === p.key} onClick={() => void review(p, 'REJECTED')} className="text-[12px] font-semibold text-red-500 hover:underline disabled:opacity-50">Reject</button>
                         </>
+                      )}
+                      {p.payable && (
+                        <button disabled={reviewing === p.key} onClick={() => void review(p, 'COMPLETED')} className="text-[12px] font-semibold text-[#b38a00] hover:underline disabled:opacity-50 dark:text-[#f5bd02]">Mark paid</button>
                       )}
                       {!p.reviewable && p.status === 'Pending' && p.source.kind === 'project' && (
                         <span className="text-[11px] text-gray-400">Reviewed in {p.source.name}</span>
@@ -203,7 +230,7 @@ export default function PaymentsPage() {
       {/* Payment Detail modal */}
       {detail && (
         <Overlay onClose={() => setDetail(null)}>
-          <div className="w-[420px] rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1e1e1e]">
+          <div className="w-[calc(100vw-2rem)] max-w-[420px] rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1e1e1e]">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-[15px] font-bold text-gray-800 dark:text-white">Payment Details</h2>
               <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600"><XIcon /></button>
@@ -217,23 +244,38 @@ export default function PaymentsPage() {
                 { label:'Category',     value: detail.category,    plain: true },
                 { label:'Description',  value: detail.description, plain: true },
                 { label:'Reference',    value: detail.reference ?? '-', plain: true },
-                { label:'Requested by', value: detail.requestedBy, plain: true },
+                { label: detail.type === 'Incoming' ? 'From' : 'To / requested by', value: detail.requestedBy, plain: true },
                 { label:'Approved by',  value: detail.approvedBy,  plain: true },
                 { label:'Created',      value: formatDate(detail.created, true),   plain: true },
                 { label:'Processed',    value: formatDate(detail.processed, true), plain: true },
               ].map(f => (
-                <div key={f.label} className="flex items-center justify-between border-b border-gray-50 pb-2.5 last:border-0 dark:border-white/4">
-                  <span className="text-[12px] text-gray-500 dark:text-gray-400">{f.label}:</span>
+                <div key={f.label} className="flex items-center justify-between gap-4 border-b border-gray-50 pb-2.5 last:border-0 dark:border-white/4">
+                  <span className="flex-shrink-0 text-[12px] text-gray-500 dark:text-gray-400">{f.label}:</span>
                   {f.badge ? (
                     <span className="rounded-sm px-2.5 py-1 text-[11px] font-bold" style={{ backgroundColor: f.badge.bg, color: f.badge.text }}>{f.value.toUpperCase()}</span>
                   ) : (
-                    <span className="text-[12px] font-semibold text-gray-700 dark:text-gray-200">{f.value}</span>
+                    <span className="min-w-0 break-words text-right text-[12px] font-semibold text-gray-700 dark:text-gray-200">{f.value}</span>
                   )}
                 </div>
               ))}
             </div>
+            {(detail.reviewable || detail.payable) && (
+              <div className="mt-5 flex gap-2">
+                {detail.reviewable ? (
+                  <>
+                    <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'APPROVED')}
+                      className="flex-1 rounded-lg bg-green-600 py-2.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">Approve</button>
+                    <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'REJECTED')}
+                      className="flex-1 rounded-lg border border-red-200 py-2.5 text-[12px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10">Reject</button>
+                  </>
+                ) : (
+                  <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'COMPLETED')}
+                    className="flex-1 rounded-lg py-2.5 text-[12px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-50" style={{ backgroundColor:'#f5bd02' }}>Mark as paid</button>
+                )}
+              </div>
+            )}
             <button onClick={() => setDetail(null)}
-              className="mt-5 w-full rounded-lg border border-gray-200 py-2.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50 dark:border-white/8 dark:text-gray-400 dark:hover:bg-white/4">
+              className="mt-2 w-full rounded-lg border border-gray-200 py-2.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50 dark:border-white/8 dark:text-gray-400 dark:hover:bg-white/4">
               Close
             </button>
           </div>
@@ -242,38 +284,144 @@ export default function PaymentsPage() {
 
       {/* New Payment modal */}
       {showNew && (
-        <Overlay onClose={() => setShowNew(false)}>
-          <div className="w-[400px] rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1e1e1e]">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-[15px] font-bold text-gray-800 dark:text-white">Create New Payment</h2>
-              <button onClick={() => setShowNew(false)} className="text-gray-400 hover:text-gray-600"><XIcon /></button>
-            </div>
-            <div className="flex flex-col gap-3">
-              <input value={nAmount} onChange={e => setNAmount(e.target.value)} placeholder="Amount"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[12px] text-gray-700 outline-none placeholder-gray-400 dark:border-white/8 dark:bg-[#2a2a2a] dark:text-gray-200 dark:placeholder-gray-500" />
-              <select value={nType} onChange={e => setNType(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[12px] text-gray-700 outline-none dark:border-white/8 dark:bg-[#2a2a2a] dark:text-gray-200">
-                {['Incoming','Outgoing','Payroll','Refund'].map(o => <option key={o}>{o}</option>)}
-              </select>
-              <select value={nProject} onChange={e => setNProject(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[12px] text-gray-700 outline-none dark:border-white/8 dark:bg-[#2a2a2a] dark:text-gray-200">
-                {(sources.length ? sources.map(source => source.name) : ['Agunwami Enterprise']).map(o => <option key={o}>{o}</option>)}
-              </select>
-              <textarea value={nDesc} onChange={e => setNDesc(e.target.value)} placeholder="Description" rows={3}
-                className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[12px] text-gray-700 outline-none placeholder-gray-400 dark:border-white/8 dark:bg-[#2a2a2a] dark:text-gray-200 dark:placeholder-gray-500" />
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => setShowNew(false)}
-                className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-medium text-gray-600 dark:border-white/8 dark:text-gray-400">Cancel</button>
-              <button onClick={() => setShowNew(false)}
-                className="flex-1 rounded-lg py-2.5 text-[12px] font-semibold text-[#1a1a1a] hover:opacity-90" style={{ backgroundColor:'#f5bd02' }}>
-                Create Payment
-              </button>
-            </div>
-          </div>
-        </Overlay>
+        <NewPaymentDialog
+          onClose={() => setShowNew(false)}
+          onCreated={async () => {
+            setShowNew(false);
+            toast.success('Payment recorded.');
+            await feed.reload();
+          }}
+        />
       )}
     </>
+  );
+}
+
+const NEW_TYPES = [
+  { value: 'incoming', label: 'Incoming' },
+  { value: 'outgoing', label: 'Outgoing' },
+  { value: 'payroll',  label: 'Payroll' },
+  { value: 'refund',   label: 'Refund' },
+] as const;
+const CURRENCIES = ['NGN', 'USD', 'GBP', 'EUR'];
+const CATEGORY_HINT: Record<(typeof NEW_TYPES)[number]['value'], string> = {
+  incoming: 'Revenue', outgoing: 'Operations', payroll: 'Payroll', refund: 'Refund',
+};
+const fieldClass = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[12px] text-gray-700 outline-none placeholder-gray-400 focus:border-[#f5bd02] dark:border-white/8 dark:bg-[#2a2a2a] dark:text-gray-200 dark:placeholder-gray-500';
+
+/** Records a payment in the enterprise's books. */
+function NewPaymentDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => Promise<void> }) {
+  const [type, setType] = useState<(typeof NEW_TYPES)[number]['value']>('incoming');
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('NGN');
+  const [party, setParty] = useState('');
+  const [category, setCategory] = useState('');
+  const [date, setDate] = useState(() => new Date().toLocaleDateString('en-CA'));
+  const [paid, setPaid] = useState(true);
+  const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const value = Number(amount.replace(/,/g, ''));
+  const valid = Number.isFinite(value) && value > 0 && party.trim() && description.trim();
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/ceo/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, amount: value, currency, party, category, date, description, status: paid ? 'COMPLETED' : 'PENDING' }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((body as { error?: string }).error || `Request failed (${res.status}).`);
+      await onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The payment could not be saved.');
+      setSaving(false);
+    }
+  }
+
+  const label = 'mb-1 block text-[11px] font-semibold text-gray-600 dark:text-gray-300';
+  return (
+    <Overlay onClose={onClose}>
+      <form onSubmit={submit} className="w-[calc(100vw-2rem)] max-w-[440px] rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1e1e1e]">
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="text-[15px] font-bold text-gray-800 dark:text-white">Record a Payment</h2>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close"><XIcon /></button>
+        </div>
+        <p className="mb-4 text-[11px] text-gray-500 dark:text-gray-400">Saved in Agunwami Enterprise’s books. Project payments come from each project.</p>
+
+        <div className="flex flex-col gap-3">
+          <div role="radiogroup" aria-label="Payment type" className="grid grid-cols-4 rounded-lg bg-gray-100 p-0.5 dark:bg-white/8">
+            {NEW_TYPES.map(t => (
+              <button key={t.value} type="button" role="radio" aria-checked={type === t.value} onClick={() => setType(t.value)}
+                className={`rounded-md py-1.5 text-[12px] font-semibold transition-colors ${type === t.value ? 'bg-white text-gray-800 shadow-sm dark:bg-[#2a2a2a] dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className={label} htmlFor="pay-amount">Amount</label>
+              <input id="pay-amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className={fieldClass} autoFocus />
+            </div>
+            <div className="w-24">
+              <label className={label} htmlFor="pay-currency">Currency</label>
+              <select id="pay-currency" value={currency} onChange={e => setCurrency(e.target.value)} className={fieldClass}>
+                {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={label} htmlFor="pay-party">{type === 'incoming' ? 'From' : type === 'payroll' ? 'Paid to (staff member)' : 'Paid to'}</label>
+            <input id="pay-party" value={party} onChange={e => setParty(e.target.value)} maxLength={120} className={fieldClass}
+              placeholder={type === 'incoming' ? 'Client or payer' : 'Person or company'} />
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className={label} htmlFor="pay-category">Category</label>
+              <input id="pay-category" value={category} onChange={e => setCategory(e.target.value)} maxLength={60} className={fieldClass} placeholder={CATEGORY_HINT[type]} />
+            </div>
+            <div className="w-36">
+              <label className={label} htmlFor="pay-date">Date</label>
+              <input id="pay-date" type="date" value={date} onChange={e => setDate(e.target.value)} className={fieldClass} />
+            </div>
+          </div>
+
+          <div>
+            <label className={label} htmlFor="pay-desc">Description</label>
+            <textarea id="pay-desc" value={description} onChange={e => setDescription(e.target.value)} maxLength={300} rows={3} className={`${fieldClass} resize-none`}
+              placeholder="What the payment is for" />
+          </div>
+
+          <label className="flex items-start gap-2 text-[12px] text-gray-600 dark:text-gray-300">
+            <input type="checkbox" checked={paid} onChange={e => setPaid(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
+            <span>
+              {type === 'incoming' ? 'Already received' : 'Already paid'}
+              <span className="block text-[11px] text-gray-400">{paid ? 'Recorded as completed.' : 'Recorded as pending, to approve and mark paid later.'}</span>
+            </span>
+          </label>
+        </div>
+
+        {error && <p role="alert" className="mt-3 text-[12px] text-red-600 dark:text-red-400">{error}</p>}
+
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={onClose}
+            className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-medium text-gray-600 dark:border-white/8 dark:text-gray-400">Cancel</button>
+          <button type="submit" disabled={!valid || saving}
+            className="flex-1 rounded-lg py-2.5 text-[12px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-50" style={{ backgroundColor:'#f5bd02' }}>
+            {saving ? 'Saving…' : 'Record Payment'}
+          </button>
+        </div>
+      </form>
+    </Overlay>
   );
 }
 

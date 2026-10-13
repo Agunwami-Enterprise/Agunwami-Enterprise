@@ -61,7 +61,6 @@ function LoginForm() {
           const userData = userDoc.data();
           const accountStatus = userData.accountStatus ?? 'active';
           const role = normalizeWorkstationRole(userData.role, userData.department ?? userData.dept);
-          const dept = String(userData.department ?? userData.dept ?? '').trim().toLowerCase();
 
           // Block fired users immediately at login
           if (accountStatus === 'fired') {
@@ -72,15 +71,11 @@ function LoginForm() {
             );
           }
 
-          if (role !== 'staff' && role !== 'ceo') {
+          // Staff accounts only; what each person can open (their AE department,
+          // CEO access) is decided by the server after sign-in.
+          if (!['staff', 'admin', 'manager', 'ceo'].includes(role) && userData.isCEO !== true) {
             await signOut(auth);
             throw new Error('Unauthorized: Workstation access is restricted to staff members.');
-          }
-
-          const validDepts = ['ceo', 'operations', 'operation', 'opm', 'hr', 'content-admin', 'content-staff'];
-          if (role !== 'ceo' && dept && !validDepts.includes(dept)) {
-            await signOut(auth);
-            throw new Error('Unauthorized: Department not recognized.');
           }
 
           // Suspended users: allowed to log in — the app will show the banner
