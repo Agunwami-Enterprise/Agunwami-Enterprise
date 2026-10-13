@@ -2,7 +2,7 @@
  * /api/site/media/[name]
  *
  * GET: an image uploaded in the C-panel (Firestore, or data/uploads on servers
- * without Firestore). File names are random and never
+ * without Firestore). File names end in a random id and are never
  * reused, so responses can be cached for a long time.
  */
 

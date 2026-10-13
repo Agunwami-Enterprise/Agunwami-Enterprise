@@ -5,10 +5,11 @@
  * page: cream canvas, white cards, dark primary actions, gold confirmations.
  */
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ImageUp, Loader2, Plus, Trash2, X } from 'lucide-react';
 import SiteIcon from '@/app/components/common/SiteIcon';
+import AeModal from '@/app/components/common/AeModal';
 import { SITE_ICON_NAMES, type SiteIconName } from '@/backend/modules/site-content/site-content.types';
 
 export const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
@@ -26,6 +27,32 @@ export async function cpanelFetch<T = unknown>(url: string, init: RequestInit & 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((body as { error?: string }).error || `Request failed (${res.status}).`);
   return body as T;
+}
+
+/**
+ * A true/false preference remembered on this device (e.g. a collapsed
+ * panel). Starts at `initial` and picks up the saved value after mount, so
+ * the server and first client render match.
+ */
+export function usePersistentToggle(key: string, initial = false): [boolean, (next: boolean | ((v: boolean) => boolean)) => void] {
+  const [value, setValue] = useState(initial);
+  useEffect(() => {
+    const read = setTimeout(() => {
+      try {
+        const saved = window.localStorage.getItem(key);
+        if (saved !== null) setValue(saved === '1');
+      } catch { /* storage unavailable */ }
+    }, 0);
+    return () => clearTimeout(read);
+  }, [key]);
+  const update = useCallback((next: boolean | ((v: boolean) => boolean)) => {
+    setValue(prev => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      try { window.localStorage.setItem(key, resolved ? '1' : '0'); } catch { /* storage unavailable */ }
+      return resolved;
+    });
+  }, [key]);
+  return [value, update];
 }
 
 /** Runs a change, then re-renders the server data. Exposes busy/error state. */
@@ -191,9 +218,10 @@ export function Select({ label, value, onChange, options, placeholder, className
 }
 
 /** Uploads an image to /api/cpanel/media and returns its URL. */
-export async function uploadImage(file: File): Promise<string> {
+export async function uploadImage(file: File, name?: string): Promise<string> {
   const form = new FormData();
   form.append('file', file);
+  if (name) form.append('name', name);
   const { url } = await cpanelFetch<{ url: string }>('/api/cpanel/media', { method: 'POST', body: form });
   return url;
 }
@@ -309,27 +337,8 @@ export function IconPicker({ value, onChange }: { value: SiteIconName; onChange:
 export function Modal({ open, title, onClose, children, footer, width = 'max-w-[640px]' }: {
   open: boolean; title: string; onClose: () => void; children: React.ReactNode; footer: React.ReactNode; width?: string;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
   if (!open) return null;
-  return (
-    <div className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={e => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={title}
-        className={cx('ae-pop-in flex max-h-[90vh] w-full flex-col rounded-2xl bg-white shadow-2xl', width)}>
-        <div className="flex items-center justify-between border-b border-[#F0EEE8] px-6 py-4">
-          <h2 className="text-[17px] font-semibold text-[#1A1A1A]">{title}</h2>
-          <IconButton label="Close" onClick={onClose}><X className="h-[18px] w-[18px]" /></IconButton>
-        </div>
-        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">{children}</div>
-        <div className="flex justify-end gap-3 border-t border-[#F0EEE8] px-6 py-4">{footer}</div>
-      </div>
-    </div>
-  );
+  return <AeModal title={title} onClose={onClose} footer={footer} widthClassName={width} bodyClassName="space-y-4">{children}</AeModal>;
 }
 
 export function SaveButton({ busy, onClick, children = 'Save Changes' }: { busy: boolean; onClick: () => void; children?: React.ReactNode }) {

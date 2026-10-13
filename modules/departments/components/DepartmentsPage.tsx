@@ -8,6 +8,7 @@
  * sign in with; this only decides their AE department and access.
  */
 
+import { useConfirm } from '@/app/components/common/AeModal';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import Link from 'next/link';
@@ -32,6 +33,7 @@ type MemberDialog =
   | { kind: 'suspend'; member: AeDepartmentMember };
 
 export default function DepartmentsPage() {
+  const confirm = useConfirm();
   const [departments, setDepartments] = useState<AeDepartment[]>([]);
   const [members, setMembers] = useState<AeDepartmentMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,11 @@ export default function DepartmentsPage() {
 
   async function deleteDepartment() {
     if (!selected) return;
-    if (!confirm(`Delete ${selected.name}? Its ${selected.memberCount} member(s) will lose their workstation until you add them to another department.`)) return;
+    if (!(await confirm({
+      title: `Delete ${selected.name}?`,
+      message: `Its ${selected.memberCount} member${selected.memberCount === 1 ? '' : 's'} will lose their workstation until you add them to another department. This can't be undone.`,
+      confirmLabel: 'Delete department', tone: 'danger',
+    }))) return;
     try {
       await api(`/api/ceo/departments/${encodeURIComponent(selected.id)}`, { method: 'DELETE' });
       toast.success(`${selected.name} deleted.`);
@@ -124,7 +130,11 @@ export default function DepartmentsPage() {
   }
 
   async function removeMember(member: AeDepartmentMember) {
-    if (!confirm(`Remove ${member.name || member.email} from ${selected?.name}? They keep their account but lose their workstation until added to a department.`)) return;
+    if (!(await confirm({
+      title: `Remove ${member.name || member.email} from ${selected?.name}?`,
+      message: 'They keep their account but lose their workstation until you add them to a department. Linked projects are updated too.',
+      confirmLabel: 'Remove', tone: 'danger',
+    }))) return;
     try {
       const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/members/${encodeURIComponent(member.uid)}`, { method: 'DELETE' });
       toast.success('Removed from the department.');
@@ -343,6 +353,7 @@ function AddPeopleDialog({ department, members, deptName, onClose, onAdded }: {
   onClose: () => void;
   onAdded: () => Promise<void>;
 }) {
+  const confirm = useConfirm();
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -363,7 +374,11 @@ function AddPeopleDialog({ department, members, deptName, onClose, onAdded }: {
 
   async function add(account: Account) {
     const current = memberOf.get(account.uid);
-    if (current && !confirm(`${account.name} is in ${deptName(current)}. Move them to ${department.name}?`)) return;
+    if (current && !(await confirm({
+      title: `Move ${account.name} to ${department.name}?`,
+      message: `They're in ${deptName(current)} now. Their page limits and admin rights there don't carry over.`,
+      confirmLabel: 'Move them',
+    }))) return;
     setBusy(account.uid);
     try {
       const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/${encodeURIComponent(department.id)}/members`, {

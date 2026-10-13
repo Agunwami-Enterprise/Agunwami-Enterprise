@@ -1,5 +1,6 @@
 "use client";
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   X, Calendar, Clock, Check, AlertCircle, AlertTriangle,
@@ -678,13 +679,8 @@ export default function UserScheduleDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end animate-fadeIn">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
+    <AeOverlay onClose={onClose} label="Schedule" className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm animate-fadeIn">
       {panelContent}
-    </div>
+    </AeOverlay>
   );
 }
