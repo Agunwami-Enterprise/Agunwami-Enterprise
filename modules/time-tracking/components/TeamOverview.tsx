@@ -1,5 +1,6 @@
 'use client';
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import { useEffect, useState } from 'react';
 import { subscribeLiveTeam, subscribeMonthlySummary, todayId, monthId } from '../services';
 import type { TimeTrackingLiveDoc, DayStatus, MonthlySummaryDoc } from '../types';
@@ -80,10 +81,7 @@ function StaffCalendarModal({ row, onClose }: { row: Row; onClose: () => void })
   useEffect(() => subscribeMonthlySummary(row.uid, monthId(), setSummary), [row.uid]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
+    <AeOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div
         className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl dark:bg-[#1e1e1e]"
         onClick={e => e.stopPropagation()}
@@ -99,6 +97,6 @@ function StaffCalendarModal({ row, onClose }: { row: Row; onClose: () => void })
         </div>
         <MonthlyCalendar uid={row.uid} summary={summary} />
       </div>
-    </div>
+    </AeOverlay>
   );
 }

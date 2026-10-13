@@ -1,5 +1,6 @@
 "use client";
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   ShieldCheck, ShieldOff, X, KeyRound, Smartphone,
@@ -435,11 +436,8 @@ export default function TwoFactorModal({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-
       {/* Dialog */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Two-Factor Authentication">
+      <AeOverlay onClose={onClose} label="Two-Factor Authentication" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
         <div
           className="relative w-full max-w-md bg-white dark:bg-[#1E1E1E] rounded-2xl shadow-2xl border border-[#E0DCC8]/60 dark:border-zinc-800"
           style={{ animation: "tfa-in 0.2s ease-out" }}
@@ -932,7 +930,7 @@ export default function TwoFactorModal({
             )}
           </div>
         </div>
-      </div>
+      </AeOverlay>
 
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes tfa-in {

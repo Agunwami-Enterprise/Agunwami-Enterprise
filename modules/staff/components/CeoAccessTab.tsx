@@ -13,6 +13,7 @@ import { toast } from 'react-toastify';
 import type { StaffAccount, CeoCandidate } from '@/modules/staff/services';
 import type { AeCeo } from '@/backend/modules/departments/ceos.service';
 import { CEO_OFFICE_ID, type AeDepartment, type AeDepartmentMember } from '@/backend/modules/departments/departments.types';
+import { useConfirm } from '@/app/components/common/AeModal';
 import { Modal, api, btnGhost, btnPrimary, input, reportSync, type SyncResult } from '@/modules/departments/components/shared';
 
 export interface CeoAccessData {
@@ -50,6 +51,7 @@ export default function CeoAccessTab({ data, error, candidates, accounts, depart
   onReload: () => Promise<void>;
   onDepartmentsChanged: () => Promise<void>;
 }) {
+  const confirm = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'promote' | 'handover' | null>(null);
 
@@ -163,7 +165,11 @@ export default function CeoAccessTab({ data, error, candidates, accounts, depart
                 {canManage && data.approvalsOn && (
                   <div className="flex flex-wrap gap-1.5">
                     <button className={btnPrimary} disabled={busy === person.uid}
-                      onClick={() => { if (confirm(`Give ${person.name} full CEO access? They'll see every page and project.`)) void act(person.uid, { action: 'approve', ...person }, `${person.name} is now a CEO.`); }}>
+                      onClick={async () => {
+                        if (await confirm({ title: `Give ${person.name} full CEO access?`, message: 'They\'ll see every page and every project, and Staff Management.', confirmLabel: 'Approve as CEO' })) {
+                          void act(person.uid, { action: 'approve', ...person }, `${person.name} is now a CEO.`);
+                        }
+                      }}>
                       Approve as CEO
                     </button>
                     <button className={btnGhost} disabled={busy === person.uid} onClick={() => void putInCeoOffice(person)}>Put in CEO Office</button>
@@ -212,8 +218,8 @@ export default function CeoAccessTab({ data, error, candidates, accounts, depart
                 </div>
                 {data.me.official && !ceo.official && ceo.uid !== data.me.uid && (
                   <button className={`${btnGhost} self-start text-red-600 sm:self-auto dark:text-red-400`} disabled={busy === ceo.uid}
-                    onClick={() => {
-                      if (confirm(`Remove ${ceo.name || ceo.email}'s CEO access? They keep their account and any AE department.`)) {
+                    onClick={async () => {
+                      if (await confirm({ title: `Remove ${ceo.name || ceo.email}'s CEO access?`, message: 'They keep their account and any AE department.', confirmLabel: 'Remove CEO access', tone: 'danger' })) {
                         void act(ceo.uid, { action: 'decline', uid: ceo.uid, name: ceo.name, email: ceo.email }, 'CEO access removed.');
                       }
                     }}>
@@ -243,7 +249,11 @@ export default function CeoAccessTab({ data, error, candidates, accounts, depart
                 {data.me.official && r.uid !== data.me.uid && (
                   <div className="flex flex-wrap gap-1.5">
                     <button className={btnGhost} disabled={busy === r.uid}
-                      onClick={() => { if (confirm(`Give ${r.name || r.email} full CEO access?`)) void act(r.uid, { action: 'approve', uid: r.uid, name: r.name, email: r.email }, 'CEO access given.'); }}>
+                      onClick={async () => {
+                        if (await confirm({ title: `Give ${r.name || r.email} full CEO access?`, message: 'They\'ll see every page and every project, and Staff Management.', confirmLabel: 'Make CEO' })) {
+                          void act(r.uid, { action: 'approve', uid: r.uid, name: r.name, email: r.email }, 'CEO access given.');
+                        }
+                      }}>
                       Make CEO
                     </button>
                     {r.claim && (

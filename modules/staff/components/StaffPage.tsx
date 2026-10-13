@@ -11,6 +11,7 @@
  * to, so AE changes don't reach them. CEO Access is the approved-CEO list.
  */
 
+import { useConfirm } from '@/app/components/common/AeModal';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
@@ -45,6 +46,7 @@ type Dialog =
   | { kind: 'suspend'; member: AeDepartmentMember };
 
 export default function StaffPage() {
+  const confirm = useConfirm();
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('directory');
   const [accounts, setAccounts] = useState<StaffAccount[] | null>(null);
@@ -153,7 +155,11 @@ export default function StaffPage() {
   }
 
   async function remove(account: StaffAccount, member: AeDepartmentMember) {
-    if (!confirm(`Remove ${account.name} from ${deptById.get(member.departmentId)?.name ?? 'their department'}? They keep their account but lose their workstation until added to a department.`)) return;
+    if (!(await confirm({
+      title: `Remove ${account.name} from ${deptById.get(member.departmentId)?.name ?? 'their department'}?`,
+      message: 'They keep their account but lose their workstation until you add them to a department. Linked projects are updated too.',
+      confirmLabel: 'Remove', tone: 'danger',
+    }))) return;
     try {
       const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/members/${encodeURIComponent(account.uid)}`, { method: 'DELETE' });
       toast.success('Removed from the department.');

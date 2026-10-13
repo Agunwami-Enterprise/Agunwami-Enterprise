@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import { useRef, useState } from 'react';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
 import {
@@ -328,12 +329,9 @@ export default function DocumentsPage() {
 
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div
-      className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <AeOverlay onClose={onClose} className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div className="ae-pop-in" onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
+    </AeOverlay>
   );
 }
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { AeOverlay, useConfirm } from '@/app/components/common/AeModal';
+import { toast } from 'react-toastify';
 import { useEffect, useState } from 'react';
 import { SkeletonDashboard } from '@/app/components/ceo/Skeleton';
 import { useAuth } from '@/lib/workstation/auth-context';
@@ -52,6 +54,7 @@ interface RevenueMonth {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const confirm = useConfirm();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date | null>(null);
@@ -80,17 +83,22 @@ export default function DashboardPage() {
   }
 
   async function handleDeleteProject(id: string, name: string) {
-    if (!confirm(`Are you sure you want to remove project "${name}"? This will delete its configuration.`)) return;
+    if (!(await confirm({
+      title: `Remove ${name}?`,
+      message: 'This deletes the project\'s configuration (its metrics endpoint and token). The project itself isn\'t affected.',
+      confirmLabel: 'Remove project', tone: 'danger',
+    }))) return;
     setDeletingProjectId(id);
     try {
       const res = await fetch(`/api/ceo/projects?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (res.ok) {
         await reloadProjects();
       } else {
-        alert('Failed to delete project');
+        const body = await res.json().catch(() => ({}));
+        toast.error((body as { error?: string }).error || `${name} could not be removed. Please try again.`);
       }
     } catch {
-      alert('Error deleting project');
+      toast.error(`${name} could not be removed. Check your connection and try again.`);
     } finally {
       setDeletingProjectId(null);
     }
@@ -1376,7 +1384,7 @@ function LiveApprovalDetailModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+    <AeOverlay onClose={onClose} label="Approval details" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1a1a1a]">
         <div className="flex items-start justify-between border-b border-gray-100 pb-3.5 dark:border-white/8">
           <div>
@@ -1435,7 +1443,7 @@ function LiveApprovalDetailModal({
           )}
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -1468,7 +1476,7 @@ function ExecutiveReportModal({
     ? `$${(dynamicSumK / 1000).toFixed(2)}M`
     : '—';
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+    <AeOverlay onClose={onClose} label="Executive report" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1a1a1a]">
         <div className="flex items-start justify-between border-b border-gray-100 pb-4 dark:border-white/8">
           <div>
@@ -1590,7 +1598,7 @@ function ExecutiveReportModal({
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -1639,7 +1647,7 @@ function BroadcastModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+    <AeOverlay onClose={onClose} label="Broadcast" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1a1a1a]">
         <div className="flex items-center justify-between border-b border-gray-100 pb-3.5 dark:border-white/8">
           <div>
@@ -1761,7 +1769,7 @@ function BroadcastModal({
           </form>
         )}
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 

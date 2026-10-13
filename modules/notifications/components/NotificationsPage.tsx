@@ -1,5 +1,6 @@
 'use client';
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import { useEffect, useState } from 'react';
 import { markAllNotifsRead, subscribeNotifications } from '@/modules/notifications/services';
 import { categoryColors, timeAgo, useProjectNotifications } from '@/modules/notifications/project-notifications';
@@ -323,9 +324,9 @@ export default function NotificationsPage() {
 
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
+    <AeOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
+    </AeOverlay>
   );
 }
 

@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import { toast } from 'react-toastify';
+import AeModal from '@/app/components/common/AeModal';
 import { SkeletonPayments } from '@/app/components/ceo/Skeleton';
 import {
   ALL_SOURCES, FeedError, FeedNotices, SourceBadge, SourceFilter,
@@ -229,12 +230,18 @@ export default function PaymentsPage() {
 
       {/* Payment Detail modal */}
       {detail && (
-        <Overlay onClose={() => setDetail(null)}>
-          <div className="w-[calc(100vw-2rem)] max-w-[420px] rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1e1e1e]">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-[15px] font-bold text-gray-800 dark:text-white">Payment Details</h2>
-              <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600"><XIcon /></button>
-            </div>
+        <AeModal size="sm" title="Payment Details" description={detail.source.name} onClose={() => setDetail(null)} bodyClassName=""
+          footer={detail.reviewable ? (
+            <>
+              <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'REJECTED')}
+                className="rounded-lg border border-red-200 px-4 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10">Reject</button>
+              <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'APPROVED')}
+                className="rounded-lg bg-green-600 px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50">Approve</button>
+            </>
+          ) : detail.payable ? (
+            <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'COMPLETED')}
+              className="rounded-lg px-4 py-2 text-[13px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-50" style={{ backgroundColor:'#f5bd02' }}>Mark as paid</button>
+          ) : undefined}>
             <div className="flex flex-col gap-3">
               {[
                 { label:'Project',      value: detail.source.name, plain: true },
@@ -259,27 +266,7 @@ export default function PaymentsPage() {
                 </div>
               ))}
             </div>
-            {(detail.reviewable || detail.payable) && (
-              <div className="mt-5 flex gap-2">
-                {detail.reviewable ? (
-                  <>
-                    <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'APPROVED')}
-                      className="flex-1 rounded-lg bg-green-600 py-2.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">Approve</button>
-                    <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'REJECTED')}
-                      className="flex-1 rounded-lg border border-red-200 py-2.5 text-[12px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10">Reject</button>
-                  </>
-                ) : (
-                  <button disabled={reviewing === detail.key} onClick={() => void review(detail, 'COMPLETED')}
-                    className="flex-1 rounded-lg py-2.5 text-[12px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-50" style={{ backgroundColor:'#f5bd02' }}>Mark as paid</button>
-                )}
-              </div>
-            )}
-            <button onClick={() => setDetail(null)}
-              className="mt-2 w-full rounded-lg border border-gray-200 py-2.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50 dark:border-white/8 dark:text-gray-400 dark:hover:bg-white/4">
-              Close
-            </button>
-          </div>
-        </Overlay>
+        </AeModal>
       )}
 
       {/* New Payment modal */}
@@ -347,13 +334,18 @@ function NewPaymentDialog({ onClose, onCreated }: { onClose: () => void; onCreat
 
   const label = 'mb-1 block text-[11px] font-semibold text-gray-600 dark:text-gray-300';
   return (
-    <Overlay onClose={onClose}>
-      <form onSubmit={submit} className="w-[calc(100vw-2rem)] max-w-[440px] rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1e1e1e]">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-[15px] font-bold text-gray-800 dark:text-white">Record a Payment</h2>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close"><XIcon /></button>
-        </div>
-        <p className="mb-4 text-[11px] text-gray-500 dark:text-gray-400">Saved in Agunwami Enterprise’s books. Project payments come from each project.</p>
+    <AeModal title="Record a Payment" description="Saved in Agunwami Enterprise’s books. Project payments come from each project." onClose={onClose} dismissible={!saving} bodyClassName=""
+      footer={(
+        <>
+          <button type="button" onClick={onClose} disabled={saving}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-[13px] font-medium text-gray-600 dark:border-white/8 dark:text-gray-400">Cancel</button>
+          <button type="submit" form="record-payment" disabled={!valid || saving}
+            className="rounded-lg px-4 py-2 text-[13px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-50" style={{ backgroundColor:'#f5bd02' }}>
+            {saving ? 'Saving…' : 'Record Payment'}
+          </button>
+        </>
+      )}>
+      <form id="record-payment" onSubmit={submit}>
 
         <div className="flex flex-col gap-3">
           <div role="radiogroup" aria-label="Payment type" className="grid grid-cols-4 rounded-lg bg-gray-100 p-0.5 dark:bg-white/8">
@@ -368,7 +360,7 @@ function NewPaymentDialog({ onClose, onCreated }: { onClose: () => void; onCreat
           <div className="flex gap-2">
             <div className="flex-1">
               <label className={label} htmlFor="pay-amount">Amount</label>
-              <input id="pay-amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className={fieldClass} autoFocus />
+              <input id="pay-amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className={fieldClass} />
             </div>
             <div className="w-24">
               <label className={label} htmlFor="pay-currency">Currency</label>
@@ -411,30 +403,12 @@ function NewPaymentDialog({ onClose, onCreated }: { onClose: () => void; onCreat
         </div>
 
         {error && <p role="alert" className="mt-3 text-[12px] text-red-600 dark:text-red-400">{error}</p>}
-
-        <div className="mt-4 flex gap-2">
-          <button type="button" onClick={onClose}
-            className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-medium text-gray-600 dark:border-white/8 dark:text-gray-400">Cancel</button>
-          <button type="submit" disabled={!valid || saving}
-            className="flex-1 rounded-lg py-2.5 text-[12px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-50" style={{ backgroundColor:'#f5bd02' }}>
-            {saving ? 'Saving…' : 'Record Payment'}
-          </button>
-        </div>
       </form>
-    </Overlay>
-  );
-}
-
-function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="ae-pop-in" onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
+    </AeModal>
   );
 }
 
 function PlusIcon()      { return <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="7" y1="1" x2="7" y2="13"/><line x1="1" y1="7" x2="13" y2="7"/></svg>; }
-function XIcon()         { return <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/></svg>; }
 function SearchSmIcon()  { return <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9ca3af" strokeWidth="1.8"><circle cx="7" cy="7" r="5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>; }
 function EyeIcon()       { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>; }
 function ExportIcon()    { return <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="4,6 8,2 12,6"/><line x1="8" y1="2" x2="8" y2="11"/><rect x="2" y="12" width="12" height="2" rx="1"/></svg>; }

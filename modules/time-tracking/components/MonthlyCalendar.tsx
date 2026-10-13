@@ -1,5 +1,6 @@
 'use client';
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import { useState } from 'react';
 import { getDay, todayId } from '../services';
 import type { TimeTrackingDayDoc, MonthlySummaryDoc } from '../types';
@@ -126,7 +127,7 @@ function DayDetailModal({ dateId, loading, detail, onClose }: {
   dateId: string; loading: boolean; detail: TimeTrackingDayDoc | null; onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <AeOverlay onClose={onClose} label="Day details" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div
         className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-[#1e1e1e]"
         onClick={e => e.stopPropagation()}
@@ -173,7 +174,7 @@ function DayDetailModal({ dateId, loading, detail, onClose }: {
           </div>
         )}
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 

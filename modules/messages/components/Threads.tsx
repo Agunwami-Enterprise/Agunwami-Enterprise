@@ -6,6 +6,7 @@
  * thread, and the note a thread leaves in its parent chat.
  */
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDocs, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
 import {
@@ -216,9 +217,7 @@ function Dialog({ title, icon, onClose, children, footer, labelId }: {
   labelId: string;
 }) {
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby={labelId}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+    <AeOverlay onClose={onClose} labelledBy={labelId} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="ae-pop-in flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
           <div className="flex items-center gap-2">
@@ -230,7 +229,7 @@ function Dialog({ title, icon, onClose, children, footer, labelId }: {
         <div className="flex-1 space-y-4 overflow-y-auto p-5">{children}</div>
         {footer && <div className="border-t border-gray-100 px-5 py-4 dark:border-zinc-800">{footer}</div>}
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -423,9 +422,7 @@ export function ThreadsPanel({ parent, myThreadIds, unreadByThread, onOpen, onJo
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="threads-panel-title"
-      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm" onClick={onClose}
-      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+    <AeOverlay onClose={onClose} label="Threads" className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
       <div className="ae-pop-in flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-zinc-900" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
           <div>
@@ -463,7 +460,7 @@ export function ThreadsPanel({ parent, myThreadIds, unreadByThread, onOpen, onJo
           )}
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 

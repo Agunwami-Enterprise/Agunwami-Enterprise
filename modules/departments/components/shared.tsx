@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { toast } from 'react-toastify';
+import AeModal from '@/app/components/common/AeModal';
 import { authDb } from '@/lib/workstation/firebase';
 import { BASE_PAGE_IDS, PAGE_GROUPS, WORKSTATION_PAGES } from '@/lib/workstation/pages';
 import { positionTitle, type AeDepartment, type AeDepartmentMember } from '@/backend/modules/departments/departments.types';
@@ -63,19 +64,7 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (on: bo
 }
 
 export function Modal({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer: React.ReactNode }) {
-  return (
-    <div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
-      <div className="ae-pop-in flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#1e1e1e]">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-white/6">
-          <h2 className="text-[15px] font-bold text-gray-900 dark:text-white">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5">✕</button>
-        </div>
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">{children}</div>
-        <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3 dark:border-white/6">{footer}</div>
-      </div>
-    </div>
-  );
+  return <AeModal title={title} onClose={onClose} footer={footer} bodyClassName="space-y-4">{children}</AeModal>;
 }
 
 export function PagePicker({ selected, onChange, limitTo }: {

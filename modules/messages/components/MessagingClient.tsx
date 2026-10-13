@@ -1,5 +1,6 @@
 "use client";
 
+import { AeOverlay, useConfirm } from '@/app/components/common/AeModal';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import {
@@ -790,7 +791,7 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
 
   if (!isOpen) return null;
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="assign-task-modal-title" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <AeOverlay onClose={onClose} label="Assign task" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
@@ -855,7 +856,7 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -1058,7 +1059,7 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
   const TypeIcon = convo.type === "community" ? Hash : Users;
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="group-settings-modal-title" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <AeOverlay onClose={onClose} label="Group settings" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800 shrink-0">
@@ -1162,7 +1163,7 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
 
               {/* Multi-step Safety Confirmation Modal */}
               {showDeleteConfirm && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-60 flex items-center justify-center p-4">
+                <AeOverlay onClose={() => { setShowDeleteConfirm(false); setDeleteConfirmName(''); }} label="Delete group" className="fixed inset-0 bg-black/60 backdrop-blur-xs z-60 flex items-center justify-center p-4">
                   <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
                     <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
                       <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950/50 flex items-center justify-center shrink-0">
@@ -1227,7 +1228,7 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
                       </button>
                     </div>
                   </div>
-                </div>
+                </AeOverlay>
               )}
             </div>
           )}
@@ -1328,7 +1329,7 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
           )}
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -1420,7 +1421,7 @@ function NewChatModal({ isOpen, onClose, myUid, myName, myDept, onCreated }: {
 
   if (!isOpen) return null;
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="new-chat-modal-title" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <AeOverlay onClose={onClose} label="New conversation" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
           <div>
@@ -1539,7 +1540,7 @@ function NewChatModal({ isOpen, onClose, myUid, myName, myDept, onCreated }: {
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -1558,6 +1559,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
   onEditInvitees?: (act: Activity) => void;
   approvedLeaves?: ApprovedLeaveRecord[];
 }) {
+  const confirm = useConfirm();
   const today = dateToStr(new Date());
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -1909,7 +1911,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
       toast.error("Activities can only be cancelled at least 1 day in advance.");
       return;
     }
-    if (!confirm(`Are you sure you want to cancel '${act.title}'?`)) return;
+    if (!(await confirm({ title: `Cancel ${act.title}?`, message: 'Everyone invited loses it from their calendar.', confirmLabel: 'Cancel activity', cancelLabel: 'Keep it', tone: 'danger' }))) return;
     setDeletingId(act.id);
     try {
       await deleteDoc(doc(db, "activities", act.id));
@@ -2943,7 +2945,7 @@ function ShareActivityModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+    <AeOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white dark:bg-zinc-900 rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-100 dark:border-zinc-800 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -3040,7 +3042,7 @@ function ShareActivityModal({
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -3152,7 +3154,7 @@ function EditInviteesModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+    <AeOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-xl md:max-w-2xl w-full p-6 shadow-2xl border border-gray-100 dark:border-zinc-800 flex flex-col max-h-[90vh] space-y-4">
         <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -3222,7 +3224,7 @@ function EditInviteesModal({
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -3243,6 +3245,7 @@ const BUBBLE_TEXT: Record<MessagePreferences["textSize"], string> = {
 
 export default function MessagingClient() {
   const { user } = useAuth();
+  const confirm = useConfirm();
   const msgPrefs = useMessagePreferences(user?.uid);
   const msgPrefsRef = useRef(msgPrefs);
   useEffect(() => { msgPrefsRef.current = msgPrefs; }, [msgPrefs]);
@@ -4562,7 +4565,7 @@ export default function MessagingClient() {
                     {activeConvo.type === "direct" && (
                       <button
                         onClick={async () => {
-                          if (!confirm("Are you sure you want to delete this direct chat history?")) return;
+                          if (!(await confirm({ title: "Delete this chat?", message: "The whole conversation is deleted for both of you. This can't be undone.", confirmLabel: "Delete chat", tone: "danger" }))) return;
                           try {
                             await remove(ref(rtdb, `messages/${activeConvo.id}`));
                             await remove(ref(rtdb, `conversations/${activeConvo.id}`));
@@ -4599,13 +4602,13 @@ export default function MessagingClient() {
                     onUnlinkTask={task => void threadAction(() => setTaskLinked(activeThread, task, false, threadSender))}
                     onResolve={() => void threadAction(() => setThreadStatus(activeThread, activeThreadParent, "resolved", threadSender), "Thread resolved.")}
                     onReopen={() => void threadAction(() => setThreadStatus(activeThread, activeThreadParent, "open", threadSender), "Thread reopened.")}
-                    onLeave={() => {
-                      if (!confirm("Leave this thread? While it's open you can join again from the group.")) return;
+                    onLeave={async () => {
+                      if (!(await confirm({ title: "Leave this thread?", message: "While it's open you can join again from the group.", confirmLabel: "Leave thread" }))) return;
                       const parentId = activeThread.parentId ?? null;
                       void threadAction(async () => { await leaveThread(activeThread, threadSender); setActiveConvId(parentId); }, "You left the thread.");
                     }}
-                    onDelete={() => {
-                      if (!confirm(`Delete the thread "${activeThread.name || "Thread"}" and all its messages for everyone? This can't be undone.`)) return;
+                    onDelete={async () => {
+                      if (!(await confirm({ title: `Delete "${activeThread.name || "Thread"}"?`, message: "The thread and all its messages are deleted for everyone. This can't be undone.", confirmLabel: "Delete thread", tone: "danger" }))) return;
                       const parentId = activeThread.parentId ?? null;
                       void threadAction(async () => { await deleteThread(activeThread, activeThreadParent, threadSender); setActiveConvId(parentId); }, "Thread deleted.");
                     }}
@@ -5342,10 +5345,7 @@ export default function MessagingClient() {
         myUid={myUid} myName={myName} myDept={profile?.department} onCreated={id => { setActiveConvId(id); setShowMobileChat(true); }} />
 
       {isMessageSettingsOpen && myUid && (
-        <div role="dialog" aria-modal="true" aria-labelledby="message-settings-title"
-          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
-          onClick={() => setIsMessageSettingsOpen(false)}
-          onKeyDown={e => { if (e.key === "Escape") setIsMessageSettingsOpen(false); }}>
+        <AeOverlay onClose={() => setIsMessageSettingsOpen(false)} label="Message settings" className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
           <div className="ae-pop-in flex h-full w-full max-w-md flex-col bg-gray-50 shadow-2xl dark:bg-zinc-950"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -5366,7 +5366,7 @@ export default function MessagingClient() {
               />
             </div>
           </div>
-        </div>
+        </AeOverlay>
       )}
 
       <GroupSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}
