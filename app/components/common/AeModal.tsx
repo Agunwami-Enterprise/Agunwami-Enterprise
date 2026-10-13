@@ -86,7 +86,10 @@ function useModalBehaviour(root: React.RefObject<HTMLElement | null>, onClose: (
       document.removeEventListener('keydown', onKey);
       openCount -= 1;
       if (openCount === 0) document.body.style.overflow = overflow;
-      previous?.focus?.();
+      // Return focus to where it was, unless the dialog's action moved it on
+      // (e.g. back into an editor at the insertion point); never scroll for it.
+      const active = document.activeElement;
+      if (!active || active === document.body || !active.isConnected) previous?.focus?.({ preventScroll: true });
     };
   }, [root]);
 

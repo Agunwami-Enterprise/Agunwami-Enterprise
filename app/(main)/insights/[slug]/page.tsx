@@ -326,7 +326,7 @@ export default async function BlogDetailPage({
               </div>
 
               {/* Table of Contents */}
-              {headings.length > 0 && (
+              {article.showToc !== false && headings.length > 0 && (
                 <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#141414] overflow-hidden shadow-sm">
                   <div className="p-6 space-y-3">
                     <h3 className="text-xs font-semibold tracking-widest uppercase text-gray-400">

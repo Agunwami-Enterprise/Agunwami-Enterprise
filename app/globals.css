@@ -312,6 +312,15 @@ html.ae-reduce-motion .ae-lift:hover { transform: none; }
 .article-content pre code { background: none; padding: 0; color: inherit; }
 .article-content img { width: 100%; height: auto; border-radius: 12px; }
 .article-content hr { border: 0; border-top: 1px solid #e5e7eb; margin: 2em 0; }
+.article-content figure { margin-left: 0; margin-right: 0; }
+.article-content figcaption {
+  margin-top: 0.6em;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+.dark .article-content:not(.article-editor) figcaption { color: #9ca3af; }
 
 .dark .article-content:not(.article-editor) { color: #d1d5db; }
 .dark .article-content:not(.article-editor) :is(h2, h3, strong, blockquote) { color: #f9fafb; }
@@ -321,11 +330,14 @@ html.ae-reduce-motion .ae-lift:hover { transform: none; }
 
 /* Editor-only touches */
 .article-editor.ProseMirror { min-height: 420px; outline: none; }
+.article-editor img.ProseMirror-selectednode,
+.article-editor figure.ProseMirror-selectednode img { outline: 3px solid #c89b3c; outline-offset: 2px; }
+.article-editor h2, .article-editor h3 { scroll-margin-top: 80px; }
 .article-editor p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
   height: 0;
-  color: #b5b5b5;
+  color: #8c8679;
   pointer-events: none;
 }
 .article-editor img.ProseMirror-selectednode { outline: 3px solid var(--primary); }

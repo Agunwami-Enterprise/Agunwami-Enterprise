@@ -120,6 +120,8 @@ export interface SiteArticle {
   /** Article content as HTML from the C-panel editor, sanitized on save. */
   body: string;
   pullQuote: string;
+  /** Show the table of contents (the article's section headings) beside it; on unless turned off. */
+  showToc?: boolean;
   /** Drafts are only visible in the C-panel. */
   published: boolean;
 }

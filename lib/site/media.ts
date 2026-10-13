@@ -35,7 +35,14 @@ const CONTENT_TYPES: Record<string, string> = Object.fromEntries(
 );
 
 /** File names this module creates: <uuid>.<ext>. */
-const NAME_PATTERN = /^[0-9a-f-]{36}\.(png|jpg|webp|gif)$/;
+// A random id, optionally after a readable name from the uploader ("team-retreat-<id>.jpg").
+const NAME_PATTERN = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*-)?[0-9a-f-]{36}\.(png|jpg|webp|gif)$/;
+
+/** A file name as a short lowercase slug ("Team Retreat 2026.JPG" → "team-retreat-2026"). */
+function nameSlug(raw: string | undefined): string {
+  return (raw ?? '').replace(/\.[a-z0-9]{2,5}$/i, '').toLowerCase().normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
+}
 
 function uploadsDir(): string {
   return path.join(process.cwd(), 'data', 'uploads');
@@ -88,7 +95,8 @@ async function firestoreMedia(name: string, init: RequestInit = {}): Promise<Res
   });
 }
 
-export async function saveUpload(file: File): Promise<string> {
+/** Stores an uploaded image; `preferredName` (e.g. the file name the uploader chose) prefixes its id. */
+export async function saveUpload(file: File, preferredName?: string): Promise<string> {
   const originalExt = IMAGE_TYPES[file.type];
   if (!originalExt) throw new Error('Upload a PNG, JPG, WebP or GIF image.');
   if (file.size > MAX_UPLOAD_BYTES) throw new Error('Images must be 5 MB or smaller.');
@@ -99,7 +107,8 @@ export async function saveUpload(file: File): Promise<string> {
   if (bytes.length > MAX_STORED_BYTES) {
     throw new Error('That image is too large to store. Use a smaller image (under 900 KB, or any size if it can be compressed).');
   }
-  const name = `${randomUUID()}.${ext}`;
+  const slug = nameSlug(preferredName);
+  const name = `${slug ? `${slug}-` : ''}${randomUUID()}.${ext}`;
 
   const res = await firestoreMedia(name, {
     method: 'PATCH',

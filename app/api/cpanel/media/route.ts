@@ -1,7 +1,8 @@
 /**
  * /api/cpanel/media
  *
- * POST (multipart, field "file"): uploads an image and returns { url }.
+ * POST (multipart, field "file", optional "name"): uploads an image and
+ * returns { url }. The name (e.g. a chosen file name) goes in front of its id.
  */
 
 import { NextResponse } from 'next/server';
@@ -18,7 +19,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Choose an image to upload.' }, { status: 400 });
   }
   try {
-    return NextResponse.json({ url: await saveUpload(file) }, { status: 201 });
+    const name = form?.get('name');
+    return NextResponse.json({ url: await saveUpload(file, typeof name === 'string' ? name : file.name) }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Upload failed.' }, { status: 400 });
   }

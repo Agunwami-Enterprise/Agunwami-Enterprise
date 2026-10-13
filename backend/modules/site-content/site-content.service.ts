@@ -487,6 +487,7 @@ export async function saveArticle(input: Input, id?: string): Promise<SiteArticl
       heroImage: url(input, 'heroImage', { label: 'Hero image URL' }) || image,
       body,
       pullQuote: text(input, 'pullQuote', { max: 400, label: 'Pull quote' }),
+      showToc: input.showToc !== false,
       published,
     };
     return existing ? articles.map(a => (a.id === existing.id ? saved! : a)) : [...articles, saved];
