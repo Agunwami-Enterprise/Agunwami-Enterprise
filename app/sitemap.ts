@@ -78,8 +78,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       };
     });
 
-  // Dynamically include all published insights articles
-  const insightRoutes: MetadataRoute.Sitemap = articles.map((article) => {
+  // Dynamically include all published insights articles (except those hidden from search engines)
+  const insightRoutes: MetadataRoute.Sitemap = articles.filter((article) => !article.noIndex).map((article) => {
     const parsedDate = new Date(article.date);
     return {
       url: `${BASE_URL}/insights/${article.slug}`,

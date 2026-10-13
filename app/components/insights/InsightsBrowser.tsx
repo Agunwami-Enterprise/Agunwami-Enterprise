@@ -28,16 +28,8 @@ export interface InsightCard {
   image: string;
 }
 
-const CATEGORIES = [
-  "All",
-  "Infrastructure",
-  "Design",
-  "Technology",
-  "Partnerships",
-  "Insights",
-] as const;
-
-export default function InsightsBrowser({ articles }: { articles: InsightCard[] }) {
+/** `categories`: the C-panel's categories that have articles, in order; "All" comes first. */
+export default function InsightsBrowser({ articles, categories }: { articles: InsightCard[]; categories: string[] }) {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -119,7 +111,7 @@ export default function InsightsBrowser({ articles }: { articles: InsightCard[] 
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-gray-200 dark:border-white/10">
             {/* Category tabs */}
             <div className="flex items-center gap-2 md:gap-4 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
-              {CATEGORIES.map((category) => {
+              {["All", ...categories].map((category) => {
                 const isActive = selectedCategory === category;
                 return (
                   <button

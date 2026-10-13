@@ -15,7 +15,7 @@ import { normalizeWebUrl } from './LinkDialog';
 
 const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
 
-export interface ArticleImage { src: string; alt: string; caption: string }
+export interface ArticleImage { src: string; alt: string; caption: string; showCaption: boolean }
 
 /** "Team Retreat_2026.JPG" → "team-retreat-2026": the file name as stored. */
 const fileSlug = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
@@ -23,7 +23,7 @@ const fileSlug = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '').toLower
 export default function ImageDialog({ mode, initial, onInsert, onClose }: {
   /** insert: a new image; replace: swap the selected image; details: edit its alt text and description. */
   mode: 'insert' | 'replace' | 'details';
-  initial?: { alt: string; caption: string };
+  initial?: { alt: string; caption: string; showCaption: boolean };
   onInsert: (image: ArticleImage) => void;
   onClose: () => void;
 }) {
@@ -33,6 +33,7 @@ export default function ImageDialog({ mode, initial, onInsert, onClose }: {
   const [url, setUrl] = useState('');
   const [alt, setAlt] = useState(initial?.alt ?? '');
   const [caption, setCaption] = useState(initial?.caption ?? '');
+  const [showCaption, setShowCaption] = useState(initial?.showCaption ?? true);
   const [fileName, setFileName] = useState('');
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -60,7 +61,7 @@ export default function ImageDialog({ mode, initial, onInsert, onClose }: {
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
-    const details = { alt: alt.trim(), caption: caption.trim() };
+    const details = { alt: alt.trim(), caption: caption.trim(), showCaption };
     if (mode === 'details') { onInsert({ src: '', ...details }); return; }
     setError('');
     if (tab === 'url') {
@@ -155,8 +156,12 @@ export default function ImageDialog({ mode, initial, onInsert, onClose }: {
           <span className="mt-1 block text-[12px] text-[#6B6B6B]">Read aloud by screen readers and used by search engines. Not shown on the page.</span>
         </label>
         <label className="block">
-          <span className="mb-1 block text-[13px] font-medium text-[#4A4A4A]">Description <span className="font-normal text-[#8C8679]">(optional caption)</span></span>
-          <textarea className={`${input} min-h-[64px]`} value={caption} maxLength={300} onChange={e => setCaption(e.target.value)} placeholder="Shown under the image, e.g. The 2026 summit drew 400 founders." />
+          <span className="mb-1 block text-[13px] font-medium text-[#4A4A4A]">Description <span className="font-normal text-[#8C8679]">(optional)</span></span>
+          <textarea className={`${input} min-h-[64px]`} value={caption} maxLength={300} onChange={e => setCaption(e.target.value)} placeholder="e.g. The 2026 summit drew 400 founders." />
+        </label>
+        <label className="flex items-start gap-2 text-[13px] text-[#4A4A4A]">
+          <input type="checkbox" checked={showCaption} onChange={e => setShowCaption(e.target.checked)} className="mt-0.5 accent-[#C89B3C]" />
+          <span>Show the description under the image<span className="block text-[12px] text-[#9A9A9A]">Turn off to keep it saved with the image without showing it to readers.</span></span>
         </label>
         {error && <p role="alert" className="text-[13px] text-red-600">{error}</p>}
       </form>

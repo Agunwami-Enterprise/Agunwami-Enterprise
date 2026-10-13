@@ -2,13 +2,14 @@
 
 /**
  * The article's author: pick anyone in AE or the connected projects (their
- * name, role and, for AE accounts, profile photo fill in), use yourself, or
- * type a name and role by hand.
+ * name, role and photo fill in: the AE profile photo, or the one they have on
+ * another article), use yourself, or type a name and role by hand. When no
+ * photo is found, the writer is asked to add one.
  */
 
 import { useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { Search, UserRound } from 'lucide-react';
+import { ImagePlus, Loader2, Search, UserRound } from 'lucide-react';
 import { authDb } from '@/lib/workstation/firebase';
 import type { AuthorOption } from '@/app/api/cpanel/people/route';
 import { ImageField, TextInput, cx } from '../ui';
@@ -27,23 +28,30 @@ export async function photoOf(uid?: string): Promise<string> {
   }
 }
 
-export default function AuthorPicker({ value, people, me, onChange }: {
+export default function AuthorPicker({ value, people, me, knownPhotos, onChange }: {
   value: AuthorValue;
   people: AuthorOption[] | null;
   me: AuthorOption | null;
+  /** Photos authors have on other articles, by lowercased name. */
+  knownPhotos: Map<string, string>;
   onChange: (next: Partial<AuthorValue>) => void;
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+  const known = (name: string) => knownPhotos.get(name.trim().toLowerCase()) ?? '';
   const term = query.trim().toLowerCase();
   const matches = (people ?? []).filter(p => !term || p.name.toLowerCase().includes(term) || p.role.toLowerCase().includes(term) || p.source.toLowerCase().includes(term)).slice(0, 30);
 
   async function pick(person: AuthorOption) {
     setOpen(false);
     setQuery('');
-    onChange({ author: person.name, authorRole: person.role });
+    onChange({ author: person.name, authorRole: person.role, authorImage: known(person.name) });
+    if (!person.uid) return;
+    setLookingUp(true);
     const photo = await photoOf(person.uid);
-    onChange({ authorImage: photo });
+    setLookingUp(false);
+    onChange({ authorImage: photo || known(person.name) });
   }
 
   return (
@@ -81,9 +89,22 @@ export default function AuthorPicker({ value, people, me, onChange }: {
           <UserRound className="h-4 w-4" aria-hidden="true" /> Use me ({me.name})
         </button>
       )}
-      <TextInput label="Name" value={value.author} onChange={author => onChange({ author })} placeholder="Author's full name" />
+      <TextInput label="Name" value={value.author} onChange={author => onChange({ author })} placeholder="Author's full name"
+        onBlur={() => { if (value.author.trim() && !value.authorImage && known(value.author)) onChange({ authorImage: known(value.author) }); }} />
       <TextInput label="Role" value={value.authorRole} onChange={authorRole => onChange({ authorRole })} placeholder="e.g. Head of Research" />
-      <ImageField label="Photo" value={value.authorImage} onChange={authorImage => onChange({ authorImage })} />
+      {value.author.trim() && !value.authorImage && (
+        lookingUp ? (
+          <p className="flex items-center gap-2 text-[13px] text-[#6B6B6B]"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Looking for {value.author.trim()}’s photo…</p>
+        ) : (
+          <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-800">
+            <ImagePlus className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>No photo found for <strong className="font-semibold">{value.author.trim()}</strong>. Please upload one or paste its address below. It shows beside their name on the article.</span>
+          </div>
+        )
+      )}
+      <div data-author-photo>
+        <ImageField label="Photo" value={value.authorImage} onChange={authorImage => onChange({ authorImage })} />
+      </div>
     </div>
   );
 }

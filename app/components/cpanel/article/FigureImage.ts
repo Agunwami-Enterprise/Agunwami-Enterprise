@@ -1,7 +1,9 @@
 /**
- * The article image: TipTap's image with a visible caption (its description).
- * Saved as <figure><img alt …><figcaption>…</figcaption></figure> when it has
- * a caption, or a plain <img> without one, which the site's HTML cleaner keeps.
+ * The article image: TipTap's image with a description, shown as its caption
+ * unless the writer hides it. Saved as
+ * <figure><img alt …><figcaption>…</figcaption></figure> when the description
+ * shows, or a plain <img> (keeping a hidden one in data-description), which
+ * the site's HTML cleaner keeps.
  */
 
 import Image from '@tiptap/extension-image';
@@ -12,7 +14,18 @@ export const FigureImage = Image.extend({
       ...this.parent?.(),
       caption: {
         default: '',
-        parseHTML: element => element.closest('figure')?.querySelector('figcaption')?.textContent?.trim() ?? '',
+        // A shown description is the figure's caption; a hidden one is kept on the image.
+        parseHTML: element => {
+          const figure = element.closest('figure');
+          if (figure) return figure.querySelector('figcaption')?.textContent?.trim() ?? '';
+          return element.getAttribute('data-description')?.trim() ?? '';
+        },
+        renderHTML: () => ({}),
+      },
+      /** Show the description under the image (as its caption). */
+      showCaption: {
+        default: true,
+        parseHTML: element => !(element.tagName === 'IMG' && element.hasAttribute('data-description') && !element.closest('figure')),
         renderHTML: () => ({}),
       },
     };
@@ -38,9 +51,12 @@ export const FigureImage = Image.extend({
   },
 
   renderHTML({ node, HTMLAttributes }) {
-    const { caption: _caption, ...img } = HTMLAttributes as Record<string, unknown>;
-    void _caption;
+    const { caption: _caption, showCaption: _show, ...img } = HTMLAttributes as Record<string, unknown>;
+    void _caption; void _show;
     const caption = String(node.attrs.caption ?? '').trim();
-    return caption ? ['figure', {}, ['img', img], ['figcaption', {}, caption]] : ['img', img];
+    if (!caption) return ['img', img];
+    return node.attrs.showCaption === false
+      ? ['img', { ...img, 'data-description': caption }]
+      : ['figure', {}, ['img', img], ['figcaption', {}, caption]];
   },
 });
