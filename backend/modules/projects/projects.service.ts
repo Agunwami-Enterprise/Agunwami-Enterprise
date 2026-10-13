@@ -1359,6 +1359,20 @@ export class ProjectsService {
    * endpoint and token; the website C-panel creates projects without them
    * (`requireMetrics: false`) and adds them later from the dashboard.
    */
+  /** Each project's public site (the origin of its metrics endpoint), for status checks. */
+  static async getProjectSites(): Promise<Array<{ id: string; name: string; url: string }>> {
+    const projects = await listProjectRecords();
+    return projects.flatMap(project => {
+      try {
+        const endpoint = typeof project.apiEndpoint === 'string' ? project.apiEndpoint : '';
+        const id = String(project._id || project.id || '');
+        return endpoint && id ? [{ id, name: String(project.name || id), url: new URL(endpoint).origin }] : [];
+      } catch {
+        return [];
+      }
+    });
+  }
+
   /**
    * Each project's departments (from its metrics), for linking AE departments
    * to project departments on the Departments page.

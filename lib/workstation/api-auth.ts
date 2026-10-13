@@ -41,6 +41,11 @@ async function readApiSession(): Promise<SessionResult> {
   }
 }
 
+/** Verifies there's a signed-in workstation session (anyone in AE). */
+export async function requireSession(): Promise<SessionResult> {
+  return readApiSession();
+}
+
 /**
  * Verifies the signed session belongs to an approved CEO (ceos.service.ts).
  */

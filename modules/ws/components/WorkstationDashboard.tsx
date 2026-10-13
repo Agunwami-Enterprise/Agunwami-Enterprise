@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import {
   Activity, AlertTriangle, CheckSquare, Clock3, FolderOpen, GitPullRequest, GitPullRequestDraft,
-  LifeBuoy, Rocket, Server, Users, Wrench, Zap, BarChart3, type LucideIcon,
+  LifeBuoy, Rocket, Server, Users, Wrench, Zap, BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
@@ -26,71 +26,7 @@ import {
   type ProjectSummary, type WsTask,
 } from '../data';
 import TaskDistributionChart from './TaskDistributionChart';
-
-// ── Small building blocks (design tokens from the Figma file) ───────────────
-
-const TAG_STYLES = [
-  'bg-[#dbeafe] text-[#193cb8]',
-  'bg-[#dcfce7] text-[#016630]',
-  'bg-[#f3e8ff] text-[#6e11b0]',
-  'bg-[#fef9c2] text-[#894b00]',
-];
-
-function tagStyle(label: string): string {
-  let hash = 0;
-  for (const ch of label.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return TAG_STYLES[hash % TAG_STYLES.length];
-}
-
-function Tag({ label }: { label: string }) {
-  return <span className={`shrink-0 rounded-[4px] px-1.5 py-0.5 text-[13px] font-medium leading-5 ${tagStyle(label)}`}>{label}</span>;
-}
-
-function StatTile({ label, value, sub, icon: Icon, iconClass, muted = false }: {
-  label: string; value: string; sub: string; icon: LucideIcon; iconClass: string; muted?: boolean;
-}) {
-  return (
-    <div className="rounded-lg bg-[#fafafa] px-[17px] py-[25px] drop-shadow-[0px_4px_2px_rgba(0,0,0,0.16)] dark:bg-[#1e1e1e]">
-      <div className="flex items-center gap-1.5">
-        <p className="min-w-0 flex-1 text-[16px] leading-6 text-[#656565] dark:text-gray-400">{label}</p>
-        <Icon className={`h-[18px] w-[18px] shrink-0 ${iconClass}`} strokeWidth={2} aria-hidden />
-      </div>
-      <p className={`mt-1 text-[24px] font-semibold leading-8 ${muted ? 'text-[#bdbdbd] dark:text-gray-600' : 'text-black dark:text-white'}`}>{value}</p>
-      <p className="truncate text-[14px] leading-5 text-[#656565] dark:text-gray-400">{sub}</p>
-    </div>
-  );
-}
-
-function Card({ title, icon: Icon, iconClass = 'text-[#f5bd02]', action, children, className = '' }: {
-  title: string; icon: LucideIcon; iconClass?: string; action?: React.ReactNode; children: React.ReactNode; className?: string;
-}) {
-  return (
-    <section className={`rounded-lg bg-[#fafafa] drop-shadow-[0px_4px_5.15px_rgba(0,0,0,0.25)] dark:bg-[#1e1e1e] ${className}`}>
-      <div className="flex items-center gap-2 px-[22.5px] pb-[7.5px] pt-[22.5px]">
-        <Icon className={`h-[15px] w-[15px] shrink-0 ${iconClass}`} strokeWidth={2} aria-hidden />
-        <h2 className="min-w-0 flex-1 text-[16px] font-semibold leading-6 text-[#292929] dark:text-white">{title}</h2>
-        {action}
-      </div>
-      <div className="px-[22.5px] pb-[22.5px] pt-2">{children}</div>
-    </section>
-  );
-}
-
-/** A card body for data whose source isn't connected yet. */
-function NotConnected({ source, detail }: { source: string; detail: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-[#bdbdbd] px-4 py-5 text-center dark:border-white/15">
-      <p className="text-[13px] font-semibold text-[#525252] dark:text-gray-300">Not connected yet</p>
-      <p className="mt-1 text-[12px] leading-5 text-[#656565] dark:text-gray-400">
-        {detail} Connect <span className="font-semibold">{source}</span> to fill this in.
-      </p>
-    </div>
-  );
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="py-2 text-[14px] leading-5 text-[#656565] dark:text-gray-400">{children}</p>;
-}
+import { Card, Empty, NotConnected, StatTile, Tag, fmtDate } from './ui';
 
 function TaskRow({ task, right, rightClass }: { task: WsTask; right: string; rightClass: string }) {
   return (
@@ -110,7 +46,6 @@ function projectState(project: ProjectSummary): { label: string; className: stri
   return { label: 'Good', className: 'bg-[#dcfce7] text-[#016630]' };
 }
 
-const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 

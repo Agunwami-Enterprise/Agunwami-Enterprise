@@ -6,7 +6,7 @@
 // /api/ws/team, and a project summary from /api/ws/projects.
 
 import { useEffect, useState } from 'react';
-import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { onValue, ref } from 'firebase/database';
 import { authDb, rtdb } from '@/lib/workstation/firebase';
 import type { ProjectSummary } from '@/app/api/ws/projects/route';
@@ -30,6 +30,14 @@ export interface WsTask {
   priority: string;
   /** The first meaningful tag (often the product), for the coloured label. */
   tag: string | null;
+  /** AE Hub's own stage: Created, Assigned, In Progress, Submitted, Approved, On Hold, Completed. */
+  rawStage: string;
+  description: string;
+  start: Date | null;
+  createdByName: string;
+  createdByUid: string;
+  /** Chat-created tasks use another shape and can't be moved here. */
+  editable: boolean;
 }
 
 function stageOf(raw: unknown): TaskStage {
@@ -71,7 +79,63 @@ function taskFromDoc(id: string, data: Record<string, unknown>): WsTask {
     isSprint: data.isSprint === true,
     priority: String(data.priority || 'Medium'),
     tag: tags.find(tag => !GENERIC_TAGS.has(tag.trim().toLowerCase())) ?? null,
+    rawStage: String(data.stage ?? data.status ?? 'Created'),
+    description: String(data.description ?? ''),
+    start: dateOf(data.startDate),
+    createdByName: String(data.createdByName ?? ''),
+    createdByUid: String(data.createdBy ?? data.createdById ?? ''),
+    editable: typeof data.stage === 'string',
   };
+}
+
+/** AE Hub's task stages, in order. */
+export const AEHUB_STAGES = ['Created', 'Assigned', 'In Progress', 'Submitted', 'Approved', 'On Hold', 'Completed'] as const;
+
+/** Moves a task to another AE Hub stage. */
+export async function setTaskStage(taskId: string, stage: string, by: { uid: string; name: string; email: string }): Promise<void> {
+  await updateDoc(doc(authDb, 'staffTasks', taskId), {
+    stage,
+    updatedAt: serverTimestamp(),
+    lastEditedByUid: by.uid,
+    lastEditedByName: by.name,
+    lastEditedByEmail: by.email,
+  });
+}
+
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * Creates a task in AE Hub's staffTasks, in the shape AE Hub's own task form
+ * writes. Sprints (which AE Hub sends for approval) are created in AE Hub.
+ */
+export async function createTask(input: {
+  title: string;
+  description: string;
+  assignee: { uid: string; name: string; email: string } | null;
+  priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  dueDate: string;
+}, by: { uid: string; name: string }): Promise<void> {
+  // The task's department is the assignee's AE Hub department, as AE Hub does it.
+  const assigneeDoc = input.assignee ? await getDoc(doc(authDb, 'users', input.assignee.uid)).catch(() => null) : null;
+  const department = String(assigneeDoc?.data()?.department ?? '');
+  await addDoc(collection(authDb, 'staffTasks'), {
+    title: input.title.trim(),
+    description: input.description.trim(),
+    assignee: input.assignee?.name ?? 'Unassigned',
+    assigneeUid: input.assignee?.uid ?? '',
+    assigneeEmail: input.assignee?.email ?? '',
+    stage: input.assignee ? 'Assigned' : 'Created',
+    priority: input.priority,
+    tags: [],
+    department,
+    startDate: isoDay(new Date()),
+    dueDate: input.dueDate,
+    isSprint: false,
+    subTasks: [],
+    createdBy: by.uid,
+    createdByName: by.name,
+    createdAt: serverTimestamp(),
+  });
 }
 
 export function isOverdue(task: WsTask, now = new Date()): boolean {

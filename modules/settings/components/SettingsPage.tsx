@@ -22,12 +22,13 @@ import { formatAehubId, formatEmployeeId } from '@/lib/workstation/employee-id';
 import { seedDatabase } from '@/lib/workstation/seed-client';
 import TwoFactorModal from '@/modules/settings/components/TwoFactorModal';
 import PreferencesTab, { timeZoneLabel } from '@/modules/settings/components/PreferencesTab';
+import SupportTab from '@/modules/settings/components/SupportTab';
 import MessageSettings from '@/modules/messages/components/MessageSettings';
 import { useMessagePreferences } from '@/modules/messages/preferences';
 
-type SettingsTab = 'profile' | 'preferences' | 'notifications' | 'messages' | 'security' | 'system';
+type SettingsTab = 'profile' | 'preferences' | 'notifications' | 'messages' | 'security' | 'support' | 'system';
 
-const VALID_TABS: SettingsTab[] = ['profile', 'preferences', 'notifications', 'messages', 'security', 'system'];
+const VALID_TABS: SettingsTab[] = ['profile', 'preferences', 'notifications', 'messages', 'security', 'support', 'system'];
 // The demo-data seeder rewrites shared collections; never offer it in production.
 const SHOW_SEED_TOOL = process.env.NODE_ENV !== 'production';
 
@@ -210,6 +211,7 @@ export default function SettingsPage() {
     { key:'notifications', label:'Notifications',         icon:<BellIcon />   },
     { key:'messages',      label:'Messages',              icon:<ChatIcon />   },
     { key:'security',      label:'Security',              icon:<ShieldIcon /> },
+    { key:'support',       label:'IT Support',            icon:<LifebuoyIcon /> },
     { key:'system',        label:'System Configuration',  icon:<CogIcon />    },
   ];
 
@@ -410,6 +412,9 @@ export default function SettingsPage() {
           </div>
         </form>
       )}
+
+      {/* IT SUPPORT TAB */}
+      {tab === 'support' && <SupportTab />}
 
       {/* PREFERENCES TAB */}
       {tab === 'preferences' && (
@@ -685,6 +690,7 @@ function UserIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fi
 function CogIcon()   { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>; }
 function ChatIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>; }
 function BellIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>; }
+function LifebuoyIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>; }
 function ShieldIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>; }
 function EmailIcon()  { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>; }
 function KeyIcon()    { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="15" r="5"/><path d="M21 2l-9.3 9.3"/><path d="M15 2l2 2-4 4 2 2"/></svg>; }
