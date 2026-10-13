@@ -1226,8 +1226,15 @@ export interface ProjectStaffAction {
   action: 'transfer' | 'position' | 'suspend' | 'reactivate' | 'remove';
   uid: string;
   email?: string;
-  /** The project's department id (transfer). */
+  /**
+   * The project's department id: where to move them (transfer), or the
+   * department the change is meant for (position, remove), so a project can
+   * skip it when they're in another department there.
+   */
   department?: string;
+  /** Position: the department admin or staff ("position"; a transfer lands as staff). */
+  admin?: boolean;
+  /** The position's title in AE, for projects that store a title. */
   position?: string;
   reason?: string;
 }
@@ -1373,8 +1380,12 @@ export class ProjectsService {
       }));
   }
 
-  /** Sends a staff change to a project's staff endpoint (next to its metrics endpoint). */
-  static async sendStaffAction(projectId: string, payload: ProjectStaffAction): Promise<{ skipped?: string }> {
+  /**
+   * Sends a staff change to a project's staff endpoint (next to its metrics
+   * endpoint). The project may reply with the person's email and staff id
+   * after the change (a department change can give new ones).
+   */
+  static async sendStaffAction(projectId: string, payload: ProjectStaffAction): Promise<{ skipped?: string; email?: string; staffId?: string }> {
     const project = (await listProjectRecords()).find(record => record.id === projectId);
     if (!project) throw new Error('That project no longer exists.');
     const url = projectActionUrl(project, 'staff');
@@ -1382,7 +1393,11 @@ export class ProjectsService {
     if (!response.ok) throw new Error(httpErrorMessage('Project staff endpoint', response, body));
     const record = asRecord(body);
     if (record?.success !== true) throw new Error('Project staff endpoint did not confirm the change.');
-    return typeof record.skipped === 'string' ? { skipped: record.skipped } : {};
+    return {
+      ...(typeof record.skipped === 'string' ? { skipped: record.skipped } : {}),
+      ...(typeof record.email === 'string' && record.email ? { email: record.email.trim().toLowerCase() } : {}),
+      ...(typeof record.aehubId === 'string' && record.aehubId ? { staffId: record.aehubId } : typeof record.staffId === 'string' && record.staffId ? { staffId: record.staffId } : {}),
+    };
   }
 
   static async createProject(dto: CreateProjectDto, { requireMetrics = true } = {}): Promise<ProjectCardData> {

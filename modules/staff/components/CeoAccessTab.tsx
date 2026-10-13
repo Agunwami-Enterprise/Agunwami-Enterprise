@@ -93,14 +93,14 @@ export default function CeoAccessTab({ data, error, candidates, accounts, depart
     }
   }
 
-  async function putInCeoOffice(person: Person, position: string) {
+  async function putInCeoOffice(person: Person) {
     if (!ceoOffice) { toast.error('CEO Office isn’t set up yet. Open the Departments page, then try again.'); return; }
     const left = await act(person.uid, { action: 'decline', uid: person.uid, name: person.name, email: person.email }, `${person.name} won’t get CEO access.`);
     if (!left) return;
     try {
       const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/${CEO_OFFICE_ID}/members`, {
         method: 'POST',
-        body: JSON.stringify({ uid: person.uid, name: person.name, email: person.email, title: position }),
+        body: JSON.stringify({ uid: person.uid, name: person.name, email: person.email }),
       });
       toast.success(`${person.name} added to CEO Office.`);
       reportSync(result.sync?.filter(r => r.skipped !== 'already-in-department'));
@@ -166,7 +166,7 @@ export default function CeoAccessTab({ data, error, candidates, accounts, depart
                       onClick={() => { if (confirm(`Give ${person.name} full CEO access? They'll see every page and project.`)) void act(person.uid, { action: 'approve', ...person }, `${person.name} is now a CEO.`); }}>
                       Approve as CEO
                     </button>
-                    <button className={btnGhost} disabled={busy === person.uid} onClick={() => void putInCeoOffice(person, person.position)}>Put in CEO Office</button>
+                    <button className={btnGhost} disabled={busy === person.uid} onClick={() => void putInCeoOffice(person)}>Put in CEO Office</button>
                     <button className={`${btnGhost} text-red-600 dark:text-red-400`} disabled={busy === person.uid}
                       onClick={() => void act(person.uid, { action: 'decline', ...person }, `${person.name} won’t get CEO access.`)}>
                       Leave out
