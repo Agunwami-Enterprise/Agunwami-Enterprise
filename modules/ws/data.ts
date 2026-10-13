@@ -36,6 +36,9 @@ export interface WsTask {
   start: Date | null;
   createdByName: string;
   createdByUid: string;
+  created: Date | null;
+  /** Last change (a completed task's completion time, near enough). */
+  updated: Date | null;
   /** Chat-created tasks use another shape and can't be moved here. */
   editable: boolean;
 }
@@ -84,6 +87,8 @@ function taskFromDoc(id: string, data: Record<string, unknown>): WsTask {
     start: dateOf(data.startDate),
     createdByName: String(data.createdByName ?? ''),
     createdByUid: String(data.createdBy ?? data.createdById ?? ''),
+    created: dateOf(data.createdAt),
+    updated: dateOf(data.updatedAt ?? data.approvedAt ?? data.createdAt),
     editable: typeof data.stage === 'string',
   };
 }

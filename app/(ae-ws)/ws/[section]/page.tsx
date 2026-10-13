@@ -3,9 +3,10 @@ import { notFound } from 'next/navigation';
 import { pageForSection } from '@/lib/workstation/pages';
 import { requireWsPage } from '@/lib/workstation/ws-guard';
 
-// Workstation pages from the design that are built in later steps. Each one
-// says what it will hold, so the sidebar never leads nowhere. Opening one
-// still needs the department to have the page.
+// A fallback for workstation pages added to the registry (lib/workstation/pages.ts)
+// before their screen is built: it says what the page will hold, so the
+// sidebar never leads nowhere. Opening one still needs the department to have
+// the page. Every page in the registry today has its own route.
 export default async function Page({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
   const page = pageForSection(section);
