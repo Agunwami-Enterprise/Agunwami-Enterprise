@@ -1235,7 +1235,8 @@ export interface ProjectStaffAction {
 export interface ProjectDepartmentOptions {
   projectId: string;
   projectName: string;
-  departments: Array<{ id: string; name: string }>;
+  /** `ceo` marks the project's CEO department, which only CEO Office links to. */
+  departments: Array<{ id: string; name: string; ceo: boolean }>;
 }
 
 export class ProjectsService {
@@ -1363,8 +1364,12 @@ export class ProjectsService {
         projectId: project.id,
         projectName: project.name,
         departments: (project.departments ?? [])
-          .filter(department => department.id && department.id.toLowerCase() !== 'ceo')
-          .map(department => ({ id: department.id, name: department.name || department.id })),
+          .filter(department => department.id)
+          .map(department => ({
+            id: department.id,
+            name: department.name || department.id,
+            ceo: department.id.toLowerCase() === 'ceo',
+          })),
       }));
   }
 

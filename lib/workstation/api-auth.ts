@@ -42,12 +42,12 @@ async function readApiSession(): Promise<SessionResult> {
 }
 
 /**
- * Verifies the signed session and the CEO role resolved during login.
+ * Verifies the signed session belongs to an approved CEO (ceos.service.ts).
  */
 export async function requireCeoSession(): Promise<SessionResult> {
   const result = await readApiSession();
   if (result.error) return result;
-  if (result.session.role.toLowerCase() !== 'ceo') {
+  if ((await getWorkstationAccess(result.session)).kind !== 'ceo') {
     return { error: NextResponse.json({ error: 'CEO access required.' }, { status: 403 }) };
   }
   return result;

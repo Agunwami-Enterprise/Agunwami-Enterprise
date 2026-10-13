@@ -7,6 +7,7 @@ export default async function CeoLayout({ children }: { children: React.ReactNod
   const session = await verifySession();
   if (!session) redirect('/auth/login');
   // /ceo is the CEO's workstation; everyone else has their department's (/ws).
-  if (session.role?.toLowerCase() !== 'ceo') redirect((await getWorkstationAccess(session)).home);
+  const access = await getWorkstationAccess(session);
+  if (access.kind !== 'ceo') redirect(access.home);
   return <CeoShell>{children}</CeoShell>;
 }

@@ -2,11 +2,14 @@
  * backend/modules/departments/departments.service.ts
  *
  * AE departments and who belongs to them, in the enterprise project (read and
- * written only by the server). The CEO department is built in and isn't stored.
+ * written only by the server). The CEO isn't a department: CEO access is the
+ * approved-CEO list (ceos.service.ts). CEO Office, for the CEO's own staff, is
+ * a built-in department created on first use.
  */
 
 import { createDoc, deleteDoc, getDoc, listDocs, updateDoc } from '../../core/firestore';
 import { BASE_PAGE_IDS, isPageId, normalizePages } from '@/lib/workstation/pages';
+import { CEO_OFFICE_ID, CEO_OFFICE_NAME, PROJECT_CEO_DEPARTMENT } from './departments.types';
 import type { AeDepartment, AeDepartmentMember, AssignMemberDto, SaveDepartmentDto, UpdateMemberDto } from './departments.types';
 
 const DEPARTMENTS = 'aeDepartments';
@@ -35,15 +38,19 @@ function slugify(name: string): string {
   return name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 }
 
-function projectLinksOf(value: unknown): Record<string, string> {
+/** Project links: CEO Office links only to project CEO departments, every other department never does. */
+function projectLinksOf(value: unknown, ceoOffice: boolean): Record<string, string> {
   const links: Record<string, string> = {};
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     for (const [projectId, departmentId] of Object.entries(value as Record<string, unknown>)) {
-      if (isSafeId(projectId) && isSafeId(departmentId) && departmentId.toLowerCase() !== 'ceo') links[projectId] = departmentId;
+      if (!isSafeId(projectId) || !isSafeId(departmentId)) continue;
+      if ((departmentId.toLowerCase() === PROJECT_CEO_DEPARTMENT) === ceoOffice) links[projectId] = departmentId;
     }
   }
   return links;
 }
+
+const DEFAULT_CEO_OFFICE_PAGES = [...BASE_PAGE_IDS, 'tasks', 'time-tracking', 'documents', 'leave-requests', 'reports'];
 
 function toDepartment(doc: Record<string, unknown>, memberCount = 0): AeDepartment {
   return {
@@ -52,8 +59,9 @@ function toDepartment(doc: Record<string, unknown>, memberCount = 0): AeDepartme
     description: String(doc.description || ''),
     pages: normalizePages(doc.pages),
     active: doc.active !== false,
-    projectLinks: projectLinksOf(doc.projectLinks),
+    projectLinks: projectLinksOf(doc.projectLinks, doc._id === CEO_OFFICE_ID),
     memberCount,
+    builtIn: doc._id === CEO_OFFICE_ID,
     createdAt: typeof doc.createdAt === 'string' ? doc.createdAt : null,
     updatedAt: typeof doc.updatedAt === 'string' ? doc.updatedAt : null,
   };
@@ -83,21 +91,25 @@ function toMember(doc: Record<string, unknown>): AeDepartmentMember {
   };
 }
 
-function validate(dto: SaveDepartmentDto) {
-  const name = text(dto.name, MAX_NAME);
+function validate(dto: SaveDepartmentDto, ceoOffice = false) {
+  const name = ceoOffice ? CEO_OFFICE_NAME : text(dto.name, MAX_NAME);
   if (!name) throw new DepartmentError('Give the department a name.');
   return {
     name,
     description: text(dto.description, MAX_DESCRIPTION),
     pages: normalizePages(dto.pages),
-    active: dto.active !== false,
-    projectLinks: projectLinksOf(dto.projectLinks),
+    // CEO Office always stays open to its members.
+    active: ceoOffice || dto.active !== false,
+    projectLinks: projectLinksOf(dto.projectLinks, ceoOffice),
   };
 }
 
+let ceoOfficeReady = false;
+
 export class DepartmentsService {
   static async list(): Promise<{ departments: AeDepartment[]; members: AeDepartmentMember[] }> {
-    const [departmentDocs, memberDocs] = await Promise.all([listDocs(DEPARTMENTS, 300), listDocs(MEMBERS, 300)]);
+    const [listed, memberDocs] = await Promise.all([listDocs(DEPARTMENTS, 300), listDocs(MEMBERS, 300)]);
+    const departmentDocs = await DepartmentsService.withCeoOffice(listed);
     const members = memberDocs.map(toMember).filter(m => m.departmentId);
     const counts = new Map<string, number>();
     for (const member of members) counts.set(member.departmentId, (counts.get(member.departmentId) ?? 0) + 1);
@@ -105,6 +117,41 @@ export class DepartmentsService {
       .map(doc => toDepartment(doc, counts.get(String(doc._id)) ?? 0))
       .sort((a, b) => a.name.localeCompare(b.name));
     return { departments, members };
+  }
+
+  /** Creates CEO Office the first time departments are listed, if it isn't there. */
+  private static async withCeoOffice(docs: Array<Record<string, unknown>>): Promise<Array<Record<string, unknown>>> {
+    if (docs.some(doc => doc._id === CEO_OFFICE_ID)) {
+      ceoOfficeReady = true;
+      return docs;
+    }
+    if (ceoOfficeReady) return docs;
+    const existing = await getDoc(DEPARTMENTS, CEO_OFFICE_ID);
+    const doc = existing ?? await createDoc(DEPARTMENTS, {
+      name: CEO_OFFICE_NAME,
+      description: 'The CEO’s own staff: assistants, PAs and chief of staff. They get a department workstation, not CEO access.',
+      pages: normalizePages(DEFAULT_CEO_OFFICE_PAGES),
+      active: true,
+      projectLinks: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: 'system',
+    }, CEO_OFFICE_ID);
+    if (!doc) return docs;
+    ceoOfficeReady = true;
+    return [...docs, doc];
+  }
+
+  /**
+   * Links CEO Office to each project's CEO department the first time those
+   * departments are known; after that the CEO manages the links.
+   */
+  static async autoLinkCeoOffice(projectCeoDepartments: Record<string, string>): Promise<void> {
+    if (Object.keys(projectCeoDepartments).length === 0) return;
+    const doc = await getDoc(DEPARTMENTS, CEO_OFFICE_ID);
+    if (!doc || doc.autoLinked === true) return;
+    const links = { ...projectLinksOf(doc.projectLinks, true), ...projectLinksOf(projectCeoDepartments, true) };
+    await updateDoc(DEPARTMENTS, CEO_OFFICE_ID, { projectLinks: links, autoLinked: true, updatedAt: new Date().toISOString() });
   }
 
   static async get(id: string): Promise<AeDepartment | null> {
@@ -116,7 +163,7 @@ export class DepartmentsService {
   static async create(dto: SaveDepartmentDto, by: string): Promise<AeDepartment> {
     const data = validate(dto);
     const id = slugify(data.name);
-    if (!id || id === 'ceo') throw new DepartmentError('Choose a different name.');
+    if (!id || id === PROJECT_CEO_DEPARTMENT || id === CEO_OFFICE_ID) throw new DepartmentError('Choose a different name.');
     if (await getDoc(DEPARTMENTS, id)) throw new DepartmentError(`A department called "${data.name}" already exists.`, 409);
     const now = new Date().toISOString();
     const created = await createDoc(DEPARTMENTS, { ...data, createdAt: now, updatedAt: now, createdBy: by }, id);
@@ -127,7 +174,7 @@ export class DepartmentsService {
   static async update(id: string, dto: SaveDepartmentDto, by: string): Promise<AeDepartment> {
     requireSafeId(id, 'department');
     if (!(await getDoc(DEPARTMENTS, id))) throw new DepartmentError('That department no longer exists.', 404);
-    const data = validate(dto);
+    const data = validate(dto, id === CEO_OFFICE_ID);
     const updated = await updateDoc(DEPARTMENTS, id, { ...data, updatedAt: new Date().toISOString(), updatedBy: by });
     if (!updated) throw new DepartmentError('The department could not be saved. Please try again.', 503);
     return toDepartment(updated);
@@ -136,6 +183,7 @@ export class DepartmentsService {
   /** Deletes the department and removes its members from it. */
   static async remove(id: string): Promise<void> {
     requireSafeId(id, 'department');
+    if (id === CEO_OFFICE_ID) throw new DepartmentError('CEO Office is built in and can’t be deleted.');
     const { members } = await DepartmentsService.list();
     await Promise.all(members.filter(m => m.departmentId === id).map(m => deleteDoc(MEMBERS, m.uid)));
     if (!(await deleteDoc(DEPARTMENTS, id))) throw new DepartmentError('The department could not be deleted. Please try again.', 503);

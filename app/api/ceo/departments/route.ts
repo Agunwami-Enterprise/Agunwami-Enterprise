@@ -5,16 +5,20 @@
  * CEO only. See backend/modules/departments.
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { requireCeoSession } from '@/lib/workstation/api-auth';
 import { DepartmentsService } from '@/backend/modules/departments';
 import { departmentErrorResponse, readJson } from './shared';
+import { autoLinkCeoOffice } from './ceo-office';
 
 export async function GET() {
   const auth = await requireCeoSession();
   if (auth.error) return auth.error;
   try {
-    return NextResponse.json(await DepartmentsService.list());
+    const data = await DepartmentsService.list();
+    const ceoOffice = data.departments.find(department => department.builtIn);
+    if (ceoOffice && Object.keys(ceoOffice.projectLinks).length === 0) after(() => autoLinkCeoOffice());
+    return NextResponse.json(data);
   } catch (err) {
     return departmentErrorResponse(err, 'GET /api/ceo/departments');
   }

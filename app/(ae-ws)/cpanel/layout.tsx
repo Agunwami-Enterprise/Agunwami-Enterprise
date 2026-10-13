@@ -12,7 +12,8 @@ export const metadata: Metadata = {
 export default async function CpanelLayout({ children }: { children: React.ReactNode }) {
   const session = await verifySession();
 
-  if (!(await getWorkstationAccess(session)).canEditWebsite) {
+  const access = await getWorkstationAccess(session);
+  if (!access.canEditWebsite) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#FBFAF3] p-6 text-center">
         <h1 className="font-primary text-[28px] text-[#1A1A1A]">No access to the C-panel</h1>
@@ -28,7 +29,7 @@ export default async function CpanelLayout({ children }: { children: React.React
   }
 
   return (
-    <CpanelShell email={session.email} isCeo={session.role.toLowerCase() === 'ceo'}>
+    <CpanelShell email={session.email} isCeo={access.kind === 'ceo'}>
       {children}
     </CpanelShell>
   );
