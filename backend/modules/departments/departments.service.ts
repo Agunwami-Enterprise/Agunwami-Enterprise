@@ -9,7 +9,7 @@
 
 import { createDoc, deleteDoc, getDoc, listDocs, updateDoc } from '../../core/firestore';
 import { BASE_PAGE_IDS, isPageId, normalizePages } from '@/lib/workstation/pages';
-import { CEO_OFFICE_ID, CEO_OFFICE_NAME, PROJECT_CEO_DEPARTMENT } from './departments.types';
+import { CEO_OFFICE_ID, CEO_OFFICE_NAME, PROJECT_CEO_DEPARTMENT, positionTitle } from './departments.types';
 import type { AeDepartment, AeDepartmentMember, AssignMemberDto, SaveDepartmentDto, UpdateMemberDto } from './departments.types';
 
 const DEPARTMENTS = 'aeDepartments';
@@ -193,12 +193,13 @@ export class DepartmentsService {
   static async assign(departmentId: string, dto: AssignMemberDto, by: string): Promise<AeDepartmentMember> {
     requireSafeId(departmentId, 'department');
     const uid = requireSafeId(dto.uid, 'person');
-    if (!(await getDoc(DEPARTMENTS, departmentId))) throw new DepartmentError('That department no longer exists.', 404);
+    const department = await getDoc(DEPARTMENTS, departmentId);
+    if (!department) throw new DepartmentError('That department no longer exists.', 404);
     const saved = await updateDoc(MEMBERS, uid, {
       departmentId,
       name: text(dto.name, 120),
       email: text(dto.email, 200),
-      title: text(dto.title, 80),
+      title: positionTitle(String(department.name || departmentId), false),
       pages: [],
       isDepartmentAdmin: false,
       status: 'active',
@@ -211,7 +212,7 @@ export class DepartmentsService {
   }
 
   /**
-   * Updates a member: position, shift, personal page access, department admin,
+   * Updates a member: position (admin or staff), shift, personal page access,
    * suspension, or a transfer to another department.
    */
   static async updateMember(uid: string, dto: UpdateMemberDto, by: string): Promise<AeDepartmentMember> {
@@ -219,7 +220,6 @@ export class DepartmentsService {
     const existing = await getDoc(MEMBERS, uid);
     if (!existing?.departmentId) throw new DepartmentError('That person is not in an AE department.', 404);
     const patch: Record<string, unknown> = {};
-    if (dto.title !== undefined) patch.title = text(dto.title, 80);
     for (const key of ['shiftStart', 'shiftEnd'] as const) {
       if (dto[key] === undefined) continue;
       const value = text(dto[key], 5);
@@ -227,18 +227,33 @@ export class DepartmentsService {
       patch[key] = value;
     }
     if (dto.pages !== undefined) patch.pages = personalPages(dto.pages);
-    if (dto.isDepartmentAdmin !== undefined) patch.isDepartmentAdmin = dto.isDepartmentAdmin === true;
+    const departmentId = String(existing.departmentId);
+    const transferring = dto.departmentId !== undefined && dto.departmentId !== departmentId;
+    if (dto.isDepartmentAdmin !== undefined && !transferring && (dto.isDepartmentAdmin === true) !== (existing.isDepartmentAdmin === true)) {
+      const makeAdmin = dto.isDepartmentAdmin === true;
+      const department = await getDoc(DEPARTMENTS, departmentId);
+      if (makeAdmin) {
+        if (departmentId === CEO_OFFICE_ID) throw new DepartmentError('CEO Office has no admin: in AE Hub that position has the CEO’s powers.');
+        const { members } = await DepartmentsService.list();
+        const current = members.find(m => m.departmentId === departmentId && m.isDepartmentAdmin && m.uid !== uid);
+        if (current) throw new DepartmentError(`${current.name || current.email} is already the admin of ${String(department?.name || departmentId)}. Make them staff first.`, 409);
+      }
+      patch.isDepartmentAdmin = makeAdmin;
+      patch.title = positionTitle(String(department?.name || departmentId), makeAdmin);
+    }
     if (dto.status !== undefined) {
       patch.status = dto.status === 'suspended' ? 'suspended' : 'active';
       patch.suspendedReason = dto.status === 'suspended' ? text(dto.suspendedReason, 240) : '';
     }
-    if (dto.departmentId !== undefined && dto.departmentId !== existing.departmentId) {
+    if (transferring) {
       const target = requireSafeId(dto.departmentId, 'department');
-      if (!(await getDoc(DEPARTMENTS, target))) throw new DepartmentError('That department no longer exists.', 404);
+      const targetDoc = await getDoc(DEPARTMENTS, target);
+      if (!targetDoc) throw new DepartmentError('That department no longer exists.', 404);
       patch.departmentId = target;
-      // Page access and admin rights belong to the old department.
+      // Page access and admin rights belong to the old department: they join as staff.
       patch.pages = [];
       patch.isDepartmentAdmin = false;
+      patch.title = positionTitle(String(targetDoc.name || target), false);
       patch.transferredFrom = String(existing.departmentId);
       patch.transferredAt = new Date().toISOString();
     }
@@ -246,6 +261,12 @@ export class DepartmentsService {
     const saved = await updateDoc(MEMBERS, uid, { ...patch, updatedAt: new Date().toISOString(), updatedBy: by });
     if (!saved) throw new DepartmentError('The change could not be saved. Please try again.', 503);
     return toMember(saved);
+  }
+
+  /** Keeps AE's copy of a member's email in step with their account (e.g. a new project work email). */
+  static async updateMemberEmail(uid: string, email: string): Promise<void> {
+    requireSafeId(uid, 'person');
+    await updateDoc(MEMBERS, uid, { email: text(email, 200).toLowerCase(), updatedAt: new Date().toISOString() });
   }
 
   static async unassign(uid: string): Promise<void> {

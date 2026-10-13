@@ -11,6 +11,15 @@ export const CEO_OFFICE_NAME = 'CEO Office';
 /** A project's CEO department; only CEO Office links to it. */
 export const PROJECT_CEO_DEPARTMENT = 'ceo';
 
+/**
+ * A department's two positions, as in AE Hub: "Technical Staff" (team member)
+ * and "Technical Admin" (the department admin, one per department).
+ */
+export function positionTitle(departmentName: string, isAdmin: boolean): string {
+  const name = departmentName.replace(/Team|Department/gi, '').trim() || 'Department';
+  return `${name} ${isAdmin ? 'Admin' : 'Staff'}`;
+}
+
 export interface AeDepartment {
   id: string;
   name: string;
@@ -38,7 +47,7 @@ export interface AeDepartmentMember {
   departmentId: string;
   name: string;
   email: string;
-  /** Position, e.g. "Lead Developer". */
+  /** Position: "<Department> Staff" or "<Department> Admin" (see positionTitle). */
   title: string;
   /** Work shift, "HH:mm". */
   shiftStart: string;
@@ -52,14 +61,14 @@ export interface AeDepartmentMember {
 }
 
 export interface UpdateMemberDto {
-  title?: string;
   shiftStart?: string;
   shiftEnd?: string;
   pages?: string[];
+  /** Position: the department admin (one per department) or staff. */
   isDepartmentAdmin?: boolean;
   status?: MemberStatus;
   suspendedReason?: string;
-  /** Transfer to another department. */
+  /** Transfer to another department (they join as staff). */
   departmentId?: string;
 }
 
@@ -71,9 +80,9 @@ export interface SaveDepartmentDto {
   projectLinks?: Record<string, string>;
 }
 
+/** New members join as staff; make them the admin afterwards. */
 export interface AssignMemberDto {
   uid: string;
   name: string;
   email: string;
-  title?: string;
 }

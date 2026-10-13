@@ -25,7 +25,7 @@ import {
   EditMemberDialog, Modal, SuspendDialog, TransferDialog, api, btnGhost, btnPrimary, input, reportSync,
   type SyncResult,
 } from '@/modules/departments/components/shared';
-import { CEO_OFFICE_ID, type AeDepartment, type AeDepartmentMember } from '@/backend/modules/departments/departments.types';
+import { CEO_OFFICE_ID, positionTitle, type AeDepartment, type AeDepartmentMember } from '@/backend/modules/departments/departments.types';
 import type { ExternalStaffProject } from '@/modules/staff/types';
 import CeoAccessTab, { type CeoAccessData } from './CeoAccessTab';
 
@@ -143,10 +143,10 @@ export default function StaffPage() {
     }
   }
 
-  async function assign(account: StaffAccount, departmentId: string, title?: string) {
+  async function assign(account: StaffAccount, departmentId: string) {
     const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/${encodeURIComponent(departmentId)}/members`, {
       method: 'POST',
-      body: JSON.stringify({ uid: account.uid, name: account.name, email: account.email, title: title ?? account.aehubPosition }),
+      body: JSON.stringify({ uid: account.uid, name: account.name, email: account.email }),
     });
     reportSync(result.sync);
     await reload();
@@ -290,11 +290,12 @@ export default function StaffPage() {
       )}
       {dialog?.kind === 'edit' && deptById.get(dialog.member.departmentId) && (
         <EditMemberDialog member={dialog.member} department={deptById.get(dialog.member.departmentId)!} onClose={() => setDialog(null)}
+          currentAdmin={members.find(m => m.departmentId === dialog.member.departmentId && m.isDepartmentAdmin && m.uid !== dialog.member.uid) ?? null}
           onSave={body => memberAction(dialog.member.uid, body, 'Saved.')} />
       )}
       {dialog?.kind === 'transfer' && deptById.get(dialog.member.departmentId) && (
         <TransferDialog member={dialog.member} current={deptById.get(dialog.member.departmentId)!} departments={departments} onClose={() => setDialog(null)}
-          onTransfer={departmentId => memberAction(dialog.member.uid, { departmentId }, `Transferred to ${deptById.get(departmentId)?.name}.`)} />
+          onTransfer={(departmentId, syncProjects) => memberAction(dialog.member.uid, { departmentId, syncProjects }, `Transferred to ${deptById.get(departmentId)?.name}.`)} />
       )}
       {dialog?.kind === 'suspend' && (
         <SuspendDialog member={dialog.member} onClose={() => setDialog(null)}
@@ -329,7 +330,7 @@ function StaffCard({ account, member, isCeo, department, shift, canTransfer, onA
   const employeeId = formatEmployeeId(account);
   const aehubId = formatAehubId(account);
   const suspended = member?.status === 'suspended';
-  const position = member?.title || account.aehubPosition || 'No position set';
+  const position = member && department ? positionTitle(department.name, member.isDepartmentAdmin) : account.aehubPosition || 'No position set';
   const initials = account.name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
 
   return (
@@ -442,7 +443,6 @@ function AddStaffDialog({ departments, onClose, onCreated }: {
 }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [position, setPosition] = useState('');
   const [departmentId, setDepartmentId] = useState(departments[0]?.id ?? '');
   const [aehubDepartments, setAehubDepartments] = useState<Array<{ id: string; name: string }> | null>(null);
   const [aehubDepartment, setAehubDepartment] = useState('');
@@ -470,11 +470,13 @@ function AddStaffDialog({ departments, onClose, onCreated }: {
     setSaving(true);
     try {
       const { uid } = await createStaffAccount({
-        name, email, position, aehubDepartment: effectiveAehubDepartment, shiftStartTime: shiftStart, shiftEndTime: shiftEnd,
+        name, email, aehubDepartment: effectiveAehubDepartment, shiftStartTime: shiftStart, shiftEndTime: shiftEnd,
+        // New staff join as staff, in AE Hub too ("Developers Staff").
+        position: positionTitle(aehubOptions.find(d => d.id === effectiveAehubDepartment)?.name ?? effectiveAehubDepartment, false),
       });
       const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/${encodeURIComponent(departmentId)}/members`, {
         method: 'POST',
-        body: JSON.stringify({ uid, name: name.trim(), email: email.trim().toLowerCase(), title: position.trim() }),
+        body: JSON.stringify({ uid, name: name.trim(), email: email.trim().toLowerCase() }),
       });
       if (shiftStart && shiftEnd) {
         await api(`/api/ceo/departments/members/${encodeURIComponent(uid)}`, { method: 'PATCH', body: JSON.stringify({ shiftStart, shiftEnd }) }).catch(() => undefined);
@@ -509,10 +511,13 @@ function AddStaffDialog({ departments, onClose, onCreated }: {
           <span className="mb-1 block text-[11px] font-semibold text-gray-500">Personal email *</span>
           <input className={input} type="email" value={email} onChange={e => setEmail(e.target.value)} />
         </label>
-        <label className="block">
+        <div className="block">
           <span className="mb-1 block text-[11px] font-semibold text-gray-500">Position</span>
-          <input className={input} value={position} maxLength={80} placeholder="e.g. Frontend Developer" onChange={e => setPosition(e.target.value)} />
-        </label>
+          <p className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] text-gray-600 dark:border-white/10 dark:text-gray-300">
+            {positionTitle(departments.find(d => d.id === departmentId)?.name ?? 'Department', false)}
+          </p>
+          <span className="mt-1 block text-[11px] text-gray-500 dark:text-gray-400">New staff join as staff; make them the admin from Edit.</span>
+        </div>
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-gray-500">AE department *</span>
           <select className={input} value={departmentId} onChange={e => { setDepartmentId(e.target.value); setAehubDepartment(''); }}>

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import Link from 'next/link';
 import { BASE_PAGE_IDS, normalizePages } from '@/lib/workstation/pages';
-import type { AeDepartment, AeDepartmentMember } from '@/backend/modules/departments/departments.types';
+import { positionTitle, type AeDepartment, type AeDepartmentMember } from '@/backend/modules/departments/departments.types';
 import {
   Modal, PagePicker, Switch, SuspendDialog, TransferDialog, EditMemberDialog, api, btnGhost, btnPrimary, input,
   loadAccounts, reportSync, type Account, type SyncResult,
@@ -288,7 +288,7 @@ export default function DepartmentsPage() {
                               {member.status === 'suspended' && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-red-700 dark:bg-red-500/15 dark:text-red-300">Suspended</span>}
                             </p>
                             <p className="truncate text-[11px] text-gray-500 dark:text-gray-400">
-                              {[member.title || 'No position set', member.shiftStart && member.shiftEnd ? `${member.shiftStart}–${member.shiftEnd}` : null,
+                              {[positionTitle(selected.name, member.isDepartmentAdmin), member.shiftStart && member.shiftEnd ? `${member.shiftStart}–${member.shiftEnd}` : null,
                                 member.pages.length ? `${member.pages.length} chosen pages` : 'All department pages'].filter(Boolean).join(' · ')}
                             </p>
                           </div>
@@ -319,11 +319,12 @@ export default function DepartmentsPage() {
       )}
       {selected && dialog?.kind === 'edit' && (
         <EditMemberDialog member={dialog.member} department={selected} onClose={() => setDialog(null)}
+          currentAdmin={deptMembers.find(m => m.isDepartmentAdmin && m.uid !== dialog.member.uid) ?? null}
           onSave={body => memberAction(dialog.member.uid, body, 'Saved.')} />
       )}
       {selected && dialog?.kind === 'transfer' && (
         <TransferDialog member={dialog.member} current={selected} departments={departments} onClose={() => setDialog(null)}
-          onTransfer={departmentId => memberAction(dialog.member.uid, { departmentId }, `Transferred to ${deptName(departmentId)}.`)} />
+          onTransfer={(departmentId, syncProjects) => memberAction(dialog.member.uid, { departmentId, syncProjects }, `Transferred to ${deptName(departmentId)}.`)} />
       )}
       {selected && dialog?.kind === 'suspend' && (
         <SuspendDialog member={dialog.member} onClose={() => setDialog(null)}
@@ -367,7 +368,7 @@ function AddPeopleDialog({ department, members, deptName, onClose, onAdded }: {
     try {
       const result = await api<{ sync?: SyncResult[] }>(`/api/ceo/departments/${encodeURIComponent(department.id)}/members`, {
         method: 'POST',
-        body: JSON.stringify({ uid: account.uid, name: account.name, email: account.email, title: account.position }),
+        body: JSON.stringify({ uid: account.uid, name: account.name, email: account.email }),
       });
       toast.success(`${account.name} added to ${department.name}.`);
       reportSync(result.sync);
