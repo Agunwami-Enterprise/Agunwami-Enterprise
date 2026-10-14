@@ -6,3 +6,4 @@
 
 export * from './site-content.types';
 export * from './site-content.service';
+export * from './article-access';

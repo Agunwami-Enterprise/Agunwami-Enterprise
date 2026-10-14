@@ -24,14 +24,16 @@ export interface InsightCard {
   title: string;
   category: string;
   excerpt: string;
+  tags: string[];
   date: string;
   image: string;
 }
 
 /** `categories`: the C-panel's categories that have articles, in order; "All" comes first. */
-export default function InsightsBrowser({ articles, categories }: { articles: InsightCard[]; categories: string[] }) {
+export default function InsightsBrowser({ articles, categories, initialQuery = "" }: { articles: InsightCard[]; categories: string[]; initialQuery?: string }) {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  // A tag link on an article opens this page searching for it (?q=tag).
+  const [searchQuery, setSearchQuery] = useState<string>(initialQuery);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isNewsletterOpen, setIsNewsletterOpen] = useState<boolean>(false);
   const itemsPerPage = 6;
@@ -43,7 +45,8 @@ export default function InsightsBrowser({ articles, categories }: { articles: In
       const matchesSearch =
         searchQuery.trim() === "" ||
         article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        article.excerpt.toLowerCase().includes(searchQuery.toLowerCase());
+        article.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        article.tags.some((tag) => tag.toLowerCase().includes(searchQuery.trim().replace(/^#/, "").toLowerCase()));
       return matchesCategory && matchesSearch;
     });
   }, [articles, selectedCategory, searchQuery]);

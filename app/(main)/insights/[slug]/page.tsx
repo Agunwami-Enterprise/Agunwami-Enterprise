@@ -37,6 +37,7 @@ export async function generateMetadata({
     // A custom meta title is used as written; otherwise the site name is added.
     title: article.seoTitle ? { absolute: article.seoTitle } : `${article.title} | Expert Insights — Agunwami Enterprise`,
     description,
+    keywords: article.tags?.length ? article.tags : undefined,
     alternates: {
       canonical: canonicalUrl,
     },
@@ -251,6 +252,20 @@ export default async function BlogDetailPage({
               className="article-content text-[15.5px] md:text-[16px]"
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
+
+            {/* Tags */}
+            {article.tags && article.tags.length > 0 && (
+              <ul className="mt-10 flex flex-wrap gap-2" aria-label="Tags">
+                {article.tags.map((tag) => (
+                  <li key={tag}>
+                    <Link href={`/insights?q=${encodeURIComponent(tag)}`}
+                      className="inline-block rounded-full border border-gray-200 dark:border-white/10 px-3 py-1 text-[13px] text-gray-600 dark:text-gray-300 hover:border-primary hover:text-primary transition-colors">
+                      #{tag}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {/* Pull Quote */}
             {article.pullQuote && (

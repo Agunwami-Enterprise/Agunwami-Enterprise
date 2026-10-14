@@ -118,6 +118,25 @@ export const ARTICLE_FONTS: Array<{ label: string; css: string }> = [
   { label: 'Courier New', css: '"Courier New", Courier, monospace' },
 ];
 
+/**
+ * Who may do what with an article (C-panel). The owner can do everything,
+ * including handing the article to someone else; managers edit, publish and
+ * share; editors edit and save; viewers read. The CEO can delete any article
+ * but only opens one they've been given access to.
+ */
+export const ARTICLE_ROLES = ['viewer', 'editor', 'manager'] as const;
+export type ArticleRole = (typeof ARTICLE_ROLES)[number];
+export const ARTICLE_ROLE_LABELS: Record<ArticleRole, string> = { viewer: 'Can view', editor: 'Can edit', manager: 'Can manage' };
+
+export interface ArticlePerson { uid: string; name: string; email: string }
+export interface ArticleCollaborator extends ArticlePerson { role: ArticleRole }
+
+/** Someone has the article open for editing; others get it read-only until it lapses. */
+export interface ArticleLock extends ArticlePerson { at: string }
+
+export const MAX_TAGS = 15;
+export const MAX_TAG_LENGTH = 30;
+
 /** An Expert Insights article (/insights and /insights/[slug]). */
 export interface SiteArticle {
   id: string;
@@ -148,6 +167,15 @@ export interface SiteArticle {
   seoImage?: string;
   /** SEO: ask search engines not to list the article. */
   noIndex?: boolean;
+  /** Topics, shown on the article and searchable on the Insights page. */
+  tags?: string[];
+  /** Who created it (or was handed it); articles from before sharing have none. */
+  owner?: ArticlePerson | null;
+  collaborators?: ArticleCollaborator[];
+  lock?: ArticleLock | null;
+  /** ISO time of the last save, to catch saves over someone else's newer changes. */
+  updatedAt?: string;
+  updatedBy?: string;
   /** Drafts are only visible in the C-panel. */
   published: boolean;
 }
