@@ -442,7 +442,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     : !editing ? (mode.kind === 'checking' ? 'Opening…' : 'Read-only')
       : saveState === 'saving' ? 'Saving…' : saveState === 'unsaved' ? 'Unsaved changes' : saveState === 'error' ? 'Not saved' : 'All changes saved';
   // Floating menus wrap on narrow screens instead of running off them.
-  const bubble = 'z-30 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
+  const bubble = 'z-10 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
   const panelField = 'w-full rounded-lg border border-[#e5e5e5] bg-white px-3 py-2 text-[14px] text-[#292929] outline-none focus:border-[#f5bd02] disabled:bg-[#f7f7f7] disabled:text-[#8a8a8a] dark:border-white/10 dark:bg-[#2a2a2a] dark:text-gray-100';
 
   return (

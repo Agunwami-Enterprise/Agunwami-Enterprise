@@ -383,10 +383,30 @@ html.ae-reduce-motion .ae-lift:hover { transform: none; }
 }
 .article-editor img.ProseMirror-selectednode { outline: 3px solid var(--primary); }
 .article-editor h4 { scroll-margin-top: 80px; }
-/* Tables fill the page; wide ones (many columns) scroll sideways inside it instead of overflowing. */
+/* Tables fill the page and keep the column widths dragged or typed in (columns without one share
+   the rest); wide ones (many columns) scroll sideways inside it instead of overflowing. */
 .article-editor .tableWrapper { max-width: 100%; overflow-x: auto; }
-.article-editor table { width: 100%; display: table; table-layout: auto; }
-.article-editor :is(td, th) { min-width: 7rem; overflow-wrap: break-word; }
+.article-editor table { width: 100%; display: table; table-layout: fixed; }
+.article-editor :is(td, th) { position: relative; overflow-wrap: break-word; }
+/* Resizing: a column's right edge and a row's bottom edge can be dragged. */
+.article-editor .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -1px;
+  width: 4px;
+  background: #f5bd02;
+  pointer-events: none;
+  z-index: 2;
+}
+.article-editor.resize-cursor, .article-editor.resize-cursor * { cursor: col-resize; }
+.article-editor.row-resize-cursor, .article-editor.row-resize-cursor * { cursor: row-resize; }
+.article-editor.row-resize-cursor :is(td, th):hover { box-shadow: inset 0 -3px 0 #f5bd02; }
+/* Phones: columns fit their content and the table scrolls, rather than squashing words. */
+@media (max-width: 640px) {
+  .article-editor table { table-layout: auto; }
+  .article-editor :is(td, th) { min-width: 6rem; }
+}
 .article-editor .selectedCell { position: relative; }
 .article-editor .selectedCell::after {
   content: "";

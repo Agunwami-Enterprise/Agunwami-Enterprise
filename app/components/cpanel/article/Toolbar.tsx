@@ -19,6 +19,10 @@ import {
 import { ARTICLE_FONTS, ARTICLE_FONT_GROUPS } from '@/backend/modules/site-content/site-content.types';
 import { cx } from '../ui';
 import { LINE_SPACINGS, MAX_INDENT, changeCase } from './extensions';
+import TableSizePanel from './TableSizePanel';
+import {
+  canMoveColumn, canMoveRow, currentVerticalAlign, moveColumn, moveRow, setColumnWidth, setRowHeight, setVerticalAlign,
+} from './table-sizing';
 
 // ── Shared bits ─────────────────────────────────────────────────────────────
 
@@ -75,7 +79,7 @@ function Dropdown({ label, button, children, buttonClass, panelClass, align = 'l
         <ChevronDown className="h-3 w-3 shrink-0 text-[#8C8679]" aria-hidden="true" />
       </button>
       {open && (
-        <div className={cx('absolute top-full z-30 mt-1 rounded-lg border border-[#E5E2D9] bg-white py-1 shadow-xl', align === 'right' ? 'right-0' : 'left-0', panelClass)}>
+        <div className={cx('absolute top-full z-40 mt-1 rounded-lg border border-[#E5E2D9] bg-white py-1 shadow-xl', align === 'right' ? 'right-0' : 'left-0', panelClass)}>
           {children(close)}
         </div>
       )}
@@ -334,7 +338,7 @@ function MenuList({ items, close, className }: { items: MenuItem[]; close: () =>
         if (item === 'divider') return <div key={i} role="separator" className="my-1 h-px bg-[#F0EEE8]" />;
         const hasSub = !!(item.submenu || item.panel);
         return (
-          <div key={i} className="relative" onMouseEnter={() => setSub(hasSub ? i : null)}>
+          <div key={i} className="relative" onMouseEnter={() => setSub(hasSub && !item.disabled ? i : null)}>
             <button type="button" role="menuitem" disabled={item.disabled} aria-haspopup={hasSub || undefined} aria-expanded={hasSub ? sub === i : undefined}
               onMouseDown={e => e.preventDefault()}
               onKeyDown={e => { if (hasSub && e.key === 'ArrowRight') { e.preventDefault(); setSub(i); } }}
@@ -376,7 +380,7 @@ function MenuBar({ menus }: { menus: Array<{ label: string; items: () => MenuIte
             className={cx('rounded-md px-2.5 py-1 text-[13px] text-[#3A3A3A] hover:bg-[#F3F1EA]', open === menu.label && 'bg-[#F1E4C3]')}>
             {menu.label}
           </button>
-          {open === menu.label && <MenuList items={menu.items()} close={close} className="absolute left-0 top-full z-30 mt-1" />}
+          {open === menu.label && <MenuList items={menu.items()} close={close} className="absolute left-0 top-full z-40 mt-1" />}
         </div>
       ))}
     </div>
@@ -469,6 +473,23 @@ export default function Toolbar({ editor, ...a }: { editor: Editor } & ToolbarAc
     { label: 'Unmerge cells', disabled: !s.table || !editor.can().splitCell(), onSelect: () => chain().splitCell().run() },
     { label: 'Header row', disabled: !s.table, onSelect: () => chain().toggleHeaderRow().run() },
     { label: 'Header column', disabled: !s.table, onSelect: () => chain().toggleHeaderColumn().run() },
+    'divider',
+    { label: 'Column width & row height', disabled: !s.table, panel: () => <TableSizePanel editor={editor} light /> },
+    { label: 'Even out columns', disabled: !s.table, onSelect: () => setColumnWidth(editor, null, true) },
+    { label: 'Fit rows to content', disabled: !s.table, onSelect: () => setRowHeight(editor, null, true) },
+    {
+      label: 'Align cell content', disabled: !s.table, submenu: s.table ? (['top', 'middle', 'bottom'] as const).map(v => ({
+        label: v[0].toUpperCase() + v.slice(1), checked: currentVerticalAlign(editor) === v, onSelect: () => setVerticalAlign(editor, v === 'top' ? null : v),
+      })) : [],
+    },
+    {
+      label: 'Move', disabled: !s.table, submenu: s.table ? [
+        { label: 'Row up', disabled: !canMoveRow(editor, -1), onSelect: () => moveRow(editor, -1) },
+        { label: 'Row down', disabled: !canMoveRow(editor, 1), onSelect: () => moveRow(editor, 1) },
+        { label: 'Column left', disabled: !canMoveColumn(editor, -1), onSelect: () => moveColumn(editor, -1) },
+        { label: 'Column right', disabled: !canMoveColumn(editor, 1), onSelect: () => moveColumn(editor, 1) },
+      ] : [],
+    },
   ];
 
   const menus: Array<{ label: string; items: () => MenuItem[] }> = [

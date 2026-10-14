@@ -18,6 +18,7 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
+import { CELL_MIN_WIDTH, TableSizing } from './table-sizing';
 import { Color, FontFamily, FontSize, TextStyle } from '@tiptap/extension-text-style';
 import { FigureImage } from './FigureImage';
 
@@ -305,7 +306,9 @@ export function articleExtensions(placeholder: string): AnyExtension[] {
     ParagraphFormat,
     TaskList,
     TaskItem.configure({ nested: true }),
-    TableKit.configure({ table: { resizable: false } }),
+    // Column resizing comes from TableSizing (installed even while a document is being read).
+    TableKit.configure({ table: { resizable: false, cellMinWidth: CELL_MIN_WIDTH } }),
+    TableSizing,
     FigureImage,
     SearchHighlight,
     PasteCleanup,
