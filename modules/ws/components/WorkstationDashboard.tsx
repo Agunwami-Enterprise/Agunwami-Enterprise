@@ -27,6 +27,7 @@ import {
 } from '../data';
 import TaskDistributionChart from './TaskDistributionChart';
 import { Card, Empty, NotConnected, StatTile, Tag, fmtDate } from './ui';
+import DepartmentResources from '@/modules/documents/components/DepartmentResources';
 
 function TaskRow({ task, right, rightClass }: { task: WsTask; right: string; rightClass: string }) {
   return (
@@ -147,6 +148,12 @@ export default function WorkstationDashboard() {
             sub={activeProjects ? 'Project endpoints reporting normally' : 'Uptime monitoring not connected yet'} />
         )}
       </div>
+
+      {/* The department's handbook, guides and links */}
+      {access.kind === 'department' && access.departmentId && (
+        <DepartmentResources departmentId={access.departmentId} basePath="/ws/documents" isCeo={false}
+          aeHubDepartment={String(profile?.department ?? '').toLowerCase()} />
+      )}
 
       {/* Time tracking & attendance (shared with the rest of the workstation) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

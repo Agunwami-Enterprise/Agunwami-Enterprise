@@ -10,7 +10,10 @@
 import { createDoc, deleteDoc, getDoc, listDocs, updateDoc } from '../../core/firestore';
 import { BASE_PAGE_IDS, isPageId, normalizePages } from '@/lib/workstation/pages';
 import { CEO_OFFICE_ID, CEO_OFFICE_NAME, PROJECT_CEO_DEPARTMENT, positionTitle } from './departments.types';
-import type { AeDepartment, AeDepartmentMember, AssignMemberDto, SaveDepartmentDto, UpdateMemberDto } from './departments.types';
+import { RESOURCE_KINDS } from './departments.types';
+import type {
+  AeDepartment, AeDepartmentMember, AssignMemberDto, DepartmentResource, ResourceKind, SaveDepartmentDto, SaveResourceDto, UpdateMemberDto,
+} from './departments.types';
 
 const DEPARTMENTS = 'aeDepartments';
 const MEMBERS = 'aeDepartmentMembers';
@@ -52,6 +55,21 @@ function projectLinksOf(value: unknown, ceoOffice: boolean): Record<string, stri
 
 const DEFAULT_CEO_OFFICE_PAGES = [...BASE_PAGE_IDS, 'tasks', 'time-tracking', 'documents', 'leave-requests', 'reports'];
 
+function resourcesOf(value: unknown): DepartmentResource[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((r): r is Record<string, unknown> => !!r && typeof r === 'object').map(r => ({
+    id: String(r.id ?? ''),
+    kind: (RESOURCE_KINDS as readonly string[]).includes(String(r.kind)) ? r.kind as ResourceKind : 'other',
+    title: String(r.title ?? ''),
+    type: r.type === 'document' ? 'document' as const : 'link' as const,
+    url: String(r.url ?? ''),
+    documentId: String(r.documentId ?? ''),
+    documentFormat: (r.documentFormat === 'written' || r.documentFormat === 'file' ? r.documentFormat : '') as DepartmentResource['documentFormat'],
+    addedBy: String(r.addedBy ?? ''),
+    addedAt: String(r.addedAt ?? ''),
+  })).filter(r => r.id && r.title);
+}
+
 function toDepartment(doc: Record<string, unknown>, memberCount = 0): AeDepartment {
   return {
     id: String(doc._id),
@@ -61,6 +79,7 @@ function toDepartment(doc: Record<string, unknown>, memberCount = 0): AeDepartme
     active: doc.active !== false,
     projectLinks: projectLinksOf(doc.projectLinks, doc._id === CEO_OFFICE_ID),
     memberCount,
+    resources: resourcesOf(doc.resources),
     builtIn: doc._id === CEO_OFFICE_ID,
     createdAt: typeof doc.createdAt === 'string' ? doc.createdAt : null,
     updatedAt: typeof doc.updatedAt === 'string' ? doc.updatedAt : null,
@@ -187,6 +206,51 @@ export class DepartmentsService {
     const { members } = await DepartmentsService.list();
     await Promise.all(members.filter(m => m.departmentId === id).map(m => deleteDoc(MEMBERS, m.uid)));
     if (!(await deleteDoc(DEPARTMENTS, id))) throw new DepartmentError('The department could not be deleted. Please try again.', 503);
+  }
+
+  /** Adds a guide, handbook, manual or the like (a link or a document in Documents). */
+  static async addResource(departmentId: string, dto: SaveResourceDto, by: string): Promise<DepartmentResource[]> {
+    requireSafeId(departmentId, 'department');
+    const doc = await getDoc(DEPARTMENTS, departmentId);
+    if (!doc) throw new DepartmentError('That department no longer exists.', 404);
+    const current = resourcesOf(doc.resources);
+    if (current.length >= 30) throw new DepartmentError('A department can have up to 30 guides and links.');
+    const title = text(dto.title, 120);
+    if (!title) throw new DepartmentError('Give it a title.');
+    const kind = (RESOURCE_KINDS as readonly string[]).includes(dto.kind) ? dto.kind as ResourceKind : 'other';
+    let url = '';
+    let documentId = '';
+    let documentFormat: DepartmentResource['documentFormat'] = '';
+    if (dto.type === 'document') {
+      documentId = requireSafeId(dto.documentId, 'document');
+      documentFormat = dto.documentFormat === 'written' ? 'written' : 'file';
+    } else {
+      url = text(dto.url, 2000);
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error();
+      } catch {
+        throw new DepartmentError('Enter a full web address (https://…).');
+      }
+    }
+    const resource: DepartmentResource = {
+      id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+      kind, title, type: dto.type === 'document' ? 'document' : 'link', url, documentId, documentFormat,
+      addedBy: by, addedAt: new Date().toISOString(),
+    };
+    const resources = [...current, resource];
+    if (!(await updateDoc(DEPARTMENTS, departmentId, { resources }))) throw new DepartmentError('It could not be saved. Please try again.', 503);
+    return resources;
+  }
+
+  /** Removes one from the department's list (a document stays in Documents). */
+  static async removeResource(departmentId: string, resourceId: string): Promise<DepartmentResource[]> {
+    requireSafeId(departmentId, 'department');
+    const doc = await getDoc(DEPARTMENTS, departmentId);
+    if (!doc) throw new DepartmentError('That department no longer exists.', 404);
+    const resources = resourcesOf(doc.resources).filter(r => r.id !== resourceId);
+    if (!(await updateDoc(DEPARTMENTS, departmentId, { resources }))) throw new DepartmentError('It could not be removed. Please try again.', 503);
+    return resources;
   }
 
   /** Puts a person in a department (moving them out of any other). */

@@ -251,7 +251,7 @@ export default function DocumentsPage() {
       ══════════════════════════════════════════════════════════════════ */}
       {creating && user && (
         <NewDocumentDialog basePath="/ceo/documents" onClose={() => setCreating(false)}
-          me={{ uid: user.uid, name: user.displayName || user.email || 'CEO', email: user.email || '', department, isCeo: true }} />
+          me={{ uid: user.uid, name: user.displayName || user.email || 'CEO', email: user.email || '', department, isCeo: true, aeDepartmentId: '' }} />
       )}
 
       {showUpload && (

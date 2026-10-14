@@ -9,12 +9,22 @@ import AeModal from '@/app/components/common/AeModal';
 import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocShare, type HiddenFrom, type Viewer } from '../doc-store';
 import HideFromPicker from './HideFromPicker';
 
-export default function NewDocumentDialog({ me, basePath, onClose }: { me: Viewer; basePath: string; onClose: () => void }) {
+export default function NewDocumentDialog({ me, basePath, onClose, team, initial, onCreated }: {
+  me: Viewer;
+  basePath: string;
+  onClose: () => void;
+  /** My AE department: "My team" documents are kept under it. */
+  team?: { id: string; name: string };
+  /** Start with this title, template and category (e.g. a department's handbook). */
+  initial?: { title?: string; templateId?: string; category?: string; share?: DocShare };
+  /** Called with the new document's id before it opens (e.g. to list it as a department guide). */
+  onCreated?: (id: string, title: string) => Promise<void>;
+}) {
   const router = useRouter();
-  const [title, setTitle] = useState('');
-  const [templateId, setTemplateId] = useState(DOC_TEMPLATES[0].id);
-  const [category, setCategory] = useState(DOC_TEMPLATES[0].category);
-  const [share, setShare] = useState<DocShare>(me.department ? 'department' : 'private');
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [templateId, setTemplateId] = useState(initial?.templateId ?? DOC_TEMPLATES[0].id);
+  const [category, setCategory] = useState(initial?.category ?? (DOC_TEMPLATES.find(t => t.id === initial?.templateId) ?? DOC_TEMPLATES[0]).category);
+  const [share, setShare] = useState<DocShare>(initial?.share ?? (team || me.department ? 'department' : 'private'));
   const [othersCanEdit, setOthersCanEdit] = useState(false);
   const [hiddenFrom, setHiddenFrom] = useState<HiddenFrom>({ departments: [], people: [] });
   const [busy, setBusy] = useState(false);
@@ -31,9 +41,12 @@ export default function NewDocumentDialog({ me, basePath, onClose }: { me: Viewe
         title: title.trim() || (template.id === 'blank' ? 'Untitled document' : `${template.label} – ${date}`),
         content: template.content(me.name, date),
         category, description: '', share, othersCanEdit: share !== 'private' && othersCanEdit,
+        team: share === 'department' ? team : undefined,
         // Departments are hidden from only when it's shared with the whole company.
         hiddenFrom: share === 'private' ? { departments: [], people: [] } : { departments: share === 'all' ? hiddenFrom.departments : [], people: hiddenFrom.people },
       }, me);
+      const finalTitle = title.trim() || (template.id === 'blank' ? 'Untitled document' : `${template.label} – ${date}`);
+      await onCreated?.(id, finalTitle);
       router.push(docPath(id, basePath));
     } catch {
       setError('The document could not be created. Please try again.');
@@ -88,7 +101,7 @@ export default function NewDocumentDialog({ me, basePath, onClose }: { me: Viewe
             <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Who can see it</span>
             <select className={field} value={share} onChange={e => setShare(e.target.value as DocShare)}>
               <option value="private">Only me</option>
-              {me.department && <option value="department">My department</option>}
+              {(team || me.department) && <option value="department">{team ? `My team (${team.name})` : 'My department'}</option>}
               <option value="all">Everyone in the company</option>
             </select>
           </label>

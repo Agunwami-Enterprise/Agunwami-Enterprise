@@ -57,6 +57,7 @@ export default async function WorkstationLayout({ children }: { children: React.
     <WorkstationShell
       access={{
         kind: access.kind,
+        departmentId: access.kind === 'ceo' ? '' : access.departmentId ?? '',
         departmentName: access.departmentName ?? 'Department',
         title: access.title,
         pages: access.pages,

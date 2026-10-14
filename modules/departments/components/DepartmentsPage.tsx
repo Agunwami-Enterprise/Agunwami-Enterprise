@@ -18,6 +18,7 @@ import {
   Modal, PagePicker, Switch, SuspendDialog, TransferDialog, EditMemberDialog, api, btnGhost, btnPrimary, input,
   loadAccounts, reportSync, type Account, type SyncResult,
 } from './shared';
+import DepartmentResources from '@/modules/documents/components/DepartmentResources';
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -318,6 +319,7 @@ export default function DepartmentsPage() {
                   )}
                 </div>
               )}
+              {selected && <DepartmentResources key={selected.id} departmentId={selected.id} basePath="/ceo/documents" isCeo />}
             </div>
           )}
         </section>
