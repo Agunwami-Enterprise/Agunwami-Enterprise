@@ -108,15 +108,88 @@ export const SEO_DESCRIPTION_MAX = 160;
 /** A category with the number of articles in it (C-panel). */
 export interface ArticleCategoryInfo { name: string; articles: number }
 
-/** Fonts the article editor offers; the site's HTML cleaner allows exactly these. */
-export const ARTICLE_FONTS: Array<{ label: string; css: string }> = [
-  { label: 'Georgia', css: 'Georgia, serif' },
-  { label: 'Times New Roman', css: '"Times New Roman", Times, serif' },
-  { label: 'Arial', css: 'Arial, Helvetica, sans-serif' },
-  { label: 'Verdana', css: 'Verdana, Geneva, sans-serif' },
-  { label: 'Trebuchet MS', css: '"Trebuchet MS", sans-serif' },
-  { label: 'Courier New', css: '"Courier New", Courier, monospace' },
+/**
+ * Fonts the article editor offers; the site's HTML cleaner allows exactly
+ * these. `google` is the Google Fonts family spec for web fonts (loaded on
+ * the article page only when the article uses them); the rest are installed
+ * on most computers.
+ */
+export type ArticleFontGroup = 'Sans serif' | 'Serif' | 'Display' | 'Monospace' | 'Handwriting';
+export interface ArticleFont { label: string; css: string; group: ArticleFontGroup; google?: string }
+
+const web = (label: string, fallback: string, group: ArticleFontGroup, weights = 'wght@400;700'): ArticleFont => ({
+  label,
+  css: `${/[\s\d]/.test(label) ? `"${label}"` : label}, ${fallback}`,
+  group,
+  google: `${label.replace(/ /g, '+')}${weights ? `:${weights}` : ''}`,
+});
+
+export const ARTICLE_FONTS: ArticleFont[] = [
+  // Sans serif
+  web('Lexend', 'sans-serif', 'Sans serif', 'wght@300;400;500;600;700'),
+  web('Inter', 'sans-serif', 'Sans serif'),
+  web('Roboto', 'sans-serif', 'Sans serif'),
+  web('Open Sans', 'sans-serif', 'Sans serif'),
+  web('Lato', 'sans-serif', 'Sans serif'),
+  web('Montserrat', 'sans-serif', 'Sans serif'),
+  web('Poppins', 'sans-serif', 'Sans serif'),
+  web('Nunito', 'sans-serif', 'Sans serif'),
+  web('Raleway', 'sans-serif', 'Sans serif'),
+  web('Work Sans', 'sans-serif', 'Sans serif'),
+  web('DM Sans', 'sans-serif', 'Sans serif'),
+  web('Manrope', 'sans-serif', 'Sans serif'),
+  web('Plus Jakarta Sans', 'sans-serif', 'Sans serif'),
+  web('Outfit', 'sans-serif', 'Sans serif'),
+  web('Source Sans 3', 'sans-serif', 'Sans serif'),
+  web('Noto Sans', 'sans-serif', 'Sans serif'),
+  { label: 'Arial', css: 'Arial, Helvetica, sans-serif', group: 'Sans serif' },
+  { label: 'Verdana', css: 'Verdana, Geneva, sans-serif', group: 'Sans serif' },
+  { label: 'Tahoma', css: 'Tahoma, Geneva, sans-serif', group: 'Sans serif' },
+  { label: 'Trebuchet MS', css: '"Trebuchet MS", sans-serif', group: 'Sans serif' },
+  // Serif
+  { label: 'Georgia', css: 'Georgia, serif', group: 'Serif' },
+  { label: 'Times New Roman', css: '"Times New Roman", Times, serif', group: 'Serif' },
+  web('Merriweather', 'serif', 'Serif'),
+  web('Lora', 'serif', 'Serif'),
+  web('Playfair Display', 'serif', 'Serif'),
+  web('Libre Baskerville', 'serif', 'Serif'),
+  web('Source Serif 4', 'serif', 'Serif'),
+  web('EB Garamond', 'serif', 'Serif'),
+  web('Crimson Text', 'serif', 'Serif'),
+  web('PT Serif', 'serif', 'Serif'),
+  web('Noto Serif', 'serif', 'Serif'),
+  web('DM Serif Display', 'serif', 'Serif', ''),
+  // Display
+  web('Oswald', 'sans-serif', 'Display'),
+  web('Bebas Neue', 'sans-serif', 'Display', ''),
+  web('Abril Fatface', 'serif', 'Display', ''),
+  // Monospace
+  { label: 'Courier New', css: '"Courier New", Courier, monospace', group: 'Monospace' },
+  web('Roboto Mono', 'monospace', 'Monospace'),
+  web('Fira Code', 'monospace', 'Monospace'),
+  web('JetBrains Mono', 'monospace', 'Monospace'),
+  web('Source Code Pro', 'monospace', 'Monospace'),
+  web('IBM Plex Mono', 'monospace', 'Monospace'),
+  // Handwriting
+  web('Caveat', 'cursive', 'Handwriting'),
+  web('Dancing Script', 'cursive', 'Handwriting'),
+  web('Pacifico', 'cursive', 'Handwriting', ''),
 ];
+
+export const ARTICLE_FONT_GROUPS: ArticleFontGroup[] = ['Sans serif', 'Serif', 'Display', 'Monospace', 'Handwriting'];
+
+/** The Google Fonts stylesheet for these fonts (web fonts only), or '' if none. */
+export function articleFontsUrl(fonts: ArticleFont[] = ARTICLE_FONTS): string {
+  const families = fonts.filter(f => f.google).map(f => `family=${f.google}`);
+  return families.length ? `https://fonts.googleapis.com/css2?${families.join('&')}&display=swap` : '';
+}
+
+/** The web fonts an article's HTML uses, so its page loads only those. */
+export function fontsUsedIn(html: string): ArticleFont[] {
+  // Style attributes that set a font (an extra match only loads an unused font).
+  const styles = [...html.matchAll(/style="([^"]*font-family[^"]*)"/gi)].map(m => m[1]).join(' ');
+  return styles ? ARTICLE_FONTS.filter(f => f.google && styles.includes(f.label)) : [];
+}
 
 /**
  * Who may do what with an article (C-panel). The owner can do everything,

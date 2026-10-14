@@ -15,7 +15,7 @@ import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import {
   Button, Card, ErrorNote, ImageField, TagInput, TextArea, TextInput, cpanelFetch, cx, uploadImage, usePersistentToggle,
 } from './ui';
-import { MAX_TAGS, type ArticleCategoryInfo, type ArticleLock, type ArticlePerson, type SiteArticle } from '@/backend/modules/site-content/site-content.types';
+import { MAX_TAGS, articleFontsUrl, type ArticleCategoryInfo, type ArticleLock, type ArticlePerson, type SiteArticle } from '@/backend/modules/site-content/site-content.types';
 import type { ArticlePermissions } from '@/backend/modules/site-content/article-access';
 import ShareDialog from './article/ShareDialog';
 import { articleExtensions } from './article/extensions';
@@ -561,6 +561,8 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
 
   return (
     <div className="w-full">
+      {/* The editor's web fonts (font files download only when used) */}
+      <link rel="stylesheet" href={articleFontsUrl()} precedence="default" />
       {/* Top bar */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Link href="/cpanel/insights" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#6B6B6B] hover:text-[#1A1A1A]">
