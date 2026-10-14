@@ -68,7 +68,7 @@ export function ApplicationsManager({ applications: initialApplications }: { app
   const visible = filter === 'all' ? applications : applications.filter(a => a.status === filter);
 
   return (
-    <div className="mx-auto max-w-[1075px]">
+    <div className="w-full">
       <PageHeader title="Partnership Applications"
         subtitle={`${applications.length} total submission${applications.length === 1 ? '' : 's'}${lastLoadedAt ? ` · updated ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}`}
         action={(

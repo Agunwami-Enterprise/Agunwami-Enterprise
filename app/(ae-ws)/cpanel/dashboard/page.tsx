@@ -25,7 +25,7 @@ export default async function CpanelDashboard() {
   ];
 
   return (
-    <div className="mx-auto max-w-[1075px]">
+    <div className="w-full">
       <PageHeader title="Dashboard" subtitle="Welcome back — here's an overview of your website." />
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">

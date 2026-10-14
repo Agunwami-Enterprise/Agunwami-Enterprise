@@ -211,7 +211,7 @@ export default function ProjectEditor({
   let step = 0;
 
   return (
-    <div className="mx-auto max-w-[1180px] pb-10">
+    <div className="w-full pb-10">
       {/* Top bar */}
       <div className="sticky top-0 z-20 -mx-5 mb-6 flex flex-wrap items-center gap-3 border-b border-[#ECEAE3] bg-[#FBFAF3]/95 px-5 py-3 backdrop-blur md:-mx-16 md:px-16">
         <Link href={backHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#6B6B6B] hover:text-[#1A1A1A]">

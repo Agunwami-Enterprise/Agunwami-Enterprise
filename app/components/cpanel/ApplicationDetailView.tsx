@@ -216,7 +216,7 @@ export function ApplicationDetailView({
   });
 
   return (
-    <div className="mx-auto max-w-[1120px] pb-16 font-secondary">
+    <div className="w-full pb-16 font-secondary">
       {/* Top breadcrumb & global action bar */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
