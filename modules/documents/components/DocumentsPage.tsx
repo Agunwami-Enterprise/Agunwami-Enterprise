@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeUserProfile } from '@/modules/settings/services';
+import { toast } from 'react-toastify';
 import NewDocumentDialog from './NewDocumentDialog';
+import { downloadDocCopy, permissionsOf, subscribeWrittenDocs, type Viewer, type WorkDoc } from '../doc-store';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
 import {
   ALL_SOURCES, FeedError, FeedNotices, SourceBadge, SourceFilter, formatDate, sourcesOf, useFeed,
@@ -59,6 +61,12 @@ export default function DocumentsPage() {
   const [creating, setCreating] = useState(false);
   const [department, setDepartment] = useState('');
   useEffect(() => (user?.uid ? subscribeUserProfile(user.uid, p => setDepartment(String(p?.department ?? '').toLowerCase())) : undefined), [user?.uid]);
+  // Documents written in the workstation: they open here, read-only unless the CEO was given editing.
+  const [written, setWritten] = useState<Map<string, WorkDoc>>(new Map());
+  useEffect(() => (user?.uid ? subscribeWrittenDocs(setWritten, () => setWritten(new Map())) : undefined), [user?.uid]);
+  const me: Viewer | null = user ? { uid: user.uid, name: user.displayName || user.email || 'CEO', email: user.email || '', department, isCeo: true, aeDepartmentId: '' } : null;
+  const canEditWritten = (id: string) => { const d = written.get(id); return !!d && !!me && permissionsOf(d, me).canEdit; };
+  const download = (f: DocFile) => downloadDocCopy(f.id).catch(() => toast.error(`${f.name} could not be downloaded.`));
   const files: DocFile[] = feed.data?.items ?? [];
   const sources = sourcesOf(files);
 
@@ -212,14 +220,25 @@ export default function DocumentsPage() {
                           </td>
                           <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{formatDate(f.date)}</td>
                           <td className="px-5 py-3.5 text-right">
-                            {f.written && f.source.id === 'enterprise' ? (
-                              <Link
-                                href={`/ceo/documents/${f.id}`}
-                                className="text-[12px] font-semibold hover:underline"
-                                style={{ color: '#f5bd02' }}
-                              >
-                                Open
-                              </Link>
+                            {f.written || written.has(f.id) ? (
+                              <span className="inline-flex items-center gap-3">
+                                <Link
+                                  href={`/ceo/documents/${f.id}`}
+                                  title={canEditWritten(f.id) ? 'Open it to edit (you can switch to viewing)' : 'Open it to read'}
+                                  className="text-[12px] font-semibold hover:underline"
+                                  style={{ color: '#f5bd02' }}
+                                >
+                                  {canEditWritten(f.id) ? 'Edit' : 'View'}
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => void download(f)}
+                                  title="Download as a Word document"
+                                  className="text-[12px] font-semibold text-gray-500 hover:underline dark:text-gray-400"
+                                >
+                                  Download
+                                </button>
+                              </span>
                             ) : f.url ? (
                               <a
                                 href={f.url}
@@ -249,9 +268,9 @@ export default function DocumentsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           UPLOAD MODAL
       ══════════════════════════════════════════════════════════════════ */}
-      {creating && user && (
+      {creating && me && (
         <NewDocumentDialog basePath="/ceo/documents" onClose={() => setCreating(false)}
-          me={{ uid: user.uid, name: user.displayName || user.email || 'CEO', email: user.email || '', department, isCeo: true, aeDepartmentId: '' }} />
+          me={me} />
       )}
 
       {showUpload && (

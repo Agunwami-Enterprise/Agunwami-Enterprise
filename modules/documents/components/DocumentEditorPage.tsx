@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import { useAuth } from '@/lib/workstation/auth-context';
+import { deniedHref } from '@/lib/workstation/access-denied';
 import { subscribeUserProfile } from '@/modules/settings/services';
 import { articleExtensions } from '@/app/components/cpanel/article/extensions';
 import Toolbar, { Divider, ToolButton, applyFontSize, clearFormatting, currentFontSize } from '@/app/components/cpanel/article/Toolbar';
@@ -72,10 +73,12 @@ const SHORTCUTS: Array<[string, string]> = [
   ['[ ] then space', 'Checklist'],
 ];
 
-export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId = '' }: {
+export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId = '', startInView = false }: {
   id: string; basePath: string; isCeo: boolean;
   /** The viewer's AE department, for documents kept under its team. */
   aeDepartmentId?: string;
+  /** Open in Viewing mode even for someone who can edit (?mode=view). */
+  startInView?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -215,15 +218,28 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
 
   const ready = !!docData && !!me && !!editor;
   const canEdit = !!can?.canEdit;
+  // Editing or Viewing, as in Google Docs: whoever can edit chooses; everyone else views.
+  const [wantEdit, setWantEdit] = useState(!startInView);
   useEffect(() => {
     if (!ready) return;
-    if (!canEdit) {
+    if (!canEdit || !wantEdit) {
       const t = setTimeout(() => setMode({ kind: 'view' }), 0);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => { setMode({ kind: 'checking' }); void acquire(); }, 0);
     return () => clearTimeout(t);
-  }, [ready, canEdit, acquire]);
+  }, [ready, canEdit, wantEdit, acquire]);
+
+  /** Switches between Editing and Viewing; leaving Editing saves and lets someone else edit. */
+  async function switchMode(next: 'editing' | 'viewing') {
+    if (next === 'editing') { setWantEdit(true); return; }
+    const viewer = meRef.current;
+    if (modeRef.current.kind === 'editing' && viewer) {
+      await flushRef.current();
+      await releaseDoc(id, viewer).catch(() => undefined);
+    }
+    setWantEdit(false);
+  }
 
   useEffect(() => {
     if (mode.kind !== 'editing' && mode.kind !== 'locked') return;
@@ -416,6 +432,12 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     }
   }
 
+  // Not shared with this person (or their department): back to Documents, with a toast saying so.
+  const denied = !!docData && !!can && !can.canView;
+  useEffect(() => {
+    if (denied) router.replace(deniedHref(basePath, 'document'));
+  }, [denied, router, basePath]);
+
   // ── Render ──
 
   if (loadError || docData === null) {
@@ -428,18 +450,12 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     );
   }
   if (docData && can && !can.canView) {
-    return (
-      <Centered>
-        <Lock className="h-10 w-10 text-[#a3a3a3]" aria-hidden="true" />
-        <p className="text-[16px] font-semibold text-[#292929] dark:text-white">You don’t have access to this document</p>
-        <p className="max-w-md text-[14px] text-[#656565] dark:text-gray-400">“{docData.title}” is shared only with {shareOf(docData) === 'private' ? 'its owner' : 'another department'}. Ask {docData.owner.name || 'its owner'} to share it.</p>
-        <Link href={basePath} className="text-[14px] font-semibold text-[#806013] hover:underline dark:text-[#f5bd02]">Back to Documents</Link>
-      </Centered>
-    );
+    // Sent back to Documents (see the effect above), where a toast says why.
+    return <Centered><Loader2 className="h-6 w-6 animate-spin text-[#a3a3a3]" aria-hidden="true" /></Centered>;
   }
 
   const status = mode.kind === 'loading' || !docData ? 'Loading…'
-    : !editing ? (mode.kind === 'checking' ? 'Opening…' : 'Read-only')
+    : !editing ? (mode.kind === 'checking' ? 'Opening…' : canEdit && !wantEdit ? 'Viewing · switch to Editing to make changes' : 'Read-only')
       : saveState === 'saving' ? 'Saving…' : saveState === 'unsaved' ? 'Unsaved changes' : saveState === 'error' ? 'Not saved' : 'All changes saved';
   // Floating menus wrap on narrow screens instead of running off them.
   const bubble = 'z-10 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
@@ -473,6 +489,21 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
           </span>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* Editing or Viewing, for whoever can edit */}
+          {canEdit && (
+            <div role="radiogroup" aria-label="Mode" className="flex rounded-lg border border-[#e5e5e5] bg-white p-0.5 dark:border-white/10 dark:bg-transparent">
+              {([['editing', 'Editing', Pencil, 'Edit the document'], ['viewing', 'Viewing', Eye, 'Read it without the editing tools']] as const).map(([value, label, Icon, hint]) => {
+                const on = value === 'editing' ? wantEdit : !wantEdit;
+                return (
+                  <button key={value} type="button" role="radio" aria-checked={on} title={hint} onClick={() => { if (!on) void switchMode(value); }}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium ${on
+                      ? 'bg-[#fef3c7] text-[#806013] dark:bg-[#f5bd02]/15 dark:text-[#f5bd02]' : 'text-[#525252] hover:bg-[#f5f5f5] dark:text-gray-300 dark:hover:bg-white/5'}`}>
+                    <Icon className="h-4 w-4" aria-hidden="true" /><span className="hidden md:inline">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {/* Page setup: portrait or landscape */}
           <div role="radiogroup" aria-label="Page orientation" className="flex rounded-lg border border-[#e5e5e5] bg-white p-0.5 dark:border-white/10 dark:bg-transparent">
             {([['portrait', 'Portrait', RectangleVertical], ['landscape', 'Landscape', RectangleHorizontal]] as const).map(([value, label, Icon]) => (

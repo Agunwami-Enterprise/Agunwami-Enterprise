@@ -22,7 +22,7 @@ import { Overlay } from './task-board';
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, MAX_FILE_BYTES, docPath, isEditableFile, makeEditable, sharedDepartmentsOf, uploadFileDoc, type SharedDepartment, type Viewer,
+  DOC_FORMAT, MAX_FILE_BYTES, docPath, downloadDocCopy, isEditableFile, makeEditable, sharedDepartmentsOf, uploadFileDoc, type SharedDepartment, type Viewer,
 } from '@/modules/documents/doc-store';
 import DepartmentPicker from '@/modules/documents/components/DepartmentPicker';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
@@ -58,6 +58,8 @@ const sizeLabel = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 
 const dateLabel = (iso: string) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
 
 type Tab = 'all' | 'company' | 'department' | 'mine';
+
+const action = 'inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-semibold text-[#525252] hover:bg-black/5 disabled:opacity-40 dark:text-gray-300 dark:hover:bg-white/5';
 
 const scopeOf = (d: WsDocument) => (d.aeDepartmentId || d.department === 'departments' ? 'department' : d.department === 'all' ? 'company' : d.department === 'private' ? 'private' : 'department');
 
@@ -104,10 +106,22 @@ export default function Documents() {
   });
   const totalBytes = visible.reduce((n, d) => n + d.size, 0);
 
+  // Written documents open here, for editing when you can (you can switch to viewing there) and for reading otherwise.
   async function open(d: WsDocument) {
     if (d.written) router.push(docPath(d.id));
     else window.open(d.url, '_blank', 'noopener,noreferrer');
     await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
+  }
+
+  // A copy to keep: a written document as a Word file, an uploaded one as itself.
+  async function download(d: WsDocument) {
+    if (!d.written) { await open(d); return; }
+    try {
+      await downloadDocCopy(d.id);
+      await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
+    } catch {
+      setError(`${d.name} could not be downloaded.`);
+    }
   }
 
   // An uploaded Word, text or web page file becomes a written document, kept in the same place.
@@ -189,12 +203,19 @@ export default function Documents() {
                     {d.description && <p className="truncate text-[12px] text-[#525252] dark:text-gray-300">{d.description}</p>}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0">
+                <div className="flex shrink-0 flex-wrap items-center gap-2 pl-12 sm:pl-0">
                   <Pill label={d.category} tone="gray" />
                   <Pill label={{ company: 'Company', department: d.department === 'departments' ? (d.sharedDepartments.length === 1 ? `${d.sharedDepartments[0].name} team` : `${d.sharedDepartments.length} departments`) : d.aeDepartmentName ? `${d.aeDepartmentName} team` : 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
-                  <button className="rounded-lg p-1.5 text-[#525252] hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5" onClick={() => void open(d)}
-                    aria-label={`${d.written ? (canEditDoc(d) ? 'Edit' : 'Read') : 'Download'} ${d.name}`} title={d.written ? (canEditDoc(d) ? 'Open to edit' : 'Open to read') : 'Download'} disabled={!d.written && !d.url}>
-                    {!d.written ? <Download className="h-4 w-4" /> : canEditDoc(d) ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {d.written && (
+                    <button className={action} onClick={() => void open(d)} aria-label={`${canEditDoc(d) ? 'Edit' : 'View'} ${d.name}`}
+                      title={canEditDoc(d) ? 'Open it to edit (you can switch to viewing there)' : 'Open it to read'}>
+                      {canEditDoc(d) ? <Pencil className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                      {canEditDoc(d) ? 'Edit' : 'View'}
+                    </button>
+                  )}
+                  <button className={action} onClick={() => void download(d)} aria-label={`Download ${d.name}`}
+                    title={d.written ? 'Download as a Word document' : 'Download the file'} disabled={!d.written && !d.url}>
+                    <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
                   </button>
                   {!d.written && d.uploadedByUid === uid && isEditableFile(d.name) && (
                     <button className="rounded-lg p-1.5 text-[#525252] hover:bg-black/5 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-white/5" onClick={() => void editFile(d)}
