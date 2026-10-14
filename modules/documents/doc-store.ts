@@ -18,7 +18,7 @@
  */
 
 import {
-  collection, deleteDoc, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc, type Unsubscribe,
+  collection, deleteDoc, doc, getDoc, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, type Unsubscribe,
 } from 'firebase/firestore';
 import { cleanPastedHtml } from '@/app/components/cpanel/article/extensions';
 import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase/storage';
@@ -147,6 +147,20 @@ export async function openDocument(id: string, basePath: string): Promise<{ kind
   const data = snap.data();
   if (data.format === DOC_FORMAT) return { kind: 'page', href: docPath(id, basePath) };
   return str(data.url) ? { kind: 'file', href: str(data.url) } : null;
+}
+
+/** Downloads a written document as a Word file, from the list (without opening it). */
+export async function downloadDocCopy(id: string): Promise<void> {
+  const snap = await getDoc(doc(authDb, 'documents', id));
+  if (!snap.exists()) throw new Error('This document was deleted.');
+  const d = toWorkDoc(id, snap.data());
+  downloadWord(d.title, d.content, d.orientation);
+}
+
+/** Every written document, live (the CEO's Documents page uses it for who can edit what). */
+export function subscribeWrittenDocs(onDocs: (docs: Map<string, WorkDoc>) => void, onError: () => void): Unsubscribe {
+  return onSnapshot(query(collection(authDb, 'documents'), where('format', '==', DOC_FORMAT)),
+    snap => onDocs(new Map(snap.docs.map(d => [d.id, toWorkDoc(d.id, d.data())]))), onError);
 }
 
 export function subscribeDoc(id: string, onDoc: (d: WorkDoc | null) => void, onError: () => void): Unsubscribe {

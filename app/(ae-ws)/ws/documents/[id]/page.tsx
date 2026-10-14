@@ -1,9 +1,14 @@
 import { requireWsPage } from '@/lib/workstation/ws-guard';
 import DocumentEditorPage from '@/modules/documents/components/DocumentEditorPage';
 
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+export default async function Page({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const access = await requireWsPage('documents');
   const { id } = await params;
+  // ?mode=view opens it in Viewing mode, even for someone who can edit.
+  const startInView = (await searchParams).mode === 'view';
   return <DocumentEditorPage key={id} id={id} basePath="/ws/documents" isCeo={access.kind === 'ceo'}
-    aeDepartmentId={access.kind === 'ceo' ? '' : access.departmentId ?? ''} />;
+    aeDepartmentId={access.kind === 'ceo' ? '' : access.departmentId ?? ''} startInView={startInView} />;
 }

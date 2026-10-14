@@ -54,6 +54,18 @@ function fileTypeOf(name: string, url: string, declared: string): string {
   return /^[A-Z0-9]{2,5}$/.test(fromName) ? fromName : 'FILE';
 }
 
+/**
+ * A document written in the AE Workstation, from its link (…/ws/documents/<id>): AE Hub lists
+ * these as files, but they open in the editor rather than downloading.
+ */
+function writtenIdOf(url: string | undefined): string | null {
+  try {
+    return url ? /^\/(?:ws|ceo)\/documents\/([\w-]+)\/?$/.exec(new URL(url).pathname)?.[1] ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
 const httpLink = (value: string) => (/^https?:\/\//i.test(value) ? value : undefined);
 
 function enterpriseItem(raw: RawRecord): DocumentFeedItem {
@@ -87,19 +99,23 @@ export async function getDocumentsFeed(): Promise<DocumentsFeed> {
   const items: DocumentFeedItem[] = [
     // The CEO's list: every document, private ones included (the CEO reads them all).
     ...enterpriseDocs.map(doc => enterpriseItem(doc as RawRecord)),
-    ...projectFeed.entries.flatMap(({ source, data }) => data.map(document => ({
-      key: `${source.id}:${document.id}`,
-      id: document.id,
-      source,
-      name: document.name,
-      type: fileTypeOf(document.name, document.url ?? '', document.type),
-      category: document.category,
-      date: document.createdAt,
-      tab: tabFor(document.department ?? ''),
-      ...(document.url ? { url: document.url } : {}),
-      ...(document.uploadedBy ? { uploadedBy: document.uploadedBy } : {}),
-      ...(document.size ? { size: document.size } : {}),
-    } satisfies DocumentFeedItem))),
+    ...projectFeed.entries.flatMap(({ source, data }) => data.map(document => {
+      const writtenId = writtenIdOf(document.url);
+      return {
+        key: `${source.id}:${document.id}`,
+        id: writtenId ?? document.id,
+        source,
+        name: document.name,
+        type: fileTypeOf(document.name, document.url ?? '', document.type),
+        category: document.category,
+        date: document.createdAt,
+        tab: tabFor(document.department ?? ''),
+        ...(document.url ? { url: document.url } : {}),
+        ...(document.uploadedBy ? { uploadedBy: document.uploadedBy } : {}),
+        ...(document.size ? { size: document.size } : {}),
+        ...(writtenId ? { written: true } : {}),
+      } satisfies DocumentFeedItem;
+    })),
   ].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
   return { items, projects: projectFeed.projects, ...(token ? {} : { enterpriseError: ENTERPRISE_READ_ERROR }) };
