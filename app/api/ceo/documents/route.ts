@@ -18,7 +18,7 @@ export async function GET() {
   if (auth.error) return auth.error;
 
   try {
-    return NextResponse.json(await getDocumentsFeed());
+    return NextResponse.json(await getDocumentsFeed(auth.session.uid));
   } catch (err) {
     console.error('[/api/ceo/documents] error:', err);
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

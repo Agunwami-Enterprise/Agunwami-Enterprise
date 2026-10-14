@@ -26,6 +26,8 @@ export interface DocumentFeedItem {
   url?: string;
   uploadedBy?: string;
   size?: string;
+  /** Written in the AE Workstation: opens in its document editor rather than as a file. */
+  written?: boolean;
 }
 
 export interface DocumentsFeed {
@@ -71,10 +73,12 @@ function enterpriseItem(raw: RawRecord): DocumentFeedItem {
     ...(httpLink(url) ? { url } : {}),
     ...(text(raw.uploadedByName) || text(raw.uploadedBy) ? { uploadedBy: text(raw.uploadedByName) || text(raw.uploadedBy) } : {}),
     ...(text(raw.fileSize) || text(raw.size) ? { size: text(raw.fileSize) || text(raw.size) } : {}),
+    ...(text(raw.format) === 'ae-doc' ? { written: true } : {}),
   };
 }
 
-export async function getDocumentsFeed(): Promise<DocumentsFeed> {
+/** `viewerUid`: private documents (shared with no one) are listed only for their owner. */
+export async function getDocumentsFeed(viewerUid?: string): Promise<DocumentsFeed> {
   const [token, projectFeed] = await Promise.all([
     getAdminAuthToken().catch(() => null),
     ProjectsService.getProjectFeed('documents'),
@@ -82,7 +86,9 @@ export async function getDocumentsFeed(): Promise<DocumentsFeed> {
   const enterpriseDocs = token ? await listDocs('documents', 300).catch(() => []) : [];
 
   const items: DocumentFeedItem[] = [
-    ...enterpriseDocs.map(doc => enterpriseItem(doc as RawRecord)),
+    ...enterpriseDocs
+      .filter(doc => text((doc as RawRecord).department) !== 'private' || text((doc as RawRecord).uploadedByUid) === viewerUid)
+      .map(doc => enterpriseItem(doc as RawRecord)),
     ...projectFeed.entries.flatMap(({ source, data }) => data.map(document => ({
       key: `${source.id}:${document.id}`,
       id: document.id,
