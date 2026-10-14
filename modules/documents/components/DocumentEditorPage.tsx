@@ -15,7 +15,7 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import { CellSelection } from '@tiptap/pm/tables';
 import {
   ArrowLeft, Bold, Check, ChevronDown, CloudOff, Download, Eye, FileText, Highlighter, Italic, Link2, Loader2, Lock,
-  PanelRightClose, PanelRightOpen, Pencil, Printer, RemoveFormatting, Replace, Trash2, Underline, Unlink,
+  PanelRightClose, PanelRightOpen, Pencil, Printer, RectangleHorizontal, RectangleVertical, RemoveFormatting, Replace, Trash2, Underline, Unlink,
 } from 'lucide-react';
 import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import { useAuth } from '@/lib/workstation/auth-context';
@@ -30,7 +30,7 @@ import ImageDialog, { type ArticleImage } from '@/app/components/cpanel/article/
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
 import DepartmentPicker from './DepartmentPicker';
 import {
-  DOC_CATEGORIES, DocConflictError, type SharedDepartment, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
+  DOC_CATEGORIES, DocConflictError, type DocOrientation, type SharedDepartment, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
 } from '../doc-store';
 
@@ -43,12 +43,12 @@ type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | {
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 type LinkState = { from: number; to: number; href: string; newTab: boolean; selectedText: string; editing: boolean };
 type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string; showCaption: boolean } };
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[] }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; orientation: DocOrientation }
 type Pending = Partial<Form> & { content?: boolean };
 
 const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department: 'My department', departments: 'Departments I choose…', all: 'Everyone in the company' };
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, orientation: d.orientation });
 const timeAgo = (iso: string) => {
   if (!iso) return '';
   const date = new Date(iso);
@@ -84,7 +84,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [] });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], orientation: 'portrait' });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
@@ -374,7 +374,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
       const key = e.key.toLowerCase();
       const run = (action: () => void) => { e.preventDefault(); action(); };
       if (key === 's') return run(() => void flushRef.current());
-      if (key === 'p' && !e.shiftKey) return run(() => printDoc(form.title, editor.getHTML()));
+      if (key === 'p' && !e.shiftKey) return run(() => printDoc(form.title, editor.getHTML(), form.orientation));
       if (!editor.isFocused) return;
       if (key === 'f' && !e.shiftKey) run(() => setFind({ replace: false }));
       else if (key === '/') run(() => setShortcuts(true));
@@ -388,7 +388,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editor, form.title, openLink]);
+  }, [editor, form.title, form.orientation, openLink]);
 
   // ── Actions ──
 
@@ -442,7 +442,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     : !editing ? (mode.kind === 'checking' ? 'Opening…' : 'Read-only')
       : saveState === 'saving' ? 'Saving…' : saveState === 'unsaved' ? 'Unsaved changes' : saveState === 'error' ? 'Not saved' : 'All changes saved';
   // Floating menus wrap on narrow screens instead of running off them.
-  const bubble = 'z-30 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
+  const bubble = 'z-10 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
   const panelField = 'w-full rounded-lg border border-[#e5e5e5] bg-white px-3 py-2 text-[14px] text-[#292929] outline-none focus:border-[#f5bd02] disabled:bg-[#f7f7f7] disabled:text-[#8a8a8a] dark:border-white/10 dark:bg-[#2a2a2a] dark:text-gray-100';
 
   return (
@@ -473,6 +473,17 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
           </span>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* Page setup: portrait or landscape */}
+          <div role="radiogroup" aria-label="Page orientation" className="flex rounded-lg border border-[#e5e5e5] bg-white p-0.5 dark:border-white/10 dark:bg-transparent">
+            {([['portrait', 'Portrait', RectangleVertical], ['landscape', 'Landscape', RectangleHorizontal]] as const).map(([value, label, Icon]) => (
+              <button key={value} type="button" role="radio" aria-checked={form.orientation === value} title={editing ? label : `${label} (only people who can edit change it)`}
+                disabled={!editing} onClick={() => setField('orientation', value)}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium disabled:cursor-default ${form.orientation === value
+                  ? 'bg-[#fef3c7] text-[#806013] dark:bg-[#f5bd02]/15 dark:text-[#f5bd02]' : 'text-[#525252] hover:bg-[#f5f5f5] disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-white/5'}`}>
+                <Icon className="h-4 w-4" aria-hidden="true" /><span className="hidden md:inline">{label}</span>
+              </button>
+            ))}
+          </div>
           <div className="relative">
             <button type="button" onClick={() => setDownloadOpen(v => !v)} aria-expanded={downloadOpen} disabled={!editor}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] bg-white px-3 py-2 text-[13px] font-medium text-[#292929] hover:bg-[#f5f5f5] dark:border-white/10 dark:bg-transparent dark:text-gray-200 dark:hover:bg-white/5">
@@ -481,9 +492,9 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
             {downloadOpen && editor && (
               <div className="absolute right-0 top-full z-30 mt-1 w-56 rounded-lg border border-[#e5e5e5] bg-white py-1 shadow-xl dark:border-white/10 dark:bg-[#1e1e1e]" onMouseLeave={() => setDownloadOpen(false)}>
                 {[
-                  { label: 'Word document (.doc)', run: () => downloadWord(form.title, editor.getHTML()) },
-                  { label: 'PDF (print, then Save as PDF)', run: () => printDoc(form.title, editor.getHTML()) },
-                  { label: 'Web page (.html)', run: () => downloadHtml(form.title, editor.getHTML()) },
+                  { label: 'Word document (.doc)', run: () => downloadWord(form.title, editor.getHTML(), form.orientation) },
+                  { label: 'PDF (print, then Save as PDF)', run: () => printDoc(form.title, editor.getHTML(), form.orientation) },
+                  { label: 'Web page (.html)', run: () => downloadHtml(form.title, editor.getHTML(), form.orientation) },
                 ].map(item => (
                   <button key={item.label} type="button" onClick={() => { item.run(); setDownloadOpen(false); }}
                     className="block w-full px-3 py-2 text-left text-[13px] text-[#292929] hover:bg-[#f5f5f5] dark:text-gray-200 dark:hover:bg-white/5">{item.label}</button>
@@ -491,7 +502,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
               </div>
             )}
           </div>
-          <button type="button" onClick={() => editor && printDoc(form.title, editor.getHTML())} title="Print (Ctrl+P)" aria-label="Print"
+          <button type="button" onClick={() => editor && printDoc(form.title, editor.getHTML(), form.orientation)} title="Print (Ctrl+P)" aria-label="Print"
             className="rounded-lg border border-[#e5e5e5] bg-white p-2 text-[#525252] hover:bg-[#f5f5f5] dark:border-white/10 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5">
             <Printer className="h-4 w-4" />
           </button>
@@ -551,7 +562,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
           )}
           {/* The page */}
           <div className="px-0 py-0 sm:px-3 sm:py-6 md:px-8 md:py-10">
-            <div className="mx-auto w-full max-w-[860px] rounded-sm bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06)]">
+            <div data-orientation={form.orientation}
+              className={`mx-auto w-full rounded-sm bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06)] transition-[max-width] duration-200 ${form.orientation === 'landscape' ? 'max-w-[1120px]' : 'max-w-[860px]'}`}>
               {mode.kind === 'loading' && <p className="flex items-center gap-2 px-5 py-10 text-[14px] text-[#8a8a8a] sm:px-10 md:px-16"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…</p>}
               <EditorContent editor={editor} />
             </div>
@@ -614,6 +626,13 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
               <p><span className="text-[#8a8a8a]">Owner:</span> {docData.owner.name || docData.owner.email}{docData.owner.uid === me.uid ? ' (you)' : ''}</p>
               <p><span className="text-[#8a8a8a]">Created:</span> {timeAgo(docData.createdAt)}</p>
               {docData.updatedAt && <p><span className="text-[#8a8a8a]">Last edited:</span> {timeAgo(docData.updatedAt)}{docData.updatedBy ? ` by ${docData.updatedBy}` : ''}</p>}
+              {docData.originalFile && (
+                <p><span className="text-[#8a8a8a]">Uploaded as:</span>{' '}
+                  <a href={docData.originalFile.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-[#806013] underline-offset-2 hover:underline dark:text-[#f5bd02]">
+                    {docData.originalFile.name} <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
+                </p>
+              )}
               {can.canDelete && (
                 <button type="button" onClick={() => void remove()} className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">
                   <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete document
@@ -668,6 +687,7 @@ function DocFacts({ doc: d, form }: { doc: WorkDoc; form: Form }) {
         {row('Category', form.category)}
         {form.description && row('Description', form.description)}
         {row('Shared with', shareText)}
+        {row('Page', form.orientation === 'landscape' ? 'Landscape' : 'Portrait')}
         {form.share !== 'private' && row('Editing', form.othersCanEdit ? 'Everyone it’s shared with can edit' : 'Only the owner edits')}
       </dl>
     </section>

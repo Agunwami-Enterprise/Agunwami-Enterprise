@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, deleteDoc, doc, increment, onSnapshot, updateDoc } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
-import { Download, Eye, FilePlus2, FileText, FolderOpen, HardDrive, Pencil, Search, Trash2, Upload, Users } from 'lucide-react';
+import { Download, Eye, FilePen, FilePlus2, FileText, FolderOpen, HardDrive, Loader2, Pencil, Search, Trash2, Upload, Users } from 'lucide-react';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { authDb, storage } from '@/lib/workstation/firebase';
 import { useConfirm } from '@/app/components/common/AeModal';
@@ -22,7 +22,7 @@ import { Overlay } from './task-board';
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, MAX_FILE_BYTES, docPath, sharedDepartmentsOf, uploadFileDoc, type SharedDepartment,
+  DOC_FORMAT, MAX_FILE_BYTES, docPath, isEditableFile, makeEditable, sharedDepartmentsOf, uploadFileDoc, type SharedDepartment, type Viewer,
 } from '@/modules/documents/doc-store';
 import DepartmentPicker from '@/modules/documents/components/DepartmentPicker';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
@@ -75,6 +75,7 @@ export default function Documents() {
   const [category, setCategory] = useState('');
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [converting, setConverting] = useState('');
 
   useEffect(() => onSnapshot(collection(authDb, 'documents'),
     snap => { setDocs(snap.docs.map(d => toDocument(d.id, d.data())).sort((a, b) => b.createdAt.localeCompare(a.createdAt))); setError(''); },
@@ -91,6 +92,7 @@ export default function Documents() {
   const visible = (docs ?? []).filter(d => isCeo || d.uploadedByUid === uid || sharedWithMe(d));
   // Written documents: who can change them (the owner, or everyone it's shared with when allowed). The CEO reads.
   const canEditDoc = (d: WsDocument) => d.uploadedByUid === uid || (d.othersCanEdit && sharedWithMe(d));
+  const me: Viewer = { uid, name: user?.displayName || user?.email || 'Team member', email: user?.email || '', department, isCeo, aeDepartmentId: team?.id ?? '' };
   const term = search.trim().toLowerCase();
   const shown = visible.filter(d => {
     if (tab === 'company' && d.department !== 'all') return false;
@@ -106,6 +108,24 @@ export default function Documents() {
     if (d.written) router.push(docPath(d.id));
     else window.open(d.url, '_blank', 'noopener,noreferrer');
     await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
+  }
+
+  // An uploaded Word, text or web page file becomes a written document, kept in the same place.
+  async function editFile(d: WsDocument) {
+    if (!(await confirm({
+      title: `Edit ${d.name} here?`,
+      message: 'It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. Some Word formatting may look different.',
+      confirmLabel: 'Open in editor',
+    }))) return;
+    setConverting(d.id);
+    setError('');
+    try {
+      await makeEditable(d.id, me);
+      router.push(docPath(d.id));
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : `${d.name} could not be opened for editing.`);
+      setConverting('');
+    }
   }
 
   async function remove(d: WsDocument) {
@@ -176,6 +196,12 @@ export default function Documents() {
                     aria-label={`${d.written ? (canEditDoc(d) ? 'Edit' : 'Read') : 'Download'} ${d.name}`} title={d.written ? (canEditDoc(d) ? 'Open to edit' : 'Open to read') : 'Download'} disabled={!d.written && !d.url}>
                     {!d.written ? <Download className="h-4 w-4" /> : canEditDoc(d) ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                  {!d.written && d.uploadedByUid === uid && isEditableFile(d.name) && (
+                    <button className="rounded-lg p-1.5 text-[#525252] hover:bg-black/5 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-white/5" onClick={() => void editFile(d)}
+                      disabled={!!converting} aria-label={`Edit ${d.name} in the editor`} title="Edit in the editor">
+                      {converting === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePen className="h-4 w-4" />}
+                    </button>
+                  )}
                   {(d.uploadedByUid === uid || isCeo) && (
                     <button className="rounded-lg p-1.5 text-[#a3a3a3] hover:bg-red-50 hover:text-[#dc2626] dark:hover:bg-red-500/10" onClick={() => void remove(d)} aria-label={`Delete ${d.name}`}>
                       <Trash2 className="h-4 w-4" />
@@ -191,19 +217,22 @@ export default function Documents() {
       {creating && user && (
         <NewDocumentDialog basePath="/ws/documents" onClose={() => setCreating(false)}
           team={team}
-          me={{ uid, name: user.displayName || user.email || 'Team member', email: user.email || '', department, isCeo: access.kind === 'ceo', aeDepartmentId: team?.id ?? '' }} />
+          me={me} />
       )}
-      {uploading && <UploadDialog department={department} team={team} me={{ uid, name: user?.displayName || user?.email || 'Team member', email: user?.email || '' }} onClose={() => setUploading(false)} />}
+      {uploading && <UploadDialog department={department} team={team} me={me} onClose={() => setUploading(false)}
+        onEditable={id => router.push(docPath(id))} />}
     </div>
   );
 }
 
-function UploadDialog({ department, team, me, onClose }: {
+function UploadDialog({ department, team, me, onClose, onEditable }: {
   department: string;
   /** My AE department: "My team" files are kept under it. */
   team?: { id: string; name: string };
-  me: { uid: string; name: string; email: string };
+  me: Viewer;
   onClose: () => void;
+  /** Called with the document's id once an uploaded file is opened for editing. */
+  onEditable: (id: string) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -211,8 +240,13 @@ function UploadDialog({ department, team, me, onClose }: {
   const [share, setShare] = useState<'department' | 'departments' | 'all'>(team || department ? 'department' : 'all');
   const [departments, setDepartments] = useState<SharedDepartment[]>(team ? [team] : []);
   const [description, setDescription] = useState('');
+  // Word, text and web page files can be edited here; Word files open in the editor unless unticked.
+  const [editHere, setEditHere] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
+  const [converting, setConverting] = useState(false);
   const [error, setError] = useState('');
+
+  const editable = !!file && isEditableFile(file.name);
 
   async function upload() {
     if (!file) return;
@@ -221,23 +255,34 @@ function UploadDialog({ department, team, me, onClose }: {
     setError('');
     setProgress(0);
     try {
-      await uploadFileDoc(file, {
+      const id = await uploadFileDoc(file, {
         category, description,
         where: share === 'all' ? { department: 'all' } : share === 'departments' ? { departments } : team ? { team } : { department },
       }, me, setProgress);
-      onClose();
+      if (!(editable && editHere)) { onClose(); return; }
+      setConverting(true);
+      try {
+        await makeEditable(id, me);
+        onEditable(id);
+      } catch (e) {
+        // The file is uploaded either way; it can be opened for editing from the list later.
+        setError(`Uploaded, but it could not be opened for editing${e instanceof Error && e.message ? `: ${e.message}` : '.'}`);
+        setConverting(false);
+        setProgress(null);
+        setFile(null);
+      }
     } catch {
       setError('The upload failed. Please try again.');
       setProgress(null);
     }
   }
 
-  const busy = progress !== null;
+  const busy = progress !== null || converting;
   return (
     <Overlay title="Upload a Document" onClose={() => { if (!busy) onClose(); }} footer={
       <>
         <button className={btnGhost} onClick={onClose} disabled={busy}>Cancel</button>
-        <button className={btnPrimary} onClick={() => void upload()} disabled={!file || busy}>{busy ? `Uploading ${progress}%…` : 'Upload'}</button>
+        <button className={btnPrimary} onClick={() => void upload()} disabled={!file || busy}>{converting ? 'Opening in the editor…' : busy ? `Uploading ${progress}%…` : 'Upload'}</button>
       </>
     }>
       <button type="button" onClick={() => input.current?.click()} disabled={busy}
@@ -266,6 +311,12 @@ function UploadDialog({ department, team, me, onClose }: {
         <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Description (optional)</span>
         <input className={field} value={description} maxLength={300} onChange={e => setDescription(e.target.value)} />
       </label>
+      {editable && (
+        <label className="flex items-start gap-2 text-[13px] text-[#525252] dark:text-gray-300">
+          <input type="checkbox" checked={editHere} disabled={busy} onChange={e => setEditHere(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
+          <span>Open it in the editor so it can be edited<span className="block text-[12px] text-[#8a8a8a]">It becomes a document you can change here. The original file stays available to download.</span></span>
+        </label>
+      )}
       {busy && <div className="h-2 overflow-hidden rounded-full bg-[#e5e5e5] dark:bg-white/10"><div className="h-full bg-[#f5bd02] transition-all" style={{ width: `${progress}%` }} /></div>}
       {error && <p role="alert" className="text-[13px] text-[#b91c1c] dark:text-red-300">{error}</p>}
     </Overlay>

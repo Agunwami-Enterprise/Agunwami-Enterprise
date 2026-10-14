@@ -18,8 +18,9 @@
  */
 
 import {
-  collection, deleteDoc, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, type Unsubscribe,
+  collection, deleteDoc, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc, type Unsubscribe,
 } from 'firebase/firestore';
+import { cleanPastedHtml } from '@/app/components/cpanel/article/extensions';
 import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase/storage';
 import { authDb, storage } from '@/lib/workstation/firebase';
 
@@ -29,6 +30,9 @@ export const DOC_CATEGORIES = ['General', 'Policy & Handbook', 'Finance & Budget
 export const LOCK_MS = 2 * 60 * 1000;
 /** Firestore documents are capped at 1 MB; leave room for the other fields. */
 export const MAX_CONTENT_BYTES = 900 * 1024;
+
+/** Page orientation, as in Google Docs' page setup. */
+export type DocOrientation = 'portrait' | 'landscape';
 
 /** Only me, my team (department), departments I choose, or everyone. */
 export type DocShare = 'private' | 'department' | 'departments' | 'all';
@@ -52,6 +56,9 @@ export interface WorkDoc {
   /** Shared with these AE departments (sharing "departments"). */
   sharedDepartments: SharedDepartment[];
   othersCanEdit: boolean;
+  orientation: DocOrientation;
+  /** An uploaded file opened for editing: the original, still downloadable. */
+  originalFile: { name: string; url: string } | null;
   owner: DocPerson;
   createdAt: string;
   updatedAt: string;
@@ -86,6 +93,8 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     aeDepartmentName: str(d.aeDepartmentName),
     sharedDepartments: sharedDepartmentsOf(d),
     othersCanEdit: d.othersCanEdit === true,
+    orientation: d.orientation === 'landscape' ? 'landscape' : 'portrait',
+    originalFile: str(d.originalFileUrl) ? { name: str(d.originalFileName) || 'Original file', url: str(d.originalFileUrl) } : null,
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
     createdAt: str(d.createdAt),
     updatedAt: str(d.updatedAt),
@@ -155,6 +164,7 @@ export async function createDoc(input: {
   team?: { id: string; name: string };
   /** With sharing "departments": the AE departments that see it. */
   departments?: SharedDepartment[];
+  orientation?: DocOrientation;
 }, me: Viewer): Promise<string> {
   const ref_ = doc(collection(authDb, 'documents'));
   const now = new Date();
@@ -183,6 +193,7 @@ export async function createDoc(input: {
     format: DOC_FORMAT,
     content: input.content,
     othersCanEdit: input.othersCanEdit,
+    orientation: input.orientation ?? 'portrait',
     updatedBy: me.name,
     lock: { uid: me.uid, name: me.name, email: me.email, at: now.toISOString() },
     serverUpdatedAt: serverTimestamp(),
@@ -197,7 +208,7 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
@@ -223,6 +234,7 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
     }
     if (changes.category !== undefined) update.category = changes.category;
     if (changes.description !== undefined) update.description = changes.description.trim();
+    if (changes.orientation !== undefined) update.orientation = changes.orientation === 'landscape' ? 'landscape' : 'portrait';
     // Sharing is the owner's call.
     if (can.canShare && changes.share !== undefined) {
       if (changes.share === 'department' && current.aeDepartmentId) {
@@ -315,6 +327,73 @@ export async function uploadFileDoc(file: File, opts: {
   return record.id;
 }
 
+// ── Editing uploaded files ──────────────────────────────────────────────────
+
+/** Uploaded files that can be opened in the editor (keep in step with /api/documents/convert). */
+export const EDITABLE_FILE_TYPES = ['docx', 'txt', 'md', 'html', 'htm'];
+export const isEditableFile = (name: string) => EDITABLE_FILE_TYPES.includes(name.split('.').pop()?.toLowerCase() ?? '');
+
+/** Images that came inline (data: addresses, e.g. from a Word file) go to storage instead. */
+async function storeInlineImages(html: string, me: Pick<Viewer, 'uid'>): Promise<string> {
+  if (!html.includes('src="data:')) return html;
+  const page = new DOMParser().parseFromString(html, 'text/html');
+  const images = Array.from(page.querySelectorAll<HTMLImageElement>('img[src^="data:"]')).slice(0, 40);
+  for (const [i, img] of images.entries()) {
+    try {
+      const blob = await (await fetch(img.src)).blob();
+      const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+      img.src = await uploadDocImage(new File([blob], `image-${i + 1}.${ext}`, { type: blob.type }), me);
+    } catch {
+      img.remove();
+    }
+  }
+  return page.body.innerHTML;
+}
+
+/**
+ * Opens an uploaded Word, text or web page file for editing: it becomes a
+ * written document in place (same sharing, same list entry), and the
+ * original file stays available to download. For whoever can edit it (the
+ * person who uploaded it).
+ */
+export async function makeEditable(id: string, me: Viewer): Promise<void> {
+  const ref_ = doc(authDb, 'documents', id);
+  const snap = await getDoc(ref_);
+  if (!snap.exists()) throw new Error('This document was deleted.');
+  const data = snap.data();
+  if (data.format === DOC_FORMAT) return;
+  if (!permissionsOf(toWorkDoc(id, data), me).canEdit) throw new Error('Only the person who uploaded it can open it for editing.');
+  const name = str(data.name);
+  const fileUrl = str(data.url);
+  if (!isEditableFile(name)) throw new Error('Only Word (.docx), text and web page files can be edited.');
+  const res = await fetch('/api/documents/convert', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: fileUrl, name }),
+  });
+  const body = await res.json().catch(() => ({})) as { html?: string; error?: string };
+  if (!res.ok || typeof body.html !== 'string') throw new Error(body.error || 'The file could not be opened for editing.');
+  const html = cleanPastedHtml(await storeInlineImages(body.html, me));
+  if (bytesOf(html) > MAX_CONTENT_BYTES) throw new Error('This file is too long to edit here. Download it instead.');
+  const now = new Date();
+  await updateDoc(ref_, {
+    format: DOC_FORMAT,
+    content: html,
+    type: 'DOC',
+    name: name.replace(/\.[^.]+$/, '') || name,
+    originalFileName: name,
+    originalFileUrl: fileUrl,
+    url: `${window.location.origin}${docPath(id)}`,
+    size: bytesOf(html),
+    formattedSize: sizeLabel(bytesOf(html)),
+    othersCanEdit: data.othersCanEdit === true,
+    orientation: 'portrait',
+    updatedAt: now.toISOString(),
+    updatedBy: me.name,
+    dateModified: dayLabel(now),
+    lock: null,
+    serverUpdatedAt: serverTimestamp(),
+  });
+}
+
 /** Uploads an image for a document to AE Hub's storage and returns its address. */
 export async function uploadDocImage(file: File, me: Pick<Viewer, 'uid'>, name?: string): Promise<string> {
   if (file.size > 8 * 1024 * 1024) throw new Error('Images can be up to 8 MB.');
@@ -328,11 +407,13 @@ export async function uploadDocImage(file: File, me: Pick<Viewer, 'uid'>, name?:
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-/** A standalone HTML page of the document (for Word and printing). */
-function standalone(title: string, html: string, extraHead = ''): string {
+/** A standalone HTML page of the document (for Word and printing), on a page of the given orientation. */
+function standalone(title: string, html: string, orientation: DocOrientation, extraHead = ''): string {
+  const landscape = orientation === 'landscape';
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${extraHead}
 <style>
-body{font-family:Arial,Helvetica,sans-serif;font-size:12pt;line-height:1.6;color:#1f2937;max-width:720px;margin:40px auto;padding:0 24px}
+@page{size:${landscape ? '11in 8.5in' : '8.5in 11in'};margin:1in}
+body{font-family:Arial,Helvetica,sans-serif;font-size:12pt;line-height:1.6;color:#1f2937;max-width:${landscape ? '960px' : '720px'};margin:40px auto;padding:0 24px}
 h1{font-size:24pt;margin:0 0 16pt}h2{font-size:18pt}h3{font-size:14pt}h4{font-size:12pt}
 table{border-collapse:collapse;width:100%}th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f3f4f6}
 img{max-width:100%;height:auto}figure{margin:0}figcaption{font-size:10pt;color:#6b7280;text-align:center}
@@ -354,24 +435,27 @@ function download(name: string, blob: Blob) {
 const fileName = (title: string) => (title.trim() || 'document').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
 
 /** Downloads a Word document (.doc), which Word, Google Docs and LibreOffice open. */
-export function downloadWord(title: string, html: string) {
-  const head = '<meta name="ProgId" content="Word.Document"><xml><w:WordDocument xmlns:w="urn:schemas-microsoft-com:office:word"><w:View>Print</w:View></w:WordDocument></xml>';
-  download(`${fileName(title)}.doc`, new Blob(['﻿', standalone(title, html, head)], { type: 'application/msword' }));
+export function downloadWord(title: string, html: string, orientation: DocOrientation = 'portrait') {
+  const landscape = orientation === 'landscape';
+  // Word reads the page size and orientation from its own section style.
+  const head = '<meta name="ProgId" content="Word.Document"><xml><w:WordDocument xmlns:w="urn:schemas-microsoft-com:office:word"><w:View>Print</w:View></w:WordDocument></xml>'
+    + `<style>@page WordSection1{size:${landscape ? '11.0in 8.5in' : '8.5in 11.0in'};mso-page-orientation:${orientation};margin:1.0in}div.WordSection1{page:WordSection1}</style>`;
+  download(`${fileName(title)}.doc`, new Blob(['﻿', standalone(title, `<div class="WordSection1">${html}</div>`, orientation, head)], { type: 'application/msword' }));
 }
 
-export function downloadHtml(title: string, html: string) {
-  download(`${fileName(title)}.html`, new Blob([standalone(title, html)], { type: 'text/html' }));
+export function downloadHtml(title: string, html: string, orientation: DocOrientation = 'portrait') {
+  download(`${fileName(title)}.html`, new Blob([standalone(title, html, orientation)], { type: 'text/html' }));
 }
 
 /** Opens the print dialog for the document; choose "Save as PDF" there for a PDF. */
-export function printDoc(title: string, html: string) {
+export function printDoc(title: string, html: string, orientation: DocOrientation = 'portrait') {
   const frame = Object.assign(document.createElement('iframe'), { title: 'Print' });
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
   document.body.appendChild(frame);
   const win = frame.contentWindow;
   if (!win) { frame.remove(); return; }
   win.document.open();
-  win.document.write(standalone(title, html));
+  win.document.write(standalone(title, html, orientation));
   win.document.close();
   const go = () => { win.focus(); win.print(); setTimeout(() => frame.remove(), 1000); };
   // Let images load before printing.
