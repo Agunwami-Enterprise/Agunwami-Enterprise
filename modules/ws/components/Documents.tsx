@@ -22,7 +22,7 @@ import { Overlay } from './task-board';
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, MAX_FILE_BYTES, docPath, hiddenFromOf, isHiddenFrom, sharedDepartmentsOf, uploadFileDoc, type HiddenFrom, type SharedDepartment,
+  DOC_FORMAT, MAX_FILE_BYTES, docPath, sharedDepartmentsOf, uploadFileDoc, type SharedDepartment,
 } from '@/modules/documents/doc-store';
 import DepartmentPicker from '@/modules/documents/components/DepartmentPicker';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
@@ -35,8 +35,6 @@ interface WsDocument {
   description: string; createdAt: string; downloadCount: number;
   /** Written in the workstation (opens in the editor) rather than uploaded. */
   written: boolean; othersCanEdit: boolean;
-  /** Departments and people the owner hid it from. */
-  hiddenFrom: HiddenFrom;
   /** Kept under an AE department's team. */
   aeDepartmentId: string; aeDepartmentName: string;
   /** Shared with these AE departments. */
@@ -50,7 +48,7 @@ function toDocument(id: string, d: Record<string, unknown>): WsDocument {
     category: String(d.category ?? 'General'), department: String(d.department ?? 'all'), uploadedBy: String(d.uploadedBy ?? ''),
     uploadedByUid: String(d.uploadedByUid ?? ''), description: String(d.description ?? ''), createdAt: String(d.createdAt ?? ''),
     downloadCount: Number(d.downloadCount ?? 0) || 0,
-    written: d.format === DOC_FORMAT, othersCanEdit: d.othersCanEdit === true, hiddenFrom: hiddenFromOf(d),
+    written: d.format === DOC_FORMAT, othersCanEdit: d.othersCanEdit === true,
     aeDepartmentId: String(d.aeDepartmentId ?? ''), aeDepartmentName: String(d.aeDepartmentName ?? ''),
     sharedDepartments: sharedDepartmentsOf(d),
   };
@@ -89,8 +87,7 @@ export default function Documents() {
   const team = access.kind === 'department' && access.departmentId ? { id: access.departmentId, name: access.departmentName } : undefined;
   const sharedWithMe = (d: WsDocument) => (d.department === 'all'
     || (d.department === 'departments' ? !!team && d.sharedDepartments.some(x => x.id === team.id)
-      : d.aeDepartmentId ? d.aeDepartmentId === team?.id : !!department && d.department.toLowerCase() === department))
-    && !isHiddenFrom(d.hiddenFrom, { uid, department });
+      : d.aeDepartmentId ? d.aeDepartmentId === team?.id : !!department && d.department.toLowerCase() === department));
   const visible = (docs ?? []).filter(d => isCeo || d.uploadedByUid === uid || sharedWithMe(d));
   // Written documents: who can change them (the owner, or everyone it's shared with when allowed). The CEO reads.
   const canEditDoc = (d: WsDocument) => d.uploadedByUid === uid || (d.othersCanEdit && sharedWithMe(d));

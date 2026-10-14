@@ -28,10 +28,9 @@ import { SpecialCharsDialog, WordCountDialog } from '@/app/components/cpanel/art
 import LinkDialog, { type LinkTarget } from '@/app/components/cpanel/article/LinkDialog';
 import ImageDialog, { type ArticleImage } from '@/app/components/cpanel/article/ImageDialog';
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
-import HideFromPicker from './HideFromPicker';
 import DepartmentPicker from './DepartmentPicker';
 import {
-  DOC_CATEGORIES, DocConflictError, type HiddenFrom, type SharedDepartment, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
+  DOC_CATEGORIES, DocConflictError, type SharedDepartment, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
 } from '../doc-store';
 
@@ -44,12 +43,12 @@ type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | {
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 type LinkState = { from: number; to: number; href: string; newTab: boolean; selectedText: string; editing: boolean };
 type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string; showCaption: boolean } };
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; hiddenFrom: HiddenFrom; sharedDepartments: SharedDepartment[] }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[] }
 type Pending = Partial<Form> & { content?: boolean };
 
 const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department: 'My department', departments: 'Departments I choose…', all: 'Everyone in the company' };
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, hiddenFrom: d.hiddenFrom, sharedDepartments: d.sharedDepartments });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments });
 const timeAgo = (iso: string) => {
   if (!iso) return '';
   const date = new Date(iso);
@@ -85,7 +84,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, hiddenFrom: { departments: [], people: [] }, sharedDepartments: [] });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [] });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
@@ -130,7 +129,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     content: '',
     editorProps: {
       attributes: () => ({
-        class: 'article-content article-editor ProseMirror min-h-[900px] px-8 py-10 md:px-16 md:py-14',
+        class: 'article-content article-editor ProseMirror min-h-[60vh] px-5 py-8 sm:px-10 md:min-h-[900px] md:px-16 md:py-14',
         'aria-label': 'Document',
         spellcheck: String(viewRef.current.spellcheck),
         style: viewRef.current.zoom === 100 ? '' : `zoom: ${viewRef.current.zoom / 100}`,
@@ -442,24 +441,37 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const status = mode.kind === 'loading' || !docData ? 'Loading…'
     : !editing ? (mode.kind === 'checking' ? 'Opening…' : 'Read-only')
       : saveState === 'saving' ? 'Saving…' : saveState === 'unsaved' ? 'Unsaved changes' : saveState === 'error' ? 'Not saved' : 'All changes saved';
-  const bubble = 'flex items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
+  // Floating menus wrap on narrow screens instead of running off them.
+  const bubble = 'z-30 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
   const panelField = 'w-full rounded-lg border border-[#e5e5e5] bg-white px-3 py-2 text-[14px] text-[#292929] outline-none focus:border-[#f5bd02] disabled:bg-[#f7f7f7] disabled:text-[#8a8a8a] dark:border-white/10 dark:bg-[#2a2a2a] dark:text-gray-100';
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <link rel="stylesheet" href={articleFontsUrl()} precedence="default" />
 
-      {/* Top bar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Link href={basePath} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#656565] hover:text-[#1a1a1a] dark:text-gray-400 dark:hover:text-white">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Documents
+      {/* Top bar: the document's name (rename it here, as in Google Docs) and its save status */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <Link href={basePath} aria-label="Back to Documents" title="Back to Documents"
+          className="rounded-lg p-2 text-[#656565] hover:bg-black/5 hover:text-[#1a1a1a] dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white">
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-[#8a8a8a]" aria-live="polite">
-          {saveState === 'saving' && editing && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-          {saveState === 'saved' && editing && <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />}
-          {saveState === 'error' && <CloudOff className="h-3.5 w-3.5 text-red-600" aria-hidden="true" />}
-          {status}
-        </span>
+        <FileText className="hidden h-8 w-8 shrink-0 text-[#2563eb] sm:block" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <input value={form.title} onChange={e => setField('title', e.target.value)} maxLength={160} aria-label="Document name" placeholder="Untitled document"
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); editor?.commands.focus(); } }}
+              onBlur={() => { if (!form.title.trim()) setField('title', 'Untitled document'); }}
+              className="w-full max-w-[560px] truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[18px] font-medium text-[#1a1a1a] outline-none placeholder:text-[#8a8a8a] hover:border-[#d4d4d4] focus:border-[#f5bd02] dark:text-white dark:hover:border-white/20" />
+          ) : (
+            <h1 className="truncate px-1.5 py-0.5 text-[18px] font-medium text-[#1a1a1a] dark:text-white">{form.title || docData?.title || 'Untitled document'}</h1>
+          )}
+          <span className="flex items-center gap-1.5 px-1.5 text-[12px] text-[#8a8a8a]" aria-live="polite">
+            {saveState === 'saving' && editing && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+            {saveState === 'saved' && editing && <Check className="h-3 w-3 text-green-600" aria-hidden="true" />}
+            {saveState === 'error' && <CloudOff className="h-3 w-3 text-red-600" aria-hidden="true" />}
+            {status}
+          </span>
+        </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="relative">
             <button type="button" onClick={() => setDownloadOpen(v => !v)} aria-expanded={downloadOpen} disabled={!editor}
@@ -538,15 +550,9 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
             </>
           )}
           {/* The page */}
-          <div className="px-3 py-6 md:px-8 md:py-10">
+          <div className="px-0 py-0 sm:px-3 sm:py-6 md:px-8 md:py-10">
             <div className="mx-auto w-full max-w-[860px] rounded-sm bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06)]">
-              {reading ? (
-                <h1 className="px-8 pt-10 font-primary text-[30px] leading-tight text-[#1a1a1a] md:px-16 md:pt-14">{form.title || 'Untitled document'}</h1>
-              ) : (
-                <input value={form.title} onChange={e => setField('title', e.target.value)} readOnly={!editing} maxLength={160} aria-label="Document title" placeholder="Untitled document"
-                  className="w-full bg-transparent px-8 pt-10 font-primary text-[30px] leading-tight text-[#1a1a1a] outline-none placeholder:text-[#b5b0a2] md:px-16 md:pt-14" />
-              )}
-              {mode.kind === 'loading' && <p className="flex items-center gap-2 px-8 py-10 text-[14px] text-[#8a8a8a] md:px-16"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…</p>}
+              {mode.kind === 'loading' && <p className="flex items-center gap-2 px-5 py-10 text-[14px] text-[#8a8a8a] sm:px-10 md:px-16"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…</p>}
               <EditorContent editor={editor} />
             </div>
           </div>
@@ -559,7 +565,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
         {/* Details */}
         {panelOpen && docData && me && can && (
           <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-            {reading ? <DocFacts doc={docData} form={form} isOwner={docData.owner.uid === me.uid} /> : (<>
+            {reading ? <DocFacts doc={docData} form={form} /> : (<>
             <section className="space-y-4 rounded-xl border border-[#e5e5e5] bg-white p-5 dark:border-white/10 dark:bg-[#1e1e1e]">
               <h2 className="text-[14px] font-semibold text-[#292929] dark:text-white">Details</h2>
               <label className="block">
@@ -582,8 +588,6 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
                 <select className={panelField} value={form.share} disabled={!editing || !can.canShare} onChange={e => {
                   const share = e.target.value as DocShare;
                   setField('share', share);
-                  // Hiding from departments only applies to company-wide sharing.
-                  if (share !== 'all' && form.hiddenFrom.departments.length) setField('hiddenFrom', { ...form.hiddenFrom, departments: [] });
                   // Choosing departments starts from the team it was kept under, if any.
                   if (share === 'departments' && !form.sharedDepartments.length && docData.aeDepartmentId) {
                     setField('sharedDepartments', [{ id: docData.aeDepartmentId, name: docData.aeDepartmentName }]);
@@ -602,10 +606,6 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
                 <input type="checkbox" checked={form.othersCanEdit} disabled={!editing || !can.canShare || form.share === 'private'} onChange={e => setField('othersCanEdit', e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
                 <span>Others can edit<span className="block text-[12px] text-[#8a8a8a]">Everyone who can see it can change it, one person at a time.</span></span>
               </label>
-              {(can.canShare || form.hiddenFrom.departments.length > 0 || form.hiddenFrom.people.length > 0) && (
-                <HideFromPicker value={form.hiddenFrom} share={form.share} ownerUid={docData.owner.uid} disabled={!editing || !can.canShare}
-                  onChange={next => setField('hiddenFrom', next)} />
-              )}
               {!can.canShare && <p className="text-[12px] text-[#8a8a8a]">Only the owner changes who can see or edit it.</p>}
             </section>
             </>)}
@@ -651,12 +651,11 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
 }
 
 /** The document's details as plain text, for people reading it (no editing controls). */
-function DocFacts({ doc: d, form, isOwner }: { doc: WorkDoc; form: Form; isOwner: boolean }) {
+function DocFacts({ doc: d, form }: { doc: WorkDoc; form: Form }) {
   const shareText = form.share === 'all' ? 'Everyone in the company'
     : form.share === 'private' ? 'Only its owner'
       : form.share === 'departments' ? (form.sharedDepartments.map(x => x.name).join(', ') || 'No departments yet')
         : d.aeDepartmentName ? `The ${d.aeDepartmentName} team` : `The ${d.department.replace(/\b\w/g, c => c.toUpperCase())} department`;
-  const hidden = [...form.hiddenFrom.departments.map(x => x.name), ...form.hiddenFrom.people.map(x => x.name)];
   const row = (label: string, value: React.ReactNode) => (
     <div>
       <dt className="text-[12px] font-medium uppercase tracking-wide text-[#8a8a8a]">{label}</dt>
@@ -670,8 +669,6 @@ function DocFacts({ doc: d, form, isOwner }: { doc: WorkDoc; form: Form; isOwner
         {form.description && row('Description', form.description)}
         {row('Shared with', shareText)}
         {form.share !== 'private' && row('Editing', form.othersCanEdit ? 'Everyone it’s shared with can edit' : 'Only the owner edits')}
-        {/* Who it's hidden from is for its owner's eyes only. */}
-        {isOwner && hidden.length > 0 && row('Hidden from', hidden.join(', '))}
       </dl>
     </section>
   );

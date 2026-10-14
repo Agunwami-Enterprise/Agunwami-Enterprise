@@ -588,7 +588,8 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
 
   const status = dirty ? 'Unsaved changes' : savedAt ? `Saved ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : published ? 'Published' : article ? 'Draft' : 'New article';
   const sections = headings.filter(h => h.level === 2);
-  const bubble = 'flex items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
+  // Floating menus wrap on narrow screens instead of running off them.
+  const bubble = 'z-30 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
   const categoryNames = categories?.map(c => c.name) ?? [meta.category];
 
   return (
