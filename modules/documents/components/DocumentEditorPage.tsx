@@ -626,6 +626,13 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
               <p><span className="text-[#8a8a8a]">Owner:</span> {docData.owner.name || docData.owner.email}{docData.owner.uid === me.uid ? ' (you)' : ''}</p>
               <p><span className="text-[#8a8a8a]">Created:</span> {timeAgo(docData.createdAt)}</p>
               {docData.updatedAt && <p><span className="text-[#8a8a8a]">Last edited:</span> {timeAgo(docData.updatedAt)}{docData.updatedBy ? ` by ${docData.updatedBy}` : ''}</p>}
+              {docData.originalFile && (
+                <p><span className="text-[#8a8a8a]">Uploaded as:</span>{' '}
+                  <a href={docData.originalFile.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-[#806013] underline-offset-2 hover:underline dark:text-[#f5bd02]">
+                    {docData.originalFile.name} <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
+                </p>
+              )}
               {can.canDelete && (
                 <button type="button" onClick={() => void remove()} className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">
                   <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete document
