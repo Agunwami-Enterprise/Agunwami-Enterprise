@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import WorkstationShell from '@/app/components/ws/WorkstationShell';
 import { verifySession } from '@/lib/workstation/session';
 import { getWorkstationAccess } from '@/lib/workstation/access';
+import { deniedHref } from '@/lib/workstation/access-denied';
 
 export const metadata: Metadata = {
   title: 'Workstation | Agunwami Enterprise',
@@ -24,6 +27,14 @@ function Holding({ title, children }: { title: string; children: React.ReactNode
 export default async function WorkstationLayout({ children }: { children: React.ReactNode }) {
   const session = await verifySession();
   const access = await getWorkstationAccess(session);
+
+  // The CEO isn't part of a department workstation: a document opens in the CEO Workstation
+  // instead; anything else goes back there with a note.
+  if (access.kind === 'ceo') {
+    const asked = (await headers()).get('x-ae-path') ?? '';
+    const document = /^\/ws\/documents\/([\w-]+)\/?(\?.*)?$/.exec(asked);
+    redirect(document ? `/ceo/documents/${document[1]}${document[2] ?? ''}` : deniedHref(access.home, 'ws'));
+  }
 
   if (access.kind === 'unassigned') {
     return (
@@ -57,7 +68,7 @@ export default async function WorkstationLayout({ children }: { children: React.
     <WorkstationShell
       access={{
         kind: access.kind,
-        departmentId: access.kind === 'ceo' ? '' : access.departmentId ?? '',
+        departmentId: access.departmentId ?? '',
         departmentName: access.departmentName ?? 'Department',
         title: access.title,
         pages: access.pages,

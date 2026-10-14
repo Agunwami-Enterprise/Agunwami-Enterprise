@@ -7,7 +7,9 @@ import { usePathname } from 'next/navigation';
 import {
   ArrowLeftRight, BookOpen, Eye, FileText, FolderOpen, Handshake, LayoutGrid, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, Users, X,
 } from 'lucide-react';
+import { ToastContainer } from 'react-toastify';
 import { useAuth } from '@/lib/workstation/auth-context';
+import AccessDeniedToast from '@/app/components/common/AccessDeniedToast';
 import { cx, usePersistentToggle } from './ui';
 
 const NAV = [
@@ -129,6 +131,8 @@ export default function CpanelShell({ email, role, workstation, children }: {
           <div key={path} className="ae-page-enter">{children}</div>
         </main>
       </div>
+      <ToastContainer position="top-right" autoClose={4000} newestOnTop />
+      <AccessDeniedToast />
     </div>
   );
 }
