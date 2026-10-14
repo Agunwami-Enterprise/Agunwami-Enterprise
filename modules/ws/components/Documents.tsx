@@ -21,7 +21,10 @@ import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btn
 import { Overlay } from './task-board';
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
-import { DOC_FORMAT, MAX_FILE_BYTES, docPath, hiddenFromOf, isHiddenFrom, uploadFileDoc, type HiddenFrom } from '@/modules/documents/doc-store';
+import {
+  DOC_FORMAT, MAX_FILE_BYTES, docPath, hiddenFromOf, isHiddenFrom, sharedDepartmentsOf, uploadFileDoc, type HiddenFrom, type SharedDepartment,
+} from '@/modules/documents/doc-store';
+import DepartmentPicker from '@/modules/documents/components/DepartmentPicker';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
 
 const CATEGORIES = ['Policy & Handbook', 'Finance & Budget', 'Operations', 'Onboarding', 'Templates', 'Technical', 'Legal', 'General'];
@@ -36,6 +39,8 @@ interface WsDocument {
   hiddenFrom: HiddenFrom;
   /** Kept under an AE department's team. */
   aeDepartmentId: string; aeDepartmentName: string;
+  /** Shared with these AE departments. */
+  sharedDepartments: SharedDepartment[];
 }
 
 function toDocument(id: string, d: Record<string, unknown>): WsDocument {
@@ -47,6 +52,7 @@ function toDocument(id: string, d: Record<string, unknown>): WsDocument {
     downloadCount: Number(d.downloadCount ?? 0) || 0,
     written: d.format === DOC_FORMAT, othersCanEdit: d.othersCanEdit === true, hiddenFrom: hiddenFromOf(d),
     aeDepartmentId: String(d.aeDepartmentId ?? ''), aeDepartmentName: String(d.aeDepartmentName ?? ''),
+    sharedDepartments: sharedDepartmentsOf(d),
   };
 }
 
@@ -55,7 +61,7 @@ const dateLabel = (iso: string) => (iso ? new Date(iso).toLocaleDateString('en-U
 
 type Tab = 'all' | 'company' | 'department' | 'mine';
 
-const scopeOf = (d: WsDocument) => (d.aeDepartmentId ? 'department' : d.department === 'all' ? 'company' : d.department === 'private' ? 'private' : 'department');
+const scopeOf = (d: WsDocument) => (d.aeDepartmentId || d.department === 'departments' ? 'department' : d.department === 'all' ? 'company' : d.department === 'private' ? 'private' : 'department');
 
 export default function Documents() {
   const { user } = useAuth();
@@ -82,7 +88,8 @@ export default function Documents() {
   // My team: my AE department (its guides and team documents live there).
   const team = access.kind === 'department' && access.departmentId ? { id: access.departmentId, name: access.departmentName } : undefined;
   const sharedWithMe = (d: WsDocument) => (d.department === 'all'
-    || (d.aeDepartmentId ? d.aeDepartmentId === team?.id : !!department && d.department.toLowerCase() === department))
+    || (d.department === 'departments' ? !!team && d.sharedDepartments.some(x => x.id === team.id)
+      : d.aeDepartmentId ? d.aeDepartmentId === team?.id : !!department && d.department.toLowerCase() === department))
     && !isHiddenFrom(d.hiddenFrom, { uid, department });
   const visible = (docs ?? []).filter(d => isCeo || d.uploadedByUid === uid || sharedWithMe(d));
   // Written documents: who can change them (the owner, or everyone it's shared with when allowed). The CEO reads.
@@ -167,7 +174,7 @@ export default function Documents() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0">
                   <Pill label={d.category} tone="gray" />
-                  <Pill label={{ company: 'Company', department: d.aeDepartmentName ? `${d.aeDepartmentName} team` : 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
+                  <Pill label={{ company: 'Company', department: d.department === 'departments' ? (d.sharedDepartments.length === 1 ? `${d.sharedDepartments[0].name} team` : `${d.sharedDepartments.length} departments`) : d.aeDepartmentName ? `${d.aeDepartmentName} team` : 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
                   <button className="rounded-lg p-1.5 text-[#525252] hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5" onClick={() => void open(d)}
                     aria-label={`${d.written ? (canEditDoc(d) ? 'Edit' : 'Read') : 'Download'} ${d.name}`} title={d.written ? (canEditDoc(d) ? 'Open to edit' : 'Open to read') : 'Download'} disabled={!d.written && !d.url}>
                     {!d.written ? <Download className="h-4 w-4" /> : canEditDoc(d) ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -204,7 +211,8 @@ function UploadDialog({ department, team, me, onClose }: {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [category, setCategory] = useState('General');
-  const [share, setShare] = useState<'department' | 'all'>(team || department ? 'department' : 'all');
+  const [share, setShare] = useState<'department' | 'departments' | 'all'>(team || department ? 'department' : 'all');
+  const [departments, setDepartments] = useState<SharedDepartment[]>(team ? [team] : []);
   const [description, setDescription] = useState('');
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -212,12 +220,13 @@ function UploadDialog({ department, team, me, onClose }: {
   async function upload() {
     if (!file) return;
     if (file.size > MAX_FILE_BYTES) { setError('Files can be up to 25 MB.'); return; }
+    if (share === 'departments' && departments.length === 0) { setError('Choose at least one department to share it with.'); return; }
     setError('');
     setProgress(0);
     try {
       await uploadFileDoc(file, {
         category, description,
-        where: share === 'all' ? { department: 'all' } : team ? { team } : { department },
+        where: share === 'all' ? { department: 'all' } : share === 'departments' ? { departments } : team ? { team } : { department },
       }, me, setProgress);
       onClose();
     } catch {
@@ -248,12 +257,14 @@ function UploadDialog({ department, team, me, onClose }: {
         </label>
         <label className="block">
           <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Share with</span>
-          <select className={field} value={share} onChange={e => setShare(e.target.value as 'department' | 'all')}>
+          <select className={field} value={share} onChange={e => setShare(e.target.value as 'department' | 'departments' | 'all')}>
             {(team || department) && <option value="department">{team ? `My team (${team.name})` : 'My department'}</option>}
+            <option value="departments">Departments I choose…</option>
             <option value="all">Everyone (company-wide)</option>
           </select>
         </label>
       </div>
+      {share === 'departments' && <DepartmentPicker value={departments} onChange={setDepartments} ownTeamId={team?.id} />}
       <label className="block">
         <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Description (optional)</span>
         <input className={field} value={description} maxLength={300} onChange={e => setDescription(e.target.value)} />

@@ -33,7 +33,10 @@ export const LOCK_MS = 2 * 60 * 1000;
 /** Firestore documents are capped at 1 MB; leave room for the other fields. */
 export const MAX_CONTENT_BYTES = 900 * 1024;
 
-export type DocShare = 'private' | 'department' | 'all';
+/** Only me, my team (department), departments I choose, or everyone. */
+export type DocShare = 'private' | 'department' | 'departments' | 'all';
+/** An AE department a document is shared with. */
+export interface SharedDepartment { id: string; name: string }
 
 export interface DocPerson { uid: string; name: string; email: string }
 /** An AE Hub department (people's profiles name it by id or by name). */
@@ -53,6 +56,8 @@ export interface WorkDoc {
   /** Kept under an AE department's team: its people see it in Documents. */
   aeDepartmentId: string;
   aeDepartmentName: string;
+  /** Shared with these AE departments (sharing "departments"). */
+  sharedDepartments: SharedDepartment[];
   othersCanEdit: boolean;
   hiddenFrom: HiddenFrom;
   owner: DocPerson;
@@ -103,6 +108,7 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     department: str(d.department) || 'all',
     aeDepartmentId: str(d.aeDepartmentId),
     aeDepartmentName: str(d.aeDepartmentName),
+    sharedDepartments: sharedDepartmentsOf(d),
     othersCanEdit: d.othersCanEdit === true,
     hiddenFrom: hiddenFromOf(d),
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
@@ -113,14 +119,20 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
   };
 }
 
+/** The AE departments a document (written or uploaded) is shared with. */
+export function sharedDepartmentsOf(d: Record<string, unknown>): SharedDepartment[] {
+  return list(d.sharedDepartments).map(x => ({ id: str(x.id), name: str(x.name) })).filter(x => x.id);
+}
+
 export function shareOf(d: Pick<WorkDoc, 'department'>): DocShare {
-  return d.department === 'all' ? 'all' : d.department === 'private' ? 'private' : 'department';
+  return d.department === 'all' ? 'all' : d.department === 'private' ? 'private' : d.department === 'departments' ? 'departments' : 'department';
 }
 
 export function permissionsOf(d: WorkDoc, viewer: Viewer): DocPermissions {
   const owner = d.owner.uid === viewer.uid;
   const share = shareOf(d);
-  const inTeam = !!d.aeDepartmentId && d.aeDepartmentId === viewer.aeDepartmentId;
+  const inTeam = (!!d.aeDepartmentId && d.aeDepartmentId === viewer.aeDepartmentId)
+    || (share === 'departments' && !!viewer.aeDepartmentId && d.sharedDepartments.some(x => x.id === viewer.aeDepartmentId));
   const sharedWith = (share === 'all' || inTeam || (share === 'department' && !d.aeDepartmentId && !!viewer.department && d.department.toLowerCase() === viewer.department))
     && !isHiddenFrom(d.hiddenFrom, viewer);
   return {
@@ -167,6 +179,8 @@ export async function createDoc(input: {
   title: string; content: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; hiddenFrom: HiddenFrom;
   /** Keep it under this AE department's team (its people see it) instead. */
   team?: { id: string; name: string };
+  /** With sharing "departments": the AE departments that see it. */
+  departments?: SharedDepartment[];
 }, me: Viewer): Promise<string> {
   const ref_ = doc(collection(authDb, 'documents'));
   const now = new Date();
@@ -183,6 +197,7 @@ export async function createDoc(input: {
     category: input.category,
     department,
     ...(input.team ? teamFields(input.team) : {}),
+    sharedDepartments: input.share === 'departments' ? (input.departments ?? []).map(x => ({ id: x.id, name: x.name })) : [],
     uploadedBy: me.name,
     uploadedByUid: me.uid,
     uploadedByEmail: me.email,
@@ -216,7 +231,7 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit' | 'hiddenFrom'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit' | 'hiddenFrom' | 'sharedDepartments'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
@@ -251,6 +266,10 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
         update.aeDepartmentId = '';
         update.aeDepartmentName = '';
       }
+      if (changes.share !== 'departments') update.sharedDepartments = [];
+    }
+    if (can.canShare && changes.sharedDepartments !== undefined && (changes.share ?? shareOf(current)) === 'departments') {
+      update.sharedDepartments = changes.sharedDepartments.map(x => ({ id: x.id, name: x.name }));
     }
     if (can.canShare && changes.othersCanEdit !== undefined) update.othersCanEdit = changes.othersCanEdit;
     if (can.canShare && changes.hiddenFrom !== undefined) Object.assign(update, hiddenFields(changes.hiddenFrom));
@@ -307,10 +326,13 @@ export function fileTypeOf(name: string, mime: string): string {
  * department, or an AE department's team. Returns the document's id.
  */
 export async function uploadFileDoc(file: File, opts: {
-  category: string; description: string; where: { department: string } | { team: { id: string; name: string } };
+  category: string; description: string;
+  where: { department: string } | { team: { id: string; name: string } } | { departments: SharedDepartment[] };
 }, me: DocPerson, onProgress?: (percent: number) => void): Promise<string> {
   if (file.size > MAX_FILE_BYTES) throw new Error('Files can be up to 25 MB.');
-  const placement = 'team' in opts.where ? teamFields(opts.where.team) : { department: opts.where.department };
+  const placement: Record<string, unknown> & { department: string } = 'team' in opts.where ? teamFields(opts.where.team)
+    : 'departments' in opts.where ? { department: 'departments', sharedDepartments: opts.where.departments.map(x => ({ id: x.id, name: x.name })) }
+      : { department: opts.where.department };
   const folder = placement.department.replace(/[^\w-]+/g, '-');
   const storagePath = `documents/${folder}/${Date.now()}_${file.name.replace(/[^\w.\- ]+/g, '_')}`;
   const task = uploadBytesResumable(ref(storage, storagePath), file, { contentType: file.type || undefined });

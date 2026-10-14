@@ -69,7 +69,7 @@ function enterpriseItem(raw: RawRecord): DocumentFeedItem {
     type: fileTypeOf(name, url, text(raw.fileType) || text(raw.type)),
     category: text(raw.category) || CATEGORY_BY_DOC_TYPE[docType] || 'General',
     date: isoOf(raw.uploadedAt) ?? isoOf(raw.createdAt) ?? isoOf(raw._createTime),
-    tab: tabFor(text(raw.department)),
+    tab: text(raw.department) === 'departments' || text(raw.aeDepartmentId) ? 'team' : tabFor(text(raw.department)),
     ...(httpLink(url) ? { url } : {}),
     ...(text(raw.uploadedByName) || text(raw.uploadedBy) ? { uploadedBy: text(raw.uploadedByName) || text(raw.uploadedBy) } : {}),
     ...(text(raw.fileSize) || text(raw.size) ? { size: text(raw.fileSize) || text(raw.size) } : {}),

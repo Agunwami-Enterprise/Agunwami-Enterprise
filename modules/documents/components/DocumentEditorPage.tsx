@@ -29,8 +29,9 @@ import LinkDialog, { type LinkTarget } from '@/app/components/cpanel/article/Lin
 import ImageDialog, { type ArticleImage } from '@/app/components/cpanel/article/ImageDialog';
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
 import HideFromPicker from './HideFromPicker';
+import DepartmentPicker from './DepartmentPicker';
 import {
-  DOC_CATEGORIES, DocConflictError, type HiddenFrom, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
+  DOC_CATEGORIES, DocConflictError, type HiddenFrom, type SharedDepartment, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
 } from '../doc-store';
 
@@ -43,12 +44,12 @@ type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | {
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 type LinkState = { from: number; to: number; href: string; newTab: boolean; selectedText: string; editing: boolean };
 type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string; showCaption: boolean } };
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; hiddenFrom: HiddenFrom }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; hiddenFrom: HiddenFrom; sharedDepartments: SharedDepartment[] }
 type Pending = Partial<Form> & { content?: boolean };
 
-const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department: 'My department', all: 'Everyone in the company' };
+const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department: 'My department', departments: 'Departments I choose…', all: 'Everyone in the company' };
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, hiddenFrom: d.hiddenFrom });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, hiddenFrom: d.hiddenFrom, sharedDepartments: d.sharedDepartments });
 const timeAgo = (iso: string) => {
   if (!iso) return '';
   const date = new Date(iso);
@@ -84,7 +85,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, hiddenFrom: { departments: [], people: [] } });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, hiddenFrom: { departments: [], people: [] }, sharedDepartments: [] });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
@@ -583,10 +584,20 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
                   setField('share', share);
                   // Hiding from departments only applies to company-wide sharing.
                   if (share !== 'all' && form.hiddenFrom.departments.length) setField('hiddenFrom', { ...form.hiddenFrom, departments: [] });
+                  // Choosing departments starts from the team it was kept under, if any.
+                  if (share === 'departments' && !form.sharedDepartments.length && docData.aeDepartmentId) {
+                    setField('sharedDepartments', [{ id: docData.aeDepartmentId, name: docData.aeDepartmentName }]);
+                  }
                 }}>
-                  {(Object.keys(SHARE_LABELS) as DocShare[]).filter(s => s !== 'department' || me.department || form.share === 'department').map(s => <option key={s} value={s}>{SHARE_LABELS[s]}</option>)}
+                  {(Object.keys(SHARE_LABELS) as DocShare[]).filter(s => s !== 'department' || me.department || form.share === 'department').map(s => (
+                    <option key={s} value={s}>{s === 'department' && docData.aeDepartmentName ? `The ${docData.aeDepartmentName} team` : SHARE_LABELS[s]}</option>
+                  ))}
                 </select>
               </label>
+              {form.share === 'departments' && (
+                <DepartmentPicker value={form.sharedDepartments} disabled={!editing || !can.canShare} ownTeamId={me.aeDepartmentId}
+                  onChange={next => setField('sharedDepartments', next)} />
+              )}
               <label className="flex items-start gap-2 text-[13px] text-[#525252] dark:text-gray-300">
                 <input type="checkbox" checked={form.othersCanEdit} disabled={!editing || !can.canShare || form.share === 'private'} onChange={e => setField('othersCanEdit', e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
                 <span>Others can edit<span className="block text-[12px] text-[#8a8a8a]">Everyone who can see it can change it, one person at a time.</span></span>
@@ -643,7 +654,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
 function DocFacts({ doc: d, form, isOwner }: { doc: WorkDoc; form: Form; isOwner: boolean }) {
   const shareText = form.share === 'all' ? 'Everyone in the company'
     : form.share === 'private' ? 'Only its owner'
-      : `The ${d.department.replace(/\b\w/g, c => c.toUpperCase())} department`;
+      : form.share === 'departments' ? (form.sharedDepartments.map(x => x.name).join(', ') || 'No departments yet')
+        : d.aeDepartmentName ? `The ${d.aeDepartmentName} team` : `The ${d.department.replace(/\b\w/g, c => c.toUpperCase())} department`;
   const hidden = [...form.hiddenFrom.departments.map(x => x.name), ...form.hiddenFrom.people.map(x => x.name)];
   const row = (label: string, value: React.ReactNode) => (
     <div>
