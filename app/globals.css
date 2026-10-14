@@ -383,7 +383,10 @@ html.ae-reduce-motion .ae-lift:hover { transform: none; }
 }
 .article-editor img.ProseMirror-selectednode { outline: 3px solid var(--primary); }
 .article-editor h4 { scroll-margin-top: 80px; }
-.article-editor table { width: 100%; display: table; }
+/* Tables fill the page; wide ones (many columns) scroll sideways inside it instead of overflowing. */
+.article-editor .tableWrapper { max-width: 100%; overflow-x: auto; }
+.article-editor table { width: 100%; display: table; table-layout: auto; }
+.article-editor :is(td, th) { min-width: 7rem; overflow-wrap: break-word; }
 .article-editor .selectedCell { position: relative; }
 .article-editor .selectedCell::after {
   content: "";

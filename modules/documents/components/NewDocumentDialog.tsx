@@ -1,13 +1,17 @@
 'use client';
 
-/** Start a written document: a title, a template, its category and who can see it. */
+/**
+ * Start a written document: a template, its category and who can see it.
+ * Like Google Docs, it's named after its template ("Untitled document" when
+ * blank) and renamed in the editor's top bar.
+ */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, FileText, Loader2 } from 'lucide-react';
 import AeModal from '@/app/components/common/AeModal';
-import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocShare, type HiddenFrom, type Viewer } from '../doc-store';
-import HideFromPicker from './HideFromPicker';
+import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocShare, type SharedDepartment, type Viewer } from '../doc-store';
+import DepartmentPicker from './DepartmentPicker';
 
 export default function NewDocumentDialog({ me, basePath, onClose, team, initial, onCreated }: {
   me: Viewer;
@@ -21,32 +25,31 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
   onCreated?: (id: string, title: string) => Promise<void>;
 }) {
   const router = useRouter();
-  const [title, setTitle] = useState(initial?.title ?? '');
   const [templateId, setTemplateId] = useState(initial?.templateId ?? DOC_TEMPLATES[0].id);
   const [category, setCategory] = useState(initial?.category ?? (DOC_TEMPLATES.find(t => t.id === initial?.templateId) ?? DOC_TEMPLATES[0]).category);
   const [share, setShare] = useState<DocShare>(initial?.share ?? (team || me.department ? 'department' : 'private'));
+  const [departments, setDepartments] = useState<SharedDepartment[]>(team ? [team] : []);
   const [othersCanEdit, setOthersCanEdit] = useState(false);
-  const [hiddenFrom, setHiddenFrom] = useState<HiddenFrom>({ departments: [], people: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const template = DOC_TEMPLATES.find(t => t.id === templateId) ?? DOC_TEMPLATES[0];
 
   async function create(e?: React.FormEvent) {
     e?.preventDefault();
+    if (share === 'departments' && departments.length === 0) { setError('Choose at least one department to share it with.'); return; }
     setBusy(true);
     setError('');
     try {
       const date = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const name = initial?.title || (template.id === 'blank' ? 'Untitled document' : template.label);
       const id = await createDoc({
-        title: title.trim() || (template.id === 'blank' ? 'Untitled document' : `${template.label} – ${date}`),
+        title: name,
         content: template.content(me.name, date),
         category, description: '', share, othersCanEdit: share !== 'private' && othersCanEdit,
         team: share === 'department' ? team : undefined,
-        // Departments are hidden from only when it's shared with the whole company.
-        hiddenFrom: share === 'private' ? { departments: [], people: [] } : { departments: share === 'all' ? hiddenFrom.departments : [], people: hiddenFrom.people },
+        departments: share === 'departments' ? departments : undefined,
       }, me);
-      const finalTitle = title.trim() || (template.id === 'blank' ? 'Untitled document' : `${template.label} – ${date}`);
-      await onCreated?.(id, finalTitle);
+      await onCreated?.(id, name);
       router.push(docPath(id, basePath));
     } catch {
       setError('The document could not be created. Please try again.');
@@ -68,12 +71,6 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
         </>
       )}>
       <form id="new-doc" onSubmit={create} className="space-y-5">
-        <label className="block">
-          <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Title</span>
-          <input className={field} value={title} maxLength={160} onChange={e => setTitle(e.target.value)} autoFocus
-            placeholder={template.id === 'blank' ? 'Untitled document' : `${template.label} – today’s date`} />
-        </label>
-
         <fieldset>
           <legend className="mb-2 text-[13px] font-medium text-[#525252] dark:text-gray-300">Start from</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -102,15 +99,16 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
             <select className={field} value={share} onChange={e => setShare(e.target.value as DocShare)}>
               <option value="private">Only me</option>
               {(team || me.department) && <option value="department">{team ? `My team (${team.name})` : 'My department'}</option>}
+              <option value="departments">Departments I choose…</option>
               <option value="all">Everyone in the company</option>
             </select>
           </label>
         </div>
+        {share === 'departments' && <DepartmentPicker value={departments} onChange={setDepartments} ownTeamId={team?.id} />}
         <label className="flex items-start gap-2 text-[13px] text-[#525252] dark:text-gray-300">
           <input type="checkbox" checked={share !== 'private' && othersCanEdit} disabled={share === 'private'} onChange={e => setOthersCanEdit(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
           <span>Others can edit<span className="block text-[12px] text-[#8a8a8a]">Everyone who can see it can change it, one person at a time. You can change this later.</span></span>
         </label>
-        <HideFromPicker value={hiddenFrom} onChange={setHiddenFrom} share={share} ownerUid={me.uid} />
         {error && <p role="alert" className="text-[13px] text-red-600">{error}</p>}
       </form>
     </AeModal>
