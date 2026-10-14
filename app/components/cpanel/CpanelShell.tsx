@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  BookOpen, Eye, FileText, FolderOpen, Handshake, LayoutGrid, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, Users, X,
+  ArrowLeftRight, BookOpen, Eye, FileText, FolderOpen, Handshake, LayoutGrid, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, Users, X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { cx, usePersistentToggle } from './ui';
@@ -44,7 +44,14 @@ function NavItem({ href, label, icon: Icon, active, collapsed, onClick, external
     : <Link href={href} onClick={onClick} aria-current={active ? 'page' : undefined} aria-label={collapsed ? label : undefined} className={className}>{content}</Link>;
 }
 
-export default function CpanelShell({ email, isCeo, children }: { email: string; isCeo: boolean; children: React.ReactNode }) {
+export default function CpanelShell({ email, role, workstation, children }: {
+  email: string;
+  /** Shown under the header name, e.g. "CEO" or "Team Member · Marketing". */
+  role: string;
+  /** The person's own AE Workstation (CEO or department), to switch back to. */
+  workstation: { href: string; label: string } | null;
+  children: React.ReactNode;
+}) {
   const path = usePathname();
   const { signOut } = useAuth();
   const [open, setOpen] = useState(false);
@@ -68,7 +75,7 @@ export default function CpanelShell({ email, isCeo, children }: { email: string;
         ))}
       </nav>
       <div className={cx('space-y-1 border-t border-white/5 py-4 text-[14px] text-[#8A8A8A]', mini ? 'flex flex-col items-center px-2' : 'px-3')}>
-        {isCeo && <NavItem href="/ceo/dashboard" label="CEO Workstation" icon={LayoutGrid} collapsed={mini} />}
+        {workstation && <NavItem href={workstation.href} label={workstation.label} icon={ArrowLeftRight} collapsed={mini} onClick={() => setOpen(false)} />}
         <NavItem href="/" label="View Website" icon={Eye} collapsed={mini} external />
         <button type="button" onClick={signOut} aria-label={mini ? 'Sign out' : undefined}
           className={cx('group relative flex items-center rounded-lg hover:bg-white/5 hover:text-white', mini ? 'h-10 w-10 justify-center' : 'w-full gap-3 px-3 py-2')}>
@@ -102,8 +109,15 @@ export default function CpanelShell({ email, isCeo, children }: { email: string;
             {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </button>
           <div className="ml-auto flex items-center gap-3">
+            {workstation && (
+              <Link href={workstation.href} title={`Switch to the ${workstation.label}`}
+                className="hidden items-center gap-2 rounded-lg border border-[#E5E2D9] bg-white px-3 py-2 text-[13px] font-semibold text-[#1A1A1A] transition-colors hover:border-[#C89B3C] hover:bg-[#FBFAF6] sm:inline-flex">
+                <ArrowLeftRight className="h-4 w-4 text-[#C89B3C]" aria-hidden="true" />
+                <span className="max-w-[220px] truncate">{workstation.label}</span>
+              </Link>
+            )}
             <div className="text-right">
-              <p className="text-[13px] font-semibold text-[#1A1A1A]">{isCeo ? 'CEO' : 'Content Team'}</p>
+              <p className="max-w-[220px] truncate text-[13px] font-semibold text-[#1A1A1A]">{role}</p>
               <p className="text-[12px] text-[#8A8A8A]">{email}</p>
             </div>
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#C89B3C] text-[14px] font-semibold text-white">

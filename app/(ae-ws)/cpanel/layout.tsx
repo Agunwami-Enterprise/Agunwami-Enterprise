@@ -28,8 +28,18 @@ export default async function CpanelLayout({ children }: { children: React.React
     );
   }
 
+  // The way back to the person's own AE Workstation (CEO or their department's).
+  const workstation = access.kind === 'ceo'
+    ? { href: '/ceo/dashboard', label: 'CEO Workstation' }
+    : access.kind === 'department'
+      ? { href: '/ws/dashboard', label: `${access.departmentName ?? 'Department'} Workstation` }
+      : null;
+  const role = access.kind === 'ceo'
+    ? 'CEO'
+    : access.kind === 'department' ? `${access.title} · ${access.departmentName ?? 'Department'}` : 'Content Team';
+
   return (
-    <CpanelShell email={session.email} isCeo={access.kind === 'ceo'}>
+    <CpanelShell email={session.email} role={role} workstation={workstation}>
       {children}
     </CpanelShell>
   );

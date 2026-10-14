@@ -195,7 +195,7 @@ export function TeamManager({ team, metrics }: { team: SiteTeamMember[]; metrics
   };
 
   return (
-    <div className="mx-auto max-w-[1075px]">
+    <div className="w-full">
       <PageHeader title="Team Members"
         subtitle={`${team.length} member${team.length === 1 ? '' : 's'} · ${shown} displayed on the About page`}
         action={<AddButton onClick={() => setEditing('new')}>Add Member</AddButton>} />

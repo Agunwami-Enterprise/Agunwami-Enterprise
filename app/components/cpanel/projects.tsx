@@ -23,7 +23,7 @@ export function ProjectsManager({ projects }: { projects: SiteProject[] }) {
     visibility.run(() => cpanelFetch('/api/ceo/projects', { method: 'PATCH', json: { id: project.id, websitePublished: published } }));
 
   return (
-    <div className="mx-auto max-w-[1075px]">
+    <div className="w-full">
       <PageHeader title="Projects"
         subtitle={`${count('client')} client project${count('client') === 1 ? '' : 's'} · ${count('ecosystem')} ecosystem platform${count('ecosystem') === 1 ? '' : 's'} · shared with the AE workstation`}
         action={(

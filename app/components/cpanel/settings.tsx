@@ -90,7 +90,7 @@ export function SettingsForm({ settings }: { settings: SiteSettings }) {
   }
 
   return (
-    <div className="mx-auto max-w-[1075px] space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader title="Site Settings" subtitle="Manage your company information and contact details." />
 
       <Section title="Company Information">
