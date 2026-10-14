@@ -30,6 +30,9 @@ export const LOCK_MS = 2 * 60 * 1000;
 /** Firestore documents are capped at 1 MB; leave room for the other fields. */
 export const MAX_CONTENT_BYTES = 900 * 1024;
 
+/** Page orientation, as in Google Docs' page setup. */
+export type DocOrientation = 'portrait' | 'landscape';
+
 /** Only me, my team (department), departments I choose, or everyone. */
 export type DocShare = 'private' | 'department' | 'departments' | 'all';
 /** An AE department a document is shared with. */
@@ -52,6 +55,7 @@ export interface WorkDoc {
   /** Shared with these AE departments (sharing "departments"). */
   sharedDepartments: SharedDepartment[];
   othersCanEdit: boolean;
+  orientation: DocOrientation;
   owner: DocPerson;
   createdAt: string;
   updatedAt: string;
@@ -86,6 +90,7 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     aeDepartmentName: str(d.aeDepartmentName),
     sharedDepartments: sharedDepartmentsOf(d),
     othersCanEdit: d.othersCanEdit === true,
+    orientation: d.orientation === 'landscape' ? 'landscape' : 'portrait',
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
     createdAt: str(d.createdAt),
     updatedAt: str(d.updatedAt),
@@ -155,6 +160,7 @@ export async function createDoc(input: {
   team?: { id: string; name: string };
   /** With sharing "departments": the AE departments that see it. */
   departments?: SharedDepartment[];
+  orientation?: DocOrientation;
 }, me: Viewer): Promise<string> {
   const ref_ = doc(collection(authDb, 'documents'));
   const now = new Date();
@@ -183,6 +189,7 @@ export async function createDoc(input: {
     format: DOC_FORMAT,
     content: input.content,
     othersCanEdit: input.othersCanEdit,
+    orientation: input.orientation ?? 'portrait',
     updatedBy: me.name,
     lock: { uid: me.uid, name: me.name, email: me.email, at: now.toISOString() },
     serverUpdatedAt: serverTimestamp(),
@@ -197,7 +204,7 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
@@ -223,6 +230,7 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
     }
     if (changes.category !== undefined) update.category = changes.category;
     if (changes.description !== undefined) update.description = changes.description.trim();
+    if (changes.orientation !== undefined) update.orientation = changes.orientation === 'landscape' ? 'landscape' : 'portrait';
     // Sharing is the owner's call.
     if (can.canShare && changes.share !== undefined) {
       if (changes.share === 'department' && current.aeDepartmentId) {
@@ -328,11 +336,13 @@ export async function uploadDocImage(file: File, me: Pick<Viewer, 'uid'>, name?:
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-/** A standalone HTML page of the document (for Word and printing). */
-function standalone(title: string, html: string, extraHead = ''): string {
+/** A standalone HTML page of the document (for Word and printing), on a page of the given orientation. */
+function standalone(title: string, html: string, orientation: DocOrientation, extraHead = ''): string {
+  const landscape = orientation === 'landscape';
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${extraHead}
 <style>
-body{font-family:Arial,Helvetica,sans-serif;font-size:12pt;line-height:1.6;color:#1f2937;max-width:720px;margin:40px auto;padding:0 24px}
+@page{size:${landscape ? '11in 8.5in' : '8.5in 11in'};margin:1in}
+body{font-family:Arial,Helvetica,sans-serif;font-size:12pt;line-height:1.6;color:#1f2937;max-width:${landscape ? '960px' : '720px'};margin:40px auto;padding:0 24px}
 h1{font-size:24pt;margin:0 0 16pt}h2{font-size:18pt}h3{font-size:14pt}h4{font-size:12pt}
 table{border-collapse:collapse;width:100%}th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f3f4f6}
 img{max-width:100%;height:auto}figure{margin:0}figcaption{font-size:10pt;color:#6b7280;text-align:center}
@@ -354,24 +364,27 @@ function download(name: string, blob: Blob) {
 const fileName = (title: string) => (title.trim() || 'document').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
 
 /** Downloads a Word document (.doc), which Word, Google Docs and LibreOffice open. */
-export function downloadWord(title: string, html: string) {
-  const head = '<meta name="ProgId" content="Word.Document"><xml><w:WordDocument xmlns:w="urn:schemas-microsoft-com:office:word"><w:View>Print</w:View></w:WordDocument></xml>';
-  download(`${fileName(title)}.doc`, new Blob(['﻿', standalone(title, html, head)], { type: 'application/msword' }));
+export function downloadWord(title: string, html: string, orientation: DocOrientation = 'portrait') {
+  const landscape = orientation === 'landscape';
+  // Word reads the page size and orientation from its own section style.
+  const head = '<meta name="ProgId" content="Word.Document"><xml><w:WordDocument xmlns:w="urn:schemas-microsoft-com:office:word"><w:View>Print</w:View></w:WordDocument></xml>'
+    + `<style>@page WordSection1{size:${landscape ? '11.0in 8.5in' : '8.5in 11.0in'};mso-page-orientation:${orientation};margin:1.0in}div.WordSection1{page:WordSection1}</style>`;
+  download(`${fileName(title)}.doc`, new Blob(['﻿', standalone(title, `<div class="WordSection1">${html}</div>`, orientation, head)], { type: 'application/msword' }));
 }
 
-export function downloadHtml(title: string, html: string) {
-  download(`${fileName(title)}.html`, new Blob([standalone(title, html)], { type: 'text/html' }));
+export function downloadHtml(title: string, html: string, orientation: DocOrientation = 'portrait') {
+  download(`${fileName(title)}.html`, new Blob([standalone(title, html, orientation)], { type: 'text/html' }));
 }
 
 /** Opens the print dialog for the document; choose "Save as PDF" there for a PDF. */
-export function printDoc(title: string, html: string) {
+export function printDoc(title: string, html: string, orientation: DocOrientation = 'portrait') {
   const frame = Object.assign(document.createElement('iframe'), { title: 'Print' });
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
   document.body.appendChild(frame);
   const win = frame.contentWindow;
   if (!win) { frame.remove(); return; }
   win.document.open();
-  win.document.write(standalone(title, html));
+  win.document.write(standalone(title, html, orientation));
   win.document.close();
   const go = () => { win.focus(); win.print(); setTimeout(() => frame.remove(), 1000); };
   // Let images load before printing.

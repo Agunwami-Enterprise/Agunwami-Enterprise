@@ -8,9 +8,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, FileText, Loader2 } from 'lucide-react';
+import { Check, FileText, Loader2, RectangleHorizontal, RectangleVertical } from 'lucide-react';
 import AeModal from '@/app/components/common/AeModal';
-import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocShare, type SharedDepartment, type Viewer } from '../doc-store';
+import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocOrientation, type DocShare, type SharedDepartment, type Viewer } from '../doc-store';
 import DepartmentPicker from './DepartmentPicker';
 
 export default function NewDocumentDialog({ me, basePath, onClose, team, initial, onCreated }: {
@@ -30,6 +30,7 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
   const [share, setShare] = useState<DocShare>(initial?.share ?? (team || me.department ? 'department' : 'private'));
   const [departments, setDepartments] = useState<SharedDepartment[]>(team ? [team] : []);
   const [othersCanEdit, setOthersCanEdit] = useState(false);
+  const [orientation, setOrientation] = useState<DocOrientation>('portrait');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const template = DOC_TEMPLATES.find(t => t.id === templateId) ?? DOC_TEMPLATES[0];
@@ -48,6 +49,7 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
         category, description: '', share, othersCanEdit: share !== 'private' && othersCanEdit,
         team: share === 'department' ? team : undefined,
         departments: share === 'departments' ? departments : undefined,
+        orientation,
       }, me);
       await onCreated?.(id, name);
       router.push(docPath(id, basePath));
@@ -105,6 +107,18 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
           </label>
         </div>
         {share === 'departments' && <DepartmentPicker value={departments} onChange={setDepartments} ownTeamId={team?.id} />}
+        <fieldset>
+          <legend className="mb-2 text-[13px] font-medium text-[#525252] dark:text-gray-300">Page</legend>
+          <div role="radiogroup" aria-label="Page orientation" className="flex gap-2">
+            {([['portrait', 'Portrait', RectangleVertical], ['landscape', 'Landscape', RectangleHorizontal]] as const).map(([value, label, Icon]) => (
+              <button key={value} type="button" role="radio" aria-checked={orientation === value} onClick={() => setOrientation(value)}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px] font-medium ${orientation === value
+                  ? 'border-[#f5bd02] bg-[#fef9e7] text-[#806013] dark:bg-[#f5bd02]/10 dark:text-[#f5bd02]' : 'border-[#e5e5e5] text-[#525252] hover:border-[#d4d4d4] dark:border-white/10 dark:text-gray-300'}`}>
+                <Icon className="h-4 w-4" aria-hidden="true" /> {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <label className="flex items-start gap-2 text-[13px] text-[#525252] dark:text-gray-300">
           <input type="checkbox" checked={share !== 'private' && othersCanEdit} disabled={share === 'private'} onChange={e => setOthersCanEdit(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
           <span>Others can edit<span className="block text-[12px] text-[#8a8a8a]">Everyone who can see it can change it, one person at a time. You can change this later.</span></span>
