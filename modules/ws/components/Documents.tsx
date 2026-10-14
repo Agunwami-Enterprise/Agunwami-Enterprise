@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, deleteDoc, doc, increment, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
-import { Download, FilePlus2, FileText, FolderOpen, HardDrive, Pencil, Search, Trash2, Upload, Users } from 'lucide-react';
+import { Download, Eye, FilePlus2, FileText, FolderOpen, HardDrive, Pencil, Search, Trash2, Upload, Users } from 'lucide-react';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { authDb, storage } from '@/lib/workstation/firebase';
 import { useConfirm } from '@/app/components/common/AeModal';
@@ -87,8 +87,10 @@ export default function Documents() {
 
   // What this person can see: company-wide, their department's, and their own; the CEO sees everything.
   const isCeo = access.kind === 'ceo';
-  const visible = (docs ?? []).filter(d => isCeo || d.uploadedByUid === uid
-    || ((d.department === 'all' || (department && d.department.toLowerCase() === department)) && !isHiddenFrom(d.hiddenFrom, { uid, department })));
+  const sharedWithMe = (d: WsDocument) => (d.department === 'all' || (!!department && d.department.toLowerCase() === department)) && !isHiddenFrom(d.hiddenFrom, { uid, department });
+  const visible = (docs ?? []).filter(d => isCeo || d.uploadedByUid === uid || sharedWithMe(d));
+  // Written documents: who can change them (the owner, or everyone it's shared with when allowed). The CEO reads.
+  const canEditDoc = (d: WsDocument) => d.uploadedByUid === uid || (d.othersCanEdit && sharedWithMe(d));
   const term = search.trim().toLowerCase();
   const shown = visible.filter(d => {
     if (tab === 'company' && d.department !== 'all') return false;
@@ -167,12 +169,12 @@ export default function Documents() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0">
                   <Pill label={d.category} tone="gray" />
-                  <Pill label={{ company: 'Company', department: 'Department', private: 'Only me' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
+                  <Pill label={{ company: 'Company', department: 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
                   <button className="rounded-lg p-1.5 text-[#525252] hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5" onClick={() => void open(d)}
-                    aria-label={`${d.written ? 'Open' : 'Download'} ${d.name}`} title={d.written ? (d.uploadedByUid === uid || d.othersCanEdit ? 'Open to edit' : 'Open to read') : 'Download'} disabled={!d.written && !d.url}>
-                    {d.written ? <Pencil className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                    aria-label={`${d.written ? (canEditDoc(d) ? 'Edit' : 'Read') : 'Download'} ${d.name}`} title={d.written ? (canEditDoc(d) ? 'Open to edit' : 'Open to read') : 'Download'} disabled={!d.written && !d.url}>
+                    {!d.written ? <Download className="h-4 w-4" /> : canEditDoc(d) ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
-                  {d.uploadedByUid === uid && (
+                  {(d.uploadedByUid === uid || isCeo) && (
                     <button className="rounded-lg p-1.5 text-[#a3a3a3] hover:bg-red-50 hover:text-[#dc2626] dark:hover:bg-red-500/10" onClick={() => void remove(d)} aria-label={`Delete ${d.name}`}>
                       <Trash2 className="h-4 w-4" />
                     </button>

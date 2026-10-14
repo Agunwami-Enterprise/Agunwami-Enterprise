@@ -115,6 +115,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
 
   const can = docData && me ? permissionsOf(docData, me) : null;
   const editing = mode.kind === 'editing';
+  // Reading (a viewer, or while someone else edits): the document as it is, without editing tools.
+  const reading = mode.kind === 'view' || mode.kind === 'locked';
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -147,7 +149,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
     onUpdate: ({ editor: e, transaction }) => {
       setWords(e.getText().split(/\s+/).filter(Boolean).length);
       if (transaction.getMeta('loading')) return;
-      if (modeRef.current.kind === 'editing') markChanged({ content: true });
+      if (modeRef.current.kind === 'editing' && e.isEditable) markChanged({ content: true });
     },
   });
 
@@ -233,7 +235,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
   }, [id]);
 
   useEffect(() => {
-    if (editor && !editor.isDestroyed && editor.isEditable !== editing) editor.setEditable(editing);
+    if (editor && !editor.isDestroyed && editor.isEditable !== editing) editor.setEditable(editing, false); // not an edit
   }, [editor, editing]);
 
   useEffect(() => {
@@ -533,8 +535,12 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
           {/* The page */}
           <div className="px-3 py-6 md:px-8 md:py-10">
             <div className="mx-auto w-full max-w-[860px] rounded-sm bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06)]">
-              <input value={form.title} onChange={e => setField('title', e.target.value)} readOnly={!editing} maxLength={160} aria-label="Document title" placeholder="Untitled document"
-                className="w-full bg-transparent px-8 pt-10 font-primary text-[30px] leading-tight text-[#1a1a1a] outline-none placeholder:text-[#b5b0a2] md:px-16 md:pt-14" />
+              {reading ? (
+                <h1 className="px-8 pt-10 font-primary text-[30px] leading-tight text-[#1a1a1a] md:px-16 md:pt-14">{form.title || 'Untitled document'}</h1>
+              ) : (
+                <input value={form.title} onChange={e => setField('title', e.target.value)} readOnly={!editing} maxLength={160} aria-label="Document title" placeholder="Untitled document"
+                  className="w-full bg-transparent px-8 pt-10 font-primary text-[30px] leading-tight text-[#1a1a1a] outline-none placeholder:text-[#b5b0a2] md:px-16 md:pt-14" />
+              )}
               {mode.kind === 'loading' && <p className="flex items-center gap-2 px-8 py-10 text-[14px] text-[#8a8a8a] md:px-16"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…</p>}
               <EditorContent editor={editor} />
             </div>
@@ -548,6 +554,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
         {/* Details */}
         {panelOpen && docData && me && can && (
           <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+            {reading ? <DocFacts doc={docData} form={form} isOwner={docData.owner.uid === me.uid} /> : (<>
             <section className="space-y-4 rounded-xl border border-[#e5e5e5] bg-white p-5 dark:border-white/10 dark:bg-[#1e1e1e]">
               <h2 className="text-[14px] font-semibold text-[#292929] dark:text-white">Details</h2>
               <label className="block">
@@ -586,6 +593,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
               )}
               {!can.canShare && <p className="text-[12px] text-[#8a8a8a]">Only the owner changes who can see or edit it.</p>}
             </section>
+            </>)}
 
             <section className="space-y-2 rounded-xl border border-[#e5e5e5] bg-white p-5 text-[13px] text-[#525252] dark:border-white/10 dark:bg-[#1e1e1e] dark:text-gray-300">
               <p><span className="text-[#8a8a8a]">Owner:</span> {docData.owner.name || docData.owner.email}{docData.owner.uid === me.uid ? ' (you)' : ''}</p>
@@ -624,6 +632,32 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
         </AeModal>
       )}
     </div>
+  );
+}
+
+/** The document's details as plain text, for people reading it (no editing controls). */
+function DocFacts({ doc: d, form, isOwner }: { doc: WorkDoc; form: Form; isOwner: boolean }) {
+  const shareText = form.share === 'all' ? 'Everyone in the company'
+    : form.share === 'private' ? 'Only its owner'
+      : `The ${d.department.replace(/\b\w/g, c => c.toUpperCase())} department`;
+  const hidden = [...form.hiddenFrom.departments.map(x => x.name), ...form.hiddenFrom.people.map(x => x.name)];
+  const row = (label: string, value: React.ReactNode) => (
+    <div>
+      <dt className="text-[12px] font-medium uppercase tracking-wide text-[#8a8a8a]">{label}</dt>
+      <dd className="mt-0.5 text-[14px] text-[#292929] dark:text-gray-100">{value}</dd>
+    </div>
+  );
+  return (
+    <section className="rounded-xl border border-[#e5e5e5] bg-white p-5 dark:border-white/10 dark:bg-[#1e1e1e]">
+      <dl className="space-y-3">
+        {row('Category', form.category)}
+        {form.description && row('Description', form.description)}
+        {row('Shared with', shareText)}
+        {form.share !== 'private' && row('Editing', form.othersCanEdit ? 'Everyone it’s shared with can edit' : 'Only the owner edits')}
+        {/* Who it's hidden from is for its owner's eyes only. */}
+        {isOwner && hidden.length > 0 && row('Hidden from', hidden.join(', '))}
+      </dl>
+    </section>
   );
 }
 
