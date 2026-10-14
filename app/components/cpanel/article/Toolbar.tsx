@@ -16,7 +16,7 @@ import {
   IndentDecrease, IndentIncrease, Italic, Keyboard, Link2, List, ListChecks, ListOrdered, Minus, Paintbrush, Plus, Redo2,
   RemoveFormatting, Search, Table2, Underline, Undo2, UnfoldVertical,
 } from 'lucide-react';
-import { ARTICLE_FONTS } from '@/backend/modules/site-content/site-content.types';
+import { ARTICLE_FONTS, ARTICLE_FONT_GROUPS } from '@/backend/modules/site-content/site-content.types';
 import { cx } from '../ui';
 import { LINE_SPACINGS, MAX_INDENT, changeCase } from './extensions';
 
@@ -90,6 +90,40 @@ function Option({ selected, onClick, children, style }: { selected?: boolean; on
       <Check className={cx('h-3.5 w-3.5 shrink-0', selected ? 'text-[#1A1A1A]' : 'invisible')} aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">{children}</span>
     </button>
+  );
+}
+
+/** The fonts, grouped, each shown in itself, with a search box. */
+function FontList({ current, onPick }: { current: string; onPick: (css: string | null) => void }) {
+  const [query, setQuery] = useState('');
+  const term = query.trim().toLowerCase();
+  const fonts = ARTICLE_FONTS.filter(f => !term || f.label.toLowerCase().includes(term) || f.group.toLowerCase().includes(term));
+  return (
+    <div>
+      <div className="px-2 pb-1 pt-1">
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search fonts" aria-label="Search fonts" autoFocus
+          onKeyDown={e => { if (e.key === 'Enter' && fonts[0]) { e.preventDefault(); onPick(fonts[0].css); } }}
+          className="w-full rounded-md border border-[#E5E2D9] px-2.5 py-1.5 text-[13px] outline-none placeholder:text-[#8C8679] focus:border-[#C89B3C]" />
+      </div>
+      <div className="max-h-[340px] overflow-y-auto">
+        {!term && <Option selected={!current} onClick={() => onPick(null)}>Default (site font)</Option>}
+        {ARTICLE_FONT_GROUPS.map(group => {
+          const inGroup = fonts.filter(f => f.group === group);
+          if (!inGroup.length) return null;
+          return (
+            <div key={group} role="group" aria-label={group}>
+              <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-[#8C8679]">{group}</p>
+              {inGroup.map(f => (
+                <Option key={f.label} selected={current === f.label} style={{ fontFamily: f.css }} onClick={() => onPick(f.css)}>
+                  <span className="text-[14px]">{f.label}</span>
+                </Option>
+              ))}
+            </div>
+          );
+        })}
+        {fonts.length === 0 && <p className="px-3 py-3 text-center text-[13px] text-[#9A9A9A]">No font matches.</p>}
+      </div>
+    </div>
   );
 }
 
@@ -564,15 +598,8 @@ export default function Toolbar({ editor, ...a }: { editor: Editor } & ToolbarAc
           ))}
         </Dropdown>
         <Divider />
-        <Dropdown label="Font" button={<span className="w-[96px] truncate text-left text-[13px]">{s.font || 'Default'}</span>} panelClass="w-52">
-          {close => (
-            <>
-              <Option selected={!s.font} onClick={() => { chain().unsetFontFamily().run(); close(); }}>Default (site font)</Option>
-              {ARTICLE_FONTS.map(f => (
-                <Option key={f.label} selected={s.font === f.label} style={{ fontFamily: f.css }} onClick={() => { chain().setFontFamily(f.css).run(); close(); }}>{f.label}</Option>
-              ))}
-            </>
-          )}
+        <Dropdown label="Font" button={<span className="w-[104px] truncate text-left text-[13px]" style={{ fontFamily: ARTICLE_FONTS.find(f => f.label === s.font)?.css }}>{s.font || 'Default'}</span>} panelClass="w-60">
+          {close => <FontList current={s.font} onPick={css => { (css ? chain().setFontFamily(css) : chain().unsetFontFamily()).run(); close(); }} />}
         </Dropdown>
         <Divider />
 

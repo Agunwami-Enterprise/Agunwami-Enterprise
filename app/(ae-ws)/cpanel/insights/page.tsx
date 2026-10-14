@@ -1,8 +1,11 @@
 import { InsightsManager } from '@/app/components/cpanel/insights';
-import { listArticles } from '@/backend/modules/site-content';
+import { listArticlesFor } from '@/backend/modules/site-content';
+import { verifySession } from '@/lib/workstation/session';
+import { articleActor } from '@/lib/workstation/article-actor';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CpanelInsightsPage() {
-  return <InsightsManager articles={await listArticles()} />;
+  const actor = await articleActor(await verifySession());
+  return <InsightsManager articles={await listArticlesFor(actor)} isCeo={actor.isCeo} />;
 }

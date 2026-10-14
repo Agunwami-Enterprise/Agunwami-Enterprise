@@ -7,15 +7,17 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import { CellSelection } from '@tiptap/pm/tables';
 import {
-  ArrowLeft, BetweenHorizontalEnd, BetweenHorizontalStart, BetweenVerticalEnd, BetweenVerticalStart, Bold, ChevronDown, ExternalLink,
+  ArrowLeft, Eye, Lock, Share2, BetweenHorizontalEnd, BetweenHorizontalStart, BetweenVerticalEnd, BetweenVerticalStart, Bold, ChevronDown, ExternalLink,
   Highlighter, Italic, Link2, Loader2, PaintBucket, PanelRightClose, PanelRightOpen, Pencil, RemoveFormatting, Replace, Rows3, Settings2,
   TableCellsMerge, TableCellsSplit, Trash2, Underline, Unlink,
 } from 'lucide-react';
 import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import {
-  Button, Card, ErrorNote, ImageField, TextArea, TextInput, cpanelFetch, cx, uploadImage, usePersistentToggle,
+  Button, Card, ErrorNote, ImageField, TagInput, TextArea, TextInput, cpanelFetch, cx, uploadImage, usePersistentToggle,
 } from './ui';
-import type { ArticleCategoryInfo, SiteArticle } from '@/backend/modules/site-content/site-content.types';
+import { MAX_TAGS, articleFontsUrl, type ArticleCategoryInfo, type ArticleLock, type ArticlePerson, type SiteArticle } from '@/backend/modules/site-content/site-content.types';
+import type { ArticlePermissions } from '@/backend/modules/site-content/article-access';
+import ShareDialog from './article/ShareDialog';
 import { articleExtensions } from './article/extensions';
 import Toolbar, { Divider, ToolButton, applyFontSize, clearFormatting, currentFontSize } from './article/Toolbar';
 import FindReplace from './article/FindReplace';
@@ -28,7 +30,8 @@ import AuthorPicker, { photoOf } from './article/AuthorPicker';
 import type { AuthorOption } from '@/app/api/cpanel/people/route';
 import { useAuth } from '@/lib/workstation/auth-context';
 
-type Meta = Omit<SiteArticle, 'id' | 'body' | 'published' | 'showToc' | keyof SeoValue> & SeoValue & {
+type Meta = Omit<SiteArticle, 'id' | 'body' | 'published' | 'showToc' | 'tags' | 'owner' | 'collaborators' | 'lock' | 'updatedAt' | 'updatedBy' | keyof SeoValue> & SeoValue & {
+  tags: string[];
   showToc: boolean;
   /** The hero image is the feature image (heroImage is then saved as the feature image). */
   sameHero: boolean;
@@ -55,6 +58,7 @@ function initialMeta(article?: SiteArticle): Meta {
     seoDescription: article?.seoDescription ?? '',
     seoImage: article?.seoImage ?? '',
     noIndex: article?.noIndex === true,
+    tags: article?.tags ?? [],
   };
 }
 
@@ -142,7 +146,11 @@ function TableMenu({ editor }: { editor: Editor }) {
 }
 
 /** A collapsible group in the details panel. */
-function Section({ title, children, defaultOpen = true, extra, id }: { title: string; children: React.ReactNode; defaultOpen?: boolean; extra?: React.ReactNode; id?: string }) {
+function Section({ title, children, defaultOpen = true, extra, id, locked }: {
+  title: string; children: React.ReactNode; defaultOpen?: boolean; extra?: React.ReactNode; id?: string;
+  /** Read-only: its fields can't be changed. */
+  locked?: boolean;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div id={id}>
@@ -152,7 +160,7 @@ function Section({ title, children, defaultOpen = true, extra, id }: { title: st
           <span className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-[#1A1A1A]">{title}{extra}</span>
           <ChevronDown className={cx('h-4 w-4 shrink-0 text-[#6B6B6B] transition-transform', open ? 'rotate-180' : '')} aria-hidden="true" />
         </button>
-        {open && <div className="space-y-4 border-t border-[#F0EEE8] px-5 pb-5 pt-4">{children}</div>}
+        {open && <fieldset disabled={locked} className="min-w-0 space-y-4 border-t border-[#F0EEE8] px-5 pb-5 pt-4">{children}</fieldset>}
       </Card>
     </div>
   );
@@ -160,8 +168,27 @@ function Section({ title, children, defaultOpen = true, extra, id }: { title: st
 
 // ── Page ────────────────────────────────────────────────────────────────────
 
-export default function ArticleEditor({ article }: { article?: SiteArticle }) {
+/** A new article: its creator will own it. */
+const CREATOR: ArticlePermissions = {
+  access: 'owner', canView: true, canEdit: true, canPublish: true, canShare: false, canTransfer: false, canClaim: false, canDelete: true,
+};
+const LOCK_RENEW_MS = 60_000;
+const LOCK_RETRY_MS = 20_000;
+
+type EditState = { mode: 'checking' } | { mode: 'editing' } | { mode: 'locked'; by: ArticleLock } | { mode: 'view' };
+
+export default function ArticleEditor({ article, permissions = CREATOR, me: actor }: {
+  article?: SiteArticle;
+  /** What the signed-in person may do with it (a new article: everything). */
+  permissions?: ArticlePermissions;
+  me: ArticlePerson;
+}) {
   const router = useRouter();
+  // Viewers read; editors wait for whoever has the article open (see the edit lock).
+  const [edit, setEdit] = useState<EditState>(() => (!permissions.canEdit ? { mode: 'view' } : article ? { mode: 'checking' } : { mode: 'editing' }));
+  const readOnly = edit.mode !== 'editing';
+  const [sharing, setSharing] = useState(false);
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState(article?.updatedAt ?? '');
   const [meta, setMeta] = useState<Meta>(() => initialMeta(article));
   const [published, setPublished] = useState(article?.published ?? false);
   const [dirty, setDirty] = useState(false);
@@ -209,6 +236,7 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
 
   const editor = useEditor({
     immediatelyRender: false,
+    editable: edit.mode === 'editing',
     extensions: articleExtensions('Start writing… Type ## and a space for a heading, or paste an image.'),
     content: article?.body ?? '',
     editorProps: {
@@ -301,17 +329,18 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
   };
 
   const save = useCallback(async (publish: boolean) => {
-    if (!editor || savingRef.current) return;
+    if (!editor || savingRef.current || edit.mode !== 'editing') return;
     savingRef.current = true;
     setSaving(publish ? 'publish' : 'draft');
     setError('');
     try {
       const { sameHero, ...fields } = meta;
-      const json = { ...fields, heroImage: sameHero ? meta.image : meta.heroImage || meta.image, body: editor.getHTML(), published: publish };
+      const json = { ...fields, heroImage: sameHero ? meta.image : meta.heroImage || meta.image, body: editor.getHTML(), published: publish, baseUpdatedAt };
       const saved = article
         ? await cpanelFetch<SiteArticle>(`/api/cpanel/articles/${article.id}`, { method: 'PATCH', json })
         : await cpanelFetch<SiteArticle>('/api/cpanel/articles', { method: 'POST', json });
       setPublished(saved.published);
+      setBaseUpdatedAt(saved.updatedAt ?? '');
       setMeta(m => ({ ...m, readTime: saved.readTime, slug: saved.slug }));
       setDirty(false);
       setSavedAt(new Date());
@@ -323,7 +352,62 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
       savingRef.current = false;
       setSaving(null);
     }
-  }, [article, editor, meta, router]);
+  }, [article, editor, meta, router, edit.mode, baseUpdatedAt]);
+
+  // ── Edit lock: one person edits at a time ──
+
+  const lockRequest = useCallback((body: { action: 'acquire' | 'release'; force?: boolean }) =>
+    cpanelFetch<{ locked: boolean; lock: ArticleLock | null }>(`/api/cpanel/articles/${article?.id}/lock`, { method: 'POST', json: body }), [article?.id]);
+
+  const acquire = useCallback(async (force = false) => {
+    try {
+      const result = await lockRequest({ action: 'acquire', force });
+      setEdit(result.locked ? { mode: 'editing' } : result.lock ? { mode: 'locked', by: result.lock } : { mode: 'view' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open the article for editing.');
+      setEdit({ mode: 'view' });
+    }
+  }, [lockRequest]);
+
+  // Open for editing (or wait for whoever has it), keep the lock while editing, and let go on leaving.
+  const articleId = article?.id;
+  const canEdit = permissions.canEdit;
+  useEffect(() => {
+    if (!articleId || !canEdit) return;
+    const first = setTimeout(() => void acquire(), 0);
+    const release = () => {
+      const blob = new Blob([JSON.stringify({ action: 'release' })], { type: 'application/json' });
+      navigator.sendBeacon?.(`/api/cpanel/articles/${articleId}/lock`, blob);
+    };
+    window.addEventListener('pagehide', release);
+    return () => {
+      clearTimeout(first);
+      window.removeEventListener('pagehide', release);
+      void lockRequest({ action: 'release' }).catch(() => undefined);
+    };
+  }, [articleId, canEdit, acquire, lockRequest]);
+
+  useEffect(() => {
+    if (edit.mode !== 'editing' && edit.mode !== 'locked') return;
+    if (!articleId) return;
+    // Renew our lock; or, while someone else has it, try again now and then.
+    const timer = setInterval(() => void acquire(), edit.mode === 'editing' ? LOCK_RENEW_MS : LOCK_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [articleId, edit.mode, acquire]);
+
+  useEffect(() => {
+    if (editor && !editor.isDestroyed && editor.isEditable === readOnly) editor.setEditable(!readOnly);
+  }, [editor, readOnly]);
+
+  async function takeOver() {
+    if (edit.mode !== 'locked') return;
+    const ok = await confirm({
+      title: `Take over from ${edit.by.name || edit.by.email}?`,
+      message: 'They’ll switch to read-only and any changes they haven’t saved won’t be saved. Let them know first if you can.',
+      confirmLabel: 'Take over editing',
+    });
+    if (ok) await acquire(true);
+  }
 
   /** Publishing without an author photo asks first, offering to add one. */
   async function publish() {
@@ -477,6 +561,8 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
 
   return (
     <div className="w-full">
+      {/* The editor's web fonts (font files download only when used) */}
+      <link rel="stylesheet" href={articleFontsUrl()} precedence="default" />
       {/* Top bar */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Link href="/cpanel/insights" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#6B6B6B] hover:text-[#1A1A1A]">
@@ -497,27 +583,55 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
               <ExternalLink className="h-4 w-4" aria-hidden="true" /> View live
             </Button>
           )}
-          <Button variant="outline" busy={saving === 'draft'} disabled={!!saving} onClick={() => save(false)}>
-            {published ? 'Unpublish' : 'Save draft'}
-          </Button>
-          <Button variant="gold" busy={saving === 'publish'} disabled={!!saving} onClick={() => void publish()}>
-            {published ? 'Update' : 'Publish'}
-          </Button>
+          {article && (
+            <Button variant="outline" onClick={() => setSharing(true)} title={article.owner ? `Owned by ${article.owner.name || article.owner.email}` : 'This article has no owner yet'}>
+              <Share2 className="h-4 w-4" aria-hidden="true" /> Share
+            </Button>
+          )}
+          {!readOnly && (permissions.canPublish || !published) && (
+            <Button variant="outline" busy={saving === 'draft'} disabled={!!saving} onClick={() => save(false)}>
+              {published ? 'Unpublish' : 'Save draft'}
+            </Button>
+          )}
+          {!readOnly && (permissions.canPublish || published) && (
+            <Button variant="gold" busy={saving === 'publish'} disabled={!!saving} onClick={() => void publish()}>
+              {published ? 'Update' : 'Publish'}
+            </Button>
+          )}
         </div>
       </div>
       <ErrorNote message={error} />
+      {edit.mode === 'view' && (
+        <div role="status" className="mb-4 flex items-center gap-3 rounded-xl border border-[#E5E2D9] bg-white px-4 py-3 text-[14px] text-[#4A4A4A]">
+          <Eye className="h-5 w-5 shrink-0 text-[#8C8679]" aria-hidden="true" />
+          <span>You can view this article. To change it, ask {article?.owner?.name || article?.owner?.email || 'its owner'} for edit access.</span>
+        </div>
+      )}
+      {edit.mode === 'locked' && (
+        <div role="status" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">
+          <Lock className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1"><strong className="font-semibold">{edit.by.name || edit.by.email}</strong> is editing this article, so it’s read-only for you. It opens for editing as soon as they’re done.</span>
+          {(permissions.canShare || permissions.canClaim) && (
+            <button type="button" onClick={() => void takeOver()} className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-amber-900 hover:bg-amber-100">Take over</button>
+          )}
+        </div>
+      )}
+      {edit.mode === 'checking' && <p className="mb-4 flex items-center gap-2 text-[13px] text-[#6B6B6B]"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Opening for editing…</p>}
+      {edit.mode === 'editing' && article && !permissions.canPublish && (
+        <p className="mb-4 text-[13px] text-[#6B6B6B]">You can edit {published ? 'and update' : 'and save'} this article. Publishing and unpublishing are for its owner and managers.</p>
+      )}
 
       <div className={cx('mt-2 grid grid-cols-1 gap-6', !panelHidden && 'lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]')}>
         {/* Writing column */}
         <div className="min-w-0 space-y-4">
-          <textarea value={meta.title} onChange={e => set('title')(e.target.value)} rows={1} placeholder="Article title"
+          <textarea value={meta.title} onChange={e => set('title')(e.target.value)} rows={1} placeholder="Article title" readOnly={readOnly}
             aria-label="Title" onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; }}
             className="field-sizing-content w-full resize-none overflow-hidden bg-transparent font-primary text-[34px] leading-tight text-[#1A1A1A] outline-none placeholder:text-[#A8A293]" />
-          <textarea value={meta.excerpt} onChange={e => set('excerpt')(e.target.value)} rows={2} maxLength={400}
+          <textarea value={meta.excerpt} onChange={e => set('excerpt')(e.target.value)} rows={2} maxLength={400} readOnly={readOnly}
             placeholder="A one or two sentence summary for cards and search results…" aria-label="Excerpt"
             className="field-sizing-content w-full resize-none bg-transparent text-[16px] leading-relaxed text-[#6B6B6B] outline-none placeholder:text-[#A8A293]" />
           <Card className="overflow-visible">
-            {editor && (
+            {editor && !readOnly && (
               <>
                 <Toolbar editor={editor} onLink={openLink} onImage={openImage} onShortcuts={() => setShortcuts(true)}
                   onFind={replace => setFind({ replace })} onSpecialChars={() => setSpecialChars(true)} onWordCount={() => setWordCount(true)}
@@ -604,11 +718,11 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
                 </nav>
               )}
               <label className="flex items-start gap-2 text-[13px] text-[#4A4A4A]">
-                <input type="checkbox" checked={meta.showToc} onChange={e => set('showToc')(e.target.checked)} className="mt-0.5 accent-[#C89B3C]" />
+                <input type="checkbox" checked={meta.showToc} disabled={readOnly} onChange={e => set('showToc')(e.target.checked)} className="mt-0.5 accent-[#C89B3C]" />
                 <span>Show the table of contents on the article<span className="block text-[12px] text-[#9A9A9A]">Readers see the section headings beside it and can jump to each.</span></span>
               </label>
             </Section>
-            <Section title="Details">
+            <Section locked={readOnly} title="Details">
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label htmlFor="article-category" className="text-[13px] font-medium text-[#3A3A3A]">Category</label>
@@ -627,8 +741,10 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
               </div>
               <TextInput label="Publish date" type="date" value={meta.date} onChange={set('date')} />
               <TextInput label="Read time" hint="blank = automatic" value={meta.readTime} onChange={set('readTime')} placeholder="7 min read" />
+              <TagInput label="Tags" hint={`up to ${MAX_TAGS}`} values={meta.tags} placeholder="Type a tag and press Enter"
+                onChange={tags => set('tags')(tags.slice(0, MAX_TAGS))} />
             </Section>
-            <Section title="Images">
+            <Section locked={readOnly} title="Images">
               <div>
                 <ImageField label="Feature image" value={meta.image} onChange={set('image')} />
                 <p className="mt-1 text-[12px] text-[#6B6B6B]">The article’s picture on the Insights page, in related articles and when it’s shared.</p>
@@ -644,14 +760,14 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
                 </div>
               )}
             </Section>
-            <Section title="SEO" defaultOpen={false} extra={meta.noIndex ? <span className="rounded-full bg-amber-50 px-2 text-[11px] font-semibold text-amber-700">Hidden</span> : undefined}>
+            <Section locked={readOnly} title="SEO" defaultOpen={false} extra={meta.noIndex ? <span className="rounded-full bg-amber-50 px-2 text-[11px] font-semibold text-amber-700">Hidden</span> : undefined}>
               <SeoSettings
                 value={{ seoTitle: meta.seoTitle, seoDescription: meta.seoDescription, seoImage: meta.seoImage, noIndex: meta.noIndex, slug: meta.slug }}
                 fallback={{ title: meta.title, excerpt: meta.excerpt, image: meta.image }}
                 savedSlug={article?.slug} published={published}
                 onChange={next => { setMeta(m => ({ ...m, ...next })); setDirty(true); }} />
             </Section>
-            <Section title="Author" id="article-author" extra={meta.author ? (
+            <Section locked={readOnly} title="Author" id="article-author" extra={meta.author ? (
               <>
                 <span className="max-w-[140px] truncate text-[12px] font-normal text-[#6B6B6B]">{meta.author}</span>
                 {!meta.authorImage && <span className="rounded-full bg-amber-50 px-2 text-[11px] font-semibold text-amber-700">Photo needed</span>}
@@ -660,7 +776,7 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
               <AuthorPicker value={{ author: meta.author, authorRole: meta.authorRole, authorImage: meta.authorImage }} people={people} me={me} knownPhotos={authorPhotos}
                 onChange={next => { setMeta(m => ({ ...m, ...next })); setDirty(true); }} />
             </Section>
-            <Section title="Pull quote" defaultOpen={false}>
+            <Section locked={readOnly} title="Pull quote" defaultOpen={false}>
               <TextArea label="Highlighted quote" hint="optional" value={meta.pullQuote} onChange={set('pullQuote')} rows={3} />
             </Section>
           </aside>
@@ -690,6 +806,10 @@ export default function ArticleEditor({ article }: { article?: SiteArticle }) {
         </div>
       )}
 
+      {sharing && article && (
+        <ShareDialog article={article} permissions={permissions} me={actor} people={people}
+          onChanged={() => router.refresh()} onClose={() => setSharing(false)} />
+      )}
       {linkDialog && (
         <LinkDialog initial={{ href: linkDialog.href, newTab: linkDialog.newTab }} selectedText={linkDialog.selectedText} editing={linkDialog.editing}
           siteLinks={siteLinks} onApply={applyLink} onRemove={removeLink} onClose={() => { setLinkDialog(null); editor?.commands.focus(); }} />
