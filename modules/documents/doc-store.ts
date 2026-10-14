@@ -8,7 +8,8 @@
  *
  * Who can do what:
  * - Seeing one follows its sharing: just the owner, the owner's department,
- *   or everyone. The CEO reads every document (a viewer unless allowed more).
+ *   an AE department's team (its guides, handbooks and the like; see the
+ *   department's resources), or everyone. The CEO reads every document (a viewer unless allowed more).
  * - The owner edits; with "Others can edit", so can everyone it's shared with
  *   (the CEO too, when it's shared with the company or the CEO's department).
  * - The owner can hide it from chosen departments and people, who then can't
@@ -20,9 +21,9 @@
  */
 
 import {
-  collection, deleteDoc, doc, getDocs, onSnapshot, runTransaction, serverTimestamp, setDoc, type Unsubscribe,
+  collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, runTransaction, serverTimestamp, setDoc, type Unsubscribe,
 } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase/storage';
 import { authDb, storage } from '@/lib/workstation/firebase';
 
 export const DOC_FORMAT = 'ae-doc';
@@ -47,8 +48,11 @@ export interface WorkDoc {
   content: string;
   category: string;
   description: string;
-  /** "all", "private", or the owner's AE Hub department. */
+  /** "all", "private", the owner's AE Hub department, or "team:<AE department id>". */
   department: string;
+  /** Kept under an AE department's team: its people see it in Documents. */
+  aeDepartmentId: string;
+  aeDepartmentName: string;
   othersCanEdit: boolean;
   hiddenFrom: HiddenFrom;
   owner: DocPerson;
@@ -61,6 +65,8 @@ export interface WorkDoc {
 export interface Viewer extends DocPerson {
   /** The viewer's AE Hub department, lowercased ('' if none). */
   department: string;
+  /** The viewer's AE department ('' if none). */
+  aeDepartmentId: string;
   isCeo: boolean;
 }
 
@@ -95,6 +101,8 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     category: str(d.category) || 'General',
     description: str(d.description),
     department: str(d.department) || 'all',
+    aeDepartmentId: str(d.aeDepartmentId),
+    aeDepartmentName: str(d.aeDepartmentName),
     othersCanEdit: d.othersCanEdit === true,
     hiddenFrom: hiddenFromOf(d),
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
@@ -112,7 +120,8 @@ export function shareOf(d: Pick<WorkDoc, 'department'>): DocShare {
 export function permissionsOf(d: WorkDoc, viewer: Viewer): DocPermissions {
   const owner = d.owner.uid === viewer.uid;
   const share = shareOf(d);
-  const sharedWith = (share === 'all' || (share === 'department' && !!viewer.department && d.department.toLowerCase() === viewer.department))
+  const inTeam = !!d.aeDepartmentId && d.aeDepartmentId === viewer.aeDepartmentId;
+  const sharedWith = (share === 'all' || inTeam || (share === 'department' && !d.aeDepartmentId && !!viewer.department && d.department.toLowerCase() === viewer.department))
     && !isHiddenFrom(d.hiddenFrom, viewer);
   return {
     // The CEO reads everything; editing still needs the owner to allow it.
@@ -136,12 +145,28 @@ const dayLabel = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', da
 /** Where a document opens in the workstation. */
 export function docPath(id: string, base = '/ws/documents') { return `${base}/${id}`; }
 
+/** Where a document in Documents opens: written ones in the editor, files at their address. */
+export async function openDocument(id: string, basePath: string): Promise<{ kind: 'page' | 'file'; href: string } | null> {
+  const snap = await getDoc(doc(authDb, 'documents', id));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  if (data.format === DOC_FORMAT) return { kind: 'page', href: docPath(id, basePath) };
+  return str(data.url) ? { kind: 'file', href: str(data.url) } : null;
+}
+
 export function subscribeDoc(id: string, onDoc: (d: WorkDoc | null) => void, onError: () => void): Unsubscribe {
   return onSnapshot(doc(authDb, 'documents', id), snap => onDoc(snap.exists() ? toWorkDoc(snap.id, snap.data()) : null), onError);
 }
 
+/** Where a team's document is kept: "team:<AE department id>", with the team on the record. */
+export function teamFields(team: { id: string; name: string }) {
+  return { department: `team:${team.id}`, aeDepartmentId: team.id, aeDepartmentName: team.name };
+}
+
 export async function createDoc(input: {
   title: string; content: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; hiddenFrom: HiddenFrom;
+  /** Keep it under this AE department's team (its people see it) instead. */
+  team?: { id: string; name: string };
 }, me: Viewer): Promise<string> {
   const ref_ = doc(collection(authDb, 'documents'));
   const now = new Date();
@@ -157,6 +182,7 @@ export async function createDoc(input: {
     type: 'DOC',
     category: input.category,
     department,
+    ...(input.team ? teamFields(input.team) : {}),
     uploadedBy: me.name,
     uploadedByUid: me.uid,
     uploadedByEmail: me.email,
@@ -217,7 +243,15 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
     if (changes.category !== undefined) update.category = changes.category;
     if (changes.description !== undefined) update.description = changes.description.trim();
     // Sharing is the owner's call.
-    if (can.canShare && changes.share !== undefined) update.department = changes.share === 'department' ? me.department || 'all' : changes.share;
+    if (can.canShare && changes.share !== undefined) {
+      if (changes.share === 'department' && current.aeDepartmentId) {
+        // A team's document stays with its team.
+      } else {
+        update.department = changes.share === 'department' ? me.department || 'all' : changes.share;
+        update.aeDepartmentId = '';
+        update.aeDepartmentName = '';
+      }
+    }
     if (can.canShare && changes.othersCanEdit !== undefined) update.othersCanEdit = changes.othersCanEdit;
     if (can.canShare && changes.hiddenFrom !== undefined) Object.assign(update, hiddenFields(changes.hiddenFrom));
     tx.update(snap.ref, update);
@@ -252,6 +286,46 @@ export async function releaseDoc(id: string, me: Viewer): Promise<void> {
 
 export async function removeDoc(id: string): Promise<void> {
   await deleteDoc(doc(authDb, 'documents', id));
+}
+
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+export function fileTypeOf(name: string, mime: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'pdf') return 'PDF';
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return 'XLSX';
+  if (['doc', 'docx'].includes(ext)) return 'DOCX';
+  if (['ppt', 'pptx'].includes(ext)) return 'PPTX';
+  if (['zip', 'rar', '7z'].includes(ext)) return 'ZIP';
+  if (mime.startsWith('image/')) return 'IMAGE';
+  return 'OTHER';
+}
+
+/**
+ * Uploads a file to AE Hub's storage and lists it in Documents, in AE Hub's
+ * shape (so AE Hub lists it too). `where`: everyone ("all"), an AE Hub
+ * department, or an AE department's team. Returns the document's id.
+ */
+export async function uploadFileDoc(file: File, opts: {
+  category: string; description: string; where: { department: string } | { team: { id: string; name: string } };
+}, me: DocPerson, onProgress?: (percent: number) => void): Promise<string> {
+  if (file.size > MAX_FILE_BYTES) throw new Error('Files can be up to 25 MB.');
+  const placement = 'team' in opts.where ? teamFields(opts.where.team) : { department: opts.where.department };
+  const folder = placement.department.replace(/[^\w-]+/g, '-');
+  const storagePath = `documents/${folder}/${Date.now()}_${file.name.replace(/[^\w.\- ]+/g, '_')}`;
+  const task = uploadBytesResumable(ref(storage, storagePath), file, { contentType: file.type || undefined });
+  await new Promise<void>((resolve, reject) => task.on('state_changed',
+    snap => onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)), reject, () => resolve()));
+  const url = await getDownloadURL(task.snapshot.ref);
+  const now = new Date();
+  const record = doc(collection(authDb, 'documents'));
+  await setDoc(record, {
+    name: file.name, url, storagePath, size: file.size, formattedSize: sizeLabel(file.size), dateModified: dayLabel(now),
+    type: fileTypeOf(file.name, file.type), category: opts.category, ...placement,
+    uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email, description: opts.description.trim(),
+    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0,
+  });
+  return record.id;
 }
 
 /** AE Hub's departments and staff, for choosing who a document is hidden from. */
@@ -359,6 +433,10 @@ export const DOC_TEMPLATES: DocTemplate[] = [
   {
     id: 'policy', label: 'Policy', description: 'Purpose, scope, the policy and who owns it', category: 'Policy & Handbook',
     content: (author, date) => `<p><strong>Owner:</strong> ${escapeHtml(author)}<br><strong>Effective:</strong> ${date}<br><strong>Review by:</strong> </p><h2>Purpose</h2><p></p><h2>Scope</h2><p></p><h2>Policy</h2><ol><li><p></p></li></ol><h2>Responsibilities</h2><p></p><h2>Related documents</h2><ul><li><p></p></li></ul>`,
+  },
+  {
+    id: 'handbook', label: 'Handbook or guide', description: 'How the team works, its tools and who to ask', category: 'Policy & Handbook',
+    content: (author, date) => `<p>Maintained by ${escapeHtml(author)} · last reviewed ${date}</p><h2>Welcome</h2><p>What this team does and who it serves.</p><h2>How we work</h2><ul><li><p>Working hours and shifts</p></li><li><p>How work is assigned and tracked</p></li><li><p>Meetings and check-ins</p></li></ul><h2>Processes</h2><ol><li><p></p></li></ol><h2>Tools and access</h2><table><tbody><tr><th><p>Tool</p></th><th><p>What it's for</p></th><th><p>How to get access</p></th></tr><tr><td><p></p></td><td><p></p></td><td><p></p></td></tr></tbody></table><h2>Who to ask</h2><ul><li><p></p></li></ul><h2>Your first week</h2><ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>Read this handbook</p></li><li data-type="taskItem" data-checked="false"><p>Meet the team</p></li></ul>`,
   },
   {
     id: 'brief', label: 'Project brief', description: 'Goals, scope, timeline and team', category: 'Operations',

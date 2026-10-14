@@ -72,7 +72,11 @@ const SHORTCUTS: Array<[string, string]> = [
   ['[ ] then space', 'Checklist'],
 ];
 
-export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string; basePath: string; isCeo: boolean }) {
+export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId = '' }: {
+  id: string; basePath: string; isCeo: boolean;
+  /** The viewer's AE department, for documents kept under its team. */
+  aeDepartmentId?: string;
+}) {
   const router = useRouter();
   const confirm = useConfirm();
   const { user } = useAuth();
@@ -107,7 +111,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
   const flushRef = useRef<() => Promise<void>>(async () => undefined);
 
   const me: Viewer | null = user && department !== null
-    ? { uid: user.uid, name: user.displayName || user.email || 'Team member', email: user.email || '', department, isCeo }
+    ? { uid: user.uid, name: user.displayName || user.email || 'Team member', email: user.email || '', department, isCeo, aeDepartmentId }
     : null;
   const meRef = useRef(me);
   useEffect(() => { meRef.current = me; });

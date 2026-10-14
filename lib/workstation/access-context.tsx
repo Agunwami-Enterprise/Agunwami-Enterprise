@@ -9,6 +9,8 @@ import { createContext, useContext } from 'react';
 
 export interface ClientAccess {
   kind: 'ceo' | 'department';
+  /** The AE department ('' for the CEO). */
+  departmentId: string;
   departmentName: string;
   title: string;
   pages: string[];

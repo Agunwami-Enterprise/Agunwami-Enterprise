@@ -10,8 +10,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, deleteDoc, doc, increment, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
+import { collection, deleteDoc, doc, increment, onSnapshot, updateDoc } from 'firebase/firestore';
+import { deleteObject, ref } from 'firebase/storage';
 import { Download, Eye, FilePlus2, FileText, FolderOpen, HardDrive, Pencil, Search, Trash2, Upload, Users } from 'lucide-react';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { authDb, storage } from '@/lib/workstation/firebase';
@@ -21,10 +21,10 @@ import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btn
 import { Overlay } from './task-board';
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
-import { DOC_FORMAT, docPath, hiddenFromOf, isHiddenFrom, type HiddenFrom } from '@/modules/documents/doc-store';
+import { DOC_FORMAT, MAX_FILE_BYTES, docPath, hiddenFromOf, isHiddenFrom, uploadFileDoc, type HiddenFrom } from '@/modules/documents/doc-store';
+import DepartmentResources from '@/modules/documents/components/DepartmentResources';
 
 const CATEGORIES = ['Policy & Handbook', 'Finance & Budget', 'Operations', 'Onboarding', 'Templates', 'Technical', 'Legal', 'General'];
-const MAX_BYTES = 25 * 1024 * 1024;
 
 interface WsDocument {
   id: string; name: string; url: string; storagePath: string; size: number; formattedSize: string;
@@ -34,6 +34,8 @@ interface WsDocument {
   written: boolean; othersCanEdit: boolean;
   /** Departments and people the owner hid it from. */
   hiddenFrom: HiddenFrom;
+  /** Kept under an AE department's team. */
+  aeDepartmentId: string; aeDepartmentName: string;
 }
 
 function toDocument(id: string, d: Record<string, unknown>): WsDocument {
@@ -44,18 +46,8 @@ function toDocument(id: string, d: Record<string, unknown>): WsDocument {
     uploadedByUid: String(d.uploadedByUid ?? ''), description: String(d.description ?? ''), createdAt: String(d.createdAt ?? ''),
     downloadCount: Number(d.downloadCount ?? 0) || 0,
     written: d.format === DOC_FORMAT, othersCanEdit: d.othersCanEdit === true, hiddenFrom: hiddenFromOf(d),
+    aeDepartmentId: String(d.aeDepartmentId ?? ''), aeDepartmentName: String(d.aeDepartmentName ?? ''),
   };
-}
-
-function fileType(name: string, mime: string): string {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  if (ext === 'pdf') return 'PDF';
-  if (['xls', 'xlsx', 'csv'].includes(ext)) return 'XLSX';
-  if (['doc', 'docx'].includes(ext)) return 'DOCX';
-  if (['ppt', 'pptx'].includes(ext)) return 'PPTX';
-  if (['zip', 'rar', '7z'].includes(ext)) return 'ZIP';
-  if (mime.startsWith('image/')) return 'IMAGE';
-  return 'OTHER';
 }
 
 const sizeLabel = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
@@ -63,7 +55,7 @@ const dateLabel = (iso: string) => (iso ? new Date(iso).toLocaleDateString('en-U
 
 type Tab = 'all' | 'company' | 'department' | 'mine';
 
-const scopeOf = (d: WsDocument) => (d.department === 'all' ? 'company' : d.department === 'private' ? 'private' : 'department');
+const scopeOf = (d: WsDocument) => (d.aeDepartmentId ? 'department' : d.department === 'all' ? 'company' : d.department === 'private' ? 'private' : 'department');
 
 export default function Documents() {
   const { user } = useAuth();
@@ -87,7 +79,11 @@ export default function Documents() {
 
   // What this person can see: company-wide, their department's, and their own; the CEO sees everything.
   const isCeo = access.kind === 'ceo';
-  const sharedWithMe = (d: WsDocument) => (d.department === 'all' || (!!department && d.department.toLowerCase() === department)) && !isHiddenFrom(d.hiddenFrom, { uid, department });
+  // My team: my AE department (its guides and team documents live there).
+  const team = access.kind === 'department' && access.departmentId ? { id: access.departmentId, name: access.departmentName } : undefined;
+  const sharedWithMe = (d: WsDocument) => (d.department === 'all'
+    || (d.aeDepartmentId ? d.aeDepartmentId === team?.id : !!department && d.department.toLowerCase() === department))
+    && !isHiddenFrom(d.hiddenFrom, { uid, department });
   const visible = (docs ?? []).filter(d => isCeo || d.uploadedByUid === uid || sharedWithMe(d));
   // Written documents: who can change them (the owner, or everyone it's shared with when allowed). The CEO reads.
   const canEditDoc = (d: WsDocument) => d.uploadedByUid === uid || (d.othersCanEdit && sharedWithMe(d));
@@ -137,6 +133,8 @@ export default function Documents() {
 
       {error && <ErrorNote>{error}</ErrorNote>}
 
+      {team && <DepartmentResources departmentId={team.id} basePath="/ws/documents" isCeo={false} aeHubDepartment={department} />}
+
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[{ id: 'all', label: 'All' }, { id: 'company', label: 'Company' }, { id: 'department', label: 'My Department' }, { id: 'mine', label: 'Mine' }]} />
 
       <Card title="Files" icon={FolderOpen} action={
@@ -169,7 +167,7 @@ export default function Documents() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0">
                   <Pill label={d.category} tone="gray" />
-                  <Pill label={{ company: 'Company', department: 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
+                  <Pill label={{ company: 'Company', department: d.aeDepartmentName ? `${d.aeDepartmentName} team` : 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
                   <button className="rounded-lg p-1.5 text-[#525252] hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5" onClick={() => void open(d)}
                     aria-label={`${d.written ? (canEditDoc(d) ? 'Edit' : 'Read') : 'Download'} ${d.name}`} title={d.written ? (canEditDoc(d) ? 'Open to edit' : 'Open to read') : 'Download'} disabled={!d.written && !d.url}>
                     {!d.written ? <Download className="h-4 w-4" /> : canEditDoc(d) ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -188,42 +186,39 @@ export default function Documents() {
 
       {creating && user && (
         <NewDocumentDialog basePath="/ws/documents" onClose={() => setCreating(false)}
-          me={{ uid, name: user.displayName || user.email || 'Team member', email: user.email || '', department, isCeo: access.kind === 'ceo' }} />
+          team={team}
+          me={{ uid, name: user.displayName || user.email || 'Team member', email: user.email || '', department, isCeo: access.kind === 'ceo', aeDepartmentId: team?.id ?? '' }} />
       )}
-      {uploading && <UploadDialog department={department} me={{ uid, name: user?.displayName || user?.email || 'Team member', email: user?.email || '' }} onClose={() => setUploading(false)} />}
+      {uploading && <UploadDialog department={department} team={team} me={{ uid, name: user?.displayName || user?.email || 'Team member', email: user?.email || '' }} onClose={() => setUploading(false)} />}
     </div>
   );
 }
 
-function UploadDialog({ department, me, onClose }: { department: string; me: { uid: string; name: string; email: string }; onClose: () => void }) {
+function UploadDialog({ department, team, me, onClose }: {
+  department: string;
+  /** My AE department: "My team" files are kept under it. */
+  team?: { id: string; name: string };
+  me: { uid: string; name: string; email: string };
+  onClose: () => void;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [category, setCategory] = useState('General');
-  const [share, setShare] = useState<'department' | 'all'>(department ? 'department' : 'all');
+  const [share, setShare] = useState<'department' | 'all'>(team || department ? 'department' : 'all');
   const [description, setDescription] = useState('');
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
 
   async function upload() {
     if (!file) return;
-    if (file.size > MAX_BYTES) { setError('Files can be up to 25 MB.'); return; }
+    if (file.size > MAX_FILE_BYTES) { setError('Files can be up to 25 MB.'); return; }
     setError('');
     setProgress(0);
-    const target = share === 'all' ? 'all' : department;
-    const storagePath = `documents/${target}/${Date.now()}_${file.name.replace(/[^\w.\- ]+/g, '_')}`;
     try {
-      const task = uploadBytesResumable(ref(storage, storagePath), file, { contentType: file.type || undefined });
-      await new Promise<void>((resolve, reject) => task.on('state_changed',
-        snap => setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)), reject, () => resolve()));
-      const url = await getDownloadURL(task.snapshot.ref);
-      const now = new Date();
-      await setDoc(doc(collection(authDb, 'documents')), {
-        name: file.name, url, storagePath, size: file.size, formattedSize: sizeLabel(file.size),
-        dateModified: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        type: fileType(file.name, file.type), category, department: target,
-        uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email, description: description.trim(),
-        createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0,
-      });
+      await uploadFileDoc(file, {
+        category, description,
+        where: share === 'all' ? { department: 'all' } : team ? { team } : { department },
+      }, me, setProgress);
       onClose();
     } catch {
       setError('The upload failed. Please try again.');
@@ -254,7 +249,7 @@ function UploadDialog({ department, me, onClose }: { department: string; me: { u
         <label className="block">
           <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Share with</span>
           <select className={field} value={share} onChange={e => setShare(e.target.value as 'department' | 'all')}>
-            {department && <option value="department">My department</option>}
+            {(team || department) && <option value="department">{team ? `My team (${team.name})` : 'My department'}</option>}
             <option value="all">Everyone (company-wide)</option>
           </select>
         </label>
