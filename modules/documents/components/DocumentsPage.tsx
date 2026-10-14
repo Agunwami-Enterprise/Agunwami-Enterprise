@@ -1,7 +1,11 @@
 ﻿'use client';
 
 import { AeOverlay } from '@/app/components/common/AeModal';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useAuth } from '@/lib/workstation/auth-context';
+import { subscribeUserProfile } from '@/modules/settings/services';
+import NewDocumentDialog from './NewDocumentDialog';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
 import {
   ALL_SOURCES, FeedError, FeedNotices, SourceBadge, SourceFilter, formatDate, sourcesOf, useFeed,
@@ -51,6 +55,10 @@ export default function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sourceF,    setSourceF]    = useState(ALL_SOURCES);
   const feed = useFeed<DocumentsFeed>('/api/ceo/documents');
+  const { user } = useAuth();
+  const [creating, setCreating] = useState(false);
+  const [department, setDepartment] = useState('');
+  useEffect(() => (user?.uid ? subscribeUserProfile(user.uid, p => setDepartment(String(p?.department ?? '').toLowerCase())) : undefined), [user?.uid]);
   const files: DocFile[] = feed.data?.items ?? [];
   const sources = sourcesOf(files);
 
@@ -77,13 +85,22 @@ export default function DocumentsPage() {
             <h1 className="text-[20px] font-bold text-gray-800 dark:text-white">Documents</h1>
             <p className="text-[12px] text-gray-500 dark:text-gray-400">Documents across the enterprise and every project, labelled by project</p>
           </div>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-1.5 self-start rounded-lg px-4 py-2.5 text-[13px] font-semibold text-[#1a1a1a] shadow-sm hover:opacity-90"
-            style={{ backgroundColor: '#f5bd02' }}
-          >
-            <UploadIcon /> Upload Document
-          </button>
+          <div className="flex flex-wrap gap-2 self-start">
+            <button
+              onClick={() => setShowUpload(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-white/10 dark:bg-transparent dark:text-gray-200 dark:hover:bg-white/5"
+            >
+              <UploadIcon /> Upload Document
+            </button>
+            <button
+              onClick={() => setCreating(true)}
+              disabled={!user}
+              className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-[13px] font-semibold text-[#1a1a1a] shadow-sm hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: '#f5bd02' }}
+            >
+              + New Document
+            </button>
+          </div>
         </div>
 
         <FeedNotices projects={feed.data.projects} enterpriseError={feed.data.enterpriseError} section="documents" />
@@ -195,7 +212,15 @@ export default function DocumentsPage() {
                           </td>
                           <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{formatDate(f.date)}</td>
                           <td className="px-5 py-3.5 text-right">
-                            {f.url ? (
+                            {f.written && f.source.id === 'enterprise' ? (
+                              <Link
+                                href={`/ceo/documents/${f.id}`}
+                                className="text-[12px] font-semibold hover:underline"
+                                style={{ color: '#f5bd02' }}
+                              >
+                                Open
+                              </Link>
+                            ) : f.url ? (
                               <a
                                 href={f.url}
                                 target="_blank"
@@ -224,6 +249,11 @@ export default function DocumentsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           UPLOAD MODAL
       ══════════════════════════════════════════════════════════════════ */}
+      {creating && user && (
+        <NewDocumentDialog basePath="/ceo/documents" onClose={() => setCreating(false)}
+          me={{ uid: user.uid, name: user.displayName || user.email || 'CEO', email: user.email || '', department, isCeo: true }} />
+      )}
+
       {showUpload && (
         <Overlay onClose={() => { setShowUpload(false); setPickedFile(null); }}>
           <div className="w-[460px] rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1e1e1e]">

@@ -26,6 +26,8 @@ export interface DocumentFeedItem {
   url?: string;
   uploadedBy?: string;
   size?: string;
+  /** Written in the AE Workstation: opens in its document editor rather than as a file. */
+  written?: boolean;
 }
 
 export interface DocumentsFeed {
@@ -71,6 +73,7 @@ function enterpriseItem(raw: RawRecord): DocumentFeedItem {
     ...(httpLink(url) ? { url } : {}),
     ...(text(raw.uploadedByName) || text(raw.uploadedBy) ? { uploadedBy: text(raw.uploadedByName) || text(raw.uploadedBy) } : {}),
     ...(text(raw.fileSize) || text(raw.size) ? { size: text(raw.fileSize) || text(raw.size) } : {}),
+    ...(text(raw.format) === 'ae-doc' ? { written: true } : {}),
   };
 }
 
@@ -82,6 +85,7 @@ export async function getDocumentsFeed(): Promise<DocumentsFeed> {
   const enterpriseDocs = token ? await listDocs('documents', 300).catch(() => []) : [];
 
   const items: DocumentFeedItem[] = [
+    // The CEO's list: every document, private ones included (the CEO reads them all).
     ...enterpriseDocs.map(doc => enterpriseItem(doc as RawRecord)),
     ...projectFeed.entries.flatMap(({ source, data }) => data.map(document => ({
       key: `${source.id}:${document.id}`,

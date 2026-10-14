@@ -22,7 +22,6 @@ export default async function EditArticlePage({ params }: { params: Promise<{ id
         <p className="max-w-md text-[15px] text-[#6B6B6B]">
           “{article.title || 'Untitled article'}” belongs to {article.owner?.name || article.owner?.email || 'someone else'}.
           Ask them to share it with you.
-          {permissions.canDelete && ' As CEO you can still delete it from the article list.'}
         </p>
         <Link href="/cpanel/insights" className="inline-flex items-center gap-1.5 rounded-lg bg-[#1F1F1F] px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-black">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> All articles

@@ -33,10 +33,7 @@ const ACCESS_BADGE: Record<ArticleAccess, { label: string; className: string }> 
   none: { label: 'No access', className: 'bg-red-50 text-red-700' },
 };
 
-/**
- * The articles this person can open, with their access; the CEO also sees the
- * rest (to delete them, not to open them).
- */
+/** The articles this person can open (the CEO: all of them), with their access. */
 export function InsightsManager({ articles: all, isCeo }: { articles: ArticleListItem[]; isCeo: boolean }) {
   const router = useRouter();
   const articles = all.filter(a => a.permissions.canView || isCeo);

@@ -20,12 +20,14 @@ export interface ArticleImage { src: string; alt: string; caption: string; showC
 /** "Team Retreat_2026.JPG" → "team-retreat-2026": the file name as stored. */
 const fileSlug = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
-export default function ImageDialog({ mode, initial, onInsert, onClose }: {
+export default function ImageDialog({ mode, initial, onInsert, onClose, upload = uploadImage }: {
   /** insert: a new image; replace: swap the selected image; details: edit its alt text and description. */
   mode: 'insert' | 'replace' | 'details';
   initial?: { alt: string; caption: string; showCaption: boolean };
   onInsert: (image: ArticleImage) => void;
   onClose: () => void;
+  /** Stores the chosen file and returns its address (default: the website's media library). */
+  upload?: (file: File, name: string) => Promise<string>;
 }) {
   const [tab, setTab] = useState<'upload' | 'url'>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -73,7 +75,7 @@ export default function ImageDialog({ mode, initial, onInsert, onClose }: {
     if (!file) { setError('Choose an image first.'); return; }
     setBusy(true);
     try {
-      onInsert({ src: await uploadImage(file, fileSlug(fileName) || fileSlug(file.name)), ...details });
+      onInsert({ src: await upload(file, fileSlug(fileName) || fileSlug(file.name)), ...details });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The upload failed. Please try again.');
       setBusy(false);

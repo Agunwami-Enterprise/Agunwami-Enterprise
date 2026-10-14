@@ -629,7 +629,7 @@ export async function saveArticle(input: Input, actor: ArticleActor, id?: string
   return saved!;
 }
 
-/** Deleting is for the owner, and the CEO (even without access to the article). */
+/** Deleting is for the owner, and the CEO (even when only a viewer). */
 export async function deleteArticle(id: string, actor: ArticleActor): Promise<void> {
   await updateCollection('articles', defaultArticles, articles => {
     const article = findArticle(articles, id);
