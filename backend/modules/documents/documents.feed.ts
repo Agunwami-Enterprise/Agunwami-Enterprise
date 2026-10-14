@@ -77,8 +77,7 @@ function enterpriseItem(raw: RawRecord): DocumentFeedItem {
   };
 }
 
-/** `viewerUid`: private documents (shared with no one) are listed only for their owner. */
-export async function getDocumentsFeed(viewerUid?: string): Promise<DocumentsFeed> {
+export async function getDocumentsFeed(): Promise<DocumentsFeed> {
   const [token, projectFeed] = await Promise.all([
     getAdminAuthToken().catch(() => null),
     ProjectsService.getProjectFeed('documents'),
@@ -86,9 +85,8 @@ export async function getDocumentsFeed(viewerUid?: string): Promise<DocumentsFee
   const enterpriseDocs = token ? await listDocs('documents', 300).catch(() => []) : [];
 
   const items: DocumentFeedItem[] = [
-    ...enterpriseDocs
-      .filter(doc => text((doc as RawRecord).department) !== 'private' || text((doc as RawRecord).uploadedByUid) === viewerUid)
-      .map(doc => enterpriseItem(doc as RawRecord)),
+    // The CEO's list: every document, private ones included (the CEO reads them all).
+    ...enterpriseDocs.map(doc => enterpriseItem(doc as RawRecord)),
     ...projectFeed.entries.flatMap(({ source, data }) => data.map(document => ({
       key: `${source.id}:${document.id}`,
       id: document.id,

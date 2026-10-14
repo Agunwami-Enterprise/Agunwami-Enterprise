@@ -194,8 +194,8 @@ export function fontsUsedIn(html: string): ArticleFont[] {
 /**
  * Who may do what with an article (C-panel). The owner can do everything,
  * including handing the article to someone else; managers edit, publish and
- * share; editors edit and save; viewers read. The CEO can delete any article
- * but only opens one they've been given access to.
+ * share; editors edit and save; viewers read. The CEO can read every article
+ * (a viewer unless given more) and delete any of them.
  */
 export const ARTICLE_ROLES = ['viewer', 'editor', 'manager'] as const;
 export type ArticleRole = (typeof ARTICLE_ROLES)[number];

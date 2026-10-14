@@ -28,8 +28,9 @@ import { SpecialCharsDialog, WordCountDialog } from '@/app/components/cpanel/art
 import LinkDialog, { type LinkTarget } from '@/app/components/cpanel/article/LinkDialog';
 import ImageDialog, { type ArticleImage } from '@/app/components/cpanel/article/ImageDialog';
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
+import HideFromPicker from './HideFromPicker';
 import {
-  DOC_CATEGORIES, DocConflictError, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
+  DOC_CATEGORIES, DocConflictError, type HiddenFrom, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
 } from '../doc-store';
 
@@ -42,12 +43,12 @@ type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | {
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 type LinkState = { from: number; to: number; href: string; newTab: boolean; selectedText: string; editing: boolean };
 type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string; showCaption: boolean } };
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; hiddenFrom: HiddenFrom }
 type Pending = Partial<Form> & { content?: boolean };
 
 const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department: 'My department', all: 'Everyone in the company' };
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, hiddenFrom: d.hiddenFrom });
 const timeAgo = (iso: string) => {
   if (!iso) return '';
   const date = new Date(iso);
@@ -79,7 +80,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, hiddenFrom: { departments: [], people: [] } });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
@@ -566,7 +567,12 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
               <h2 className="text-[14px] font-semibold text-[#292929] dark:text-white">Sharing</h2>
               <label className="block">
                 <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Who can see it</span>
-                <select className={panelField} value={form.share} disabled={!editing || !can.canShare} onChange={e => setField('share', e.target.value as DocShare)}>
+                <select className={panelField} value={form.share} disabled={!editing || !can.canShare} onChange={e => {
+                  const share = e.target.value as DocShare;
+                  setField('share', share);
+                  // Hiding from departments only applies to company-wide sharing.
+                  if (share !== 'all' && form.hiddenFrom.departments.length) setField('hiddenFrom', { ...form.hiddenFrom, departments: [] });
+                }}>
                   {(Object.keys(SHARE_LABELS) as DocShare[]).filter(s => s !== 'department' || me.department || form.share === 'department').map(s => <option key={s} value={s}>{SHARE_LABELS[s]}</option>)}
                 </select>
               </label>
@@ -574,6 +580,10 @@ export default function DocumentEditorPage({ id, basePath, isCeo }: { id: string
                 <input type="checkbox" checked={form.othersCanEdit} disabled={!editing || !can.canShare || form.share === 'private'} onChange={e => setField('othersCanEdit', e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
                 <span>Others can edit<span className="block text-[12px] text-[#8a8a8a]">Everyone who can see it can change it, one person at a time.</span></span>
               </label>
+              {(can.canShare || form.hiddenFrom.departments.length > 0 || form.hiddenFrom.people.length > 0) && (
+                <HideFromPicker value={form.hiddenFrom} share={form.share} ownerUid={docData.owner.uid} disabled={!editing || !can.canShare}
+                  onChange={next => setField('hiddenFrom', next)} />
+              )}
               {!can.canShare && <p className="text-[12px] text-[#8a8a8a]">Only the owner changes who can see or edit it.</p>}
             </section>
 

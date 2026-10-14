@@ -8,15 +8,19 @@
  *
  * Who can do what:
  * - Seeing one follows its sharing: just the owner, the owner's department,
- *   or everyone. The CEO sees all but private ones.
- * - The owner edits; with "Others can edit", so can everyone who can see it.
+ *   or everyone. The CEO reads every document (a viewer unless allowed more).
+ * - The owner edits; with "Others can edit", so can everyone it's shared with
+ *   (the CEO too, when it's shared with the company or the CEO's department).
+ * - The owner can hide it from chosen departments and people, who then can't
+ *   see or open it even though it's shared with the company or their
+ *   department (the CEO, who reads everything, excepted).
  * - The owner and the CEO delete.
  * - One person edits at a time (an edit lock, renewed while the editor is
  *   open), and a save never overwrites changes saved after it was opened.
  */
 
 import {
-  collection, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, setDoc, type Unsubscribe,
+  collection, deleteDoc, doc, getDocs, onSnapshot, runTransaction, serverTimestamp, setDoc, type Unsubscribe,
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { authDb, storage } from '@/lib/workstation/firebase';
@@ -31,6 +35,10 @@ export const MAX_CONTENT_BYTES = 900 * 1024;
 export type DocShare = 'private' | 'department' | 'all';
 
 export interface DocPerson { uid: string; name: string; email: string }
+/** An AE Hub department (people's profiles name it by id or by name). */
+export interface DocDepartment { id: string; name: string }
+/** Who can't see the document although it's shared with them. */
+export interface HiddenFrom { departments: DocDepartment[]; people: DocPerson[] }
 export interface DocLock extends DocPerson { at: string }
 
 export interface WorkDoc {
@@ -42,6 +50,7 @@ export interface WorkDoc {
   /** "all", "private", or the owner's AE Hub department. */
   department: string;
   othersCanEdit: boolean;
+  hiddenFrom: HiddenFrom;
   owner: DocPerson;
   createdAt: string;
   updatedAt: string;
@@ -59,6 +68,24 @@ export interface DocPermissions { canView: boolean; canEdit: boolean; canDelete:
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
+const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : []);
+
+/** The hidden-from lists stored on a document (written or uploaded). */
+export function hiddenFromOf(d: Record<string, unknown>): HiddenFrom {
+  return {
+    departments: list(d.hiddenDepartments).map(x => ({ id: str(x.id), name: str(x.name) })).filter(x => x.id || x.name),
+    people: list(d.hiddenPeople).map(x => ({ uid: str(x.uid), name: str(x.name), email: str(x.email) })).filter(x => x.uid),
+  };
+}
+
+const sameDept = (dept: DocDepartment, viewerDept: string) =>
+  !!viewerDept && (dept.id.toLowerCase() === viewerDept || dept.name.toLowerCase() === viewerDept);
+
+/** Whether the owner hid the document from this person (or their department). */
+export function isHiddenFrom(hidden: HiddenFrom, viewer: Pick<Viewer, 'uid' | 'department'>): boolean {
+  return hidden.people.some(p => p.uid === viewer.uid) || hidden.departments.some(d => sameDept(d, viewer.department));
+}
+
 export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
   const lock = d.lock && typeof d.lock === 'object' ? d.lock as Record<string, unknown> : null;
   return {
@@ -69,6 +96,7 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     description: str(d.description),
     department: str(d.department) || 'all',
     othersCanEdit: d.othersCanEdit === true,
+    hiddenFrom: hiddenFromOf(d),
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
     createdAt: str(d.createdAt),
     updatedAt: str(d.updatedAt),
@@ -84,11 +112,12 @@ export function shareOf(d: Pick<WorkDoc, 'department'>): DocShare {
 export function permissionsOf(d: WorkDoc, viewer: Viewer): DocPermissions {
   const owner = d.owner.uid === viewer.uid;
   const share = shareOf(d);
-  const canView = owner || share === 'all'
-    || (share === 'department' && (viewer.isCeo || (!!viewer.department && d.department.toLowerCase() === viewer.department)));
+  const sharedWith = (share === 'all' || (share === 'department' && !!viewer.department && d.department.toLowerCase() === viewer.department))
+    && !isHiddenFrom(d.hiddenFrom, viewer);
   return {
-    canView,
-    canEdit: owner || (canView && d.othersCanEdit),
+    // The CEO reads everything; editing still needs the owner to allow it.
+    canView: owner || sharedWith || viewer.isCeo,
+    canEdit: owner || (sharedWith && d.othersCanEdit),
     canDelete: owner || viewer.isCeo,
     canShare: owner,
   };
@@ -112,7 +141,7 @@ export function subscribeDoc(id: string, onDoc: (d: WorkDoc | null) => void, onE
 }
 
 export async function createDoc(input: {
-  title: string; content: string; category: string; description: string; share: DocShare; othersCanEdit: boolean;
+  title: string; content: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; hiddenFrom: HiddenFrom;
 }, me: Viewer): Promise<string> {
   const ref_ = doc(collection(authDb, 'documents'));
   const now = new Date();
@@ -139,11 +168,19 @@ export async function createDoc(input: {
     format: DOC_FORMAT,
     content: input.content,
     othersCanEdit: input.othersCanEdit,
+    ...hiddenFields(input.hiddenFrom),
     updatedBy: me.name,
     lock: { uid: me.uid, name: me.name, email: me.email, at: now.toISOString() },
     serverUpdatedAt: serverTimestamp(),
   });
   return ref_.id;
+}
+
+function hiddenFields(hidden: HiddenFrom) {
+  return {
+    hiddenDepartments: hidden.departments.map(d => ({ id: d.id, name: d.name })),
+    hiddenPeople: hidden.people.map(p => ({ uid: p.uid, name: p.name, email: p.email })),
+  };
 }
 
 export class DocConflictError extends Error {}
@@ -153,7 +190,7 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit' | 'hiddenFrom'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
@@ -182,6 +219,7 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
     // Sharing is the owner's call.
     if (can.canShare && changes.share !== undefined) update.department = changes.share === 'department' ? me.department || 'all' : changes.share;
     if (can.canShare && changes.othersCanEdit !== undefined) update.othersCanEdit = changes.othersCanEdit;
+    if (can.canShare && changes.hiddenFrom !== undefined) Object.assign(update, hiddenFields(changes.hiddenFrom));
     tx.update(snap.ref, update);
     return update.updatedAt as string;
   });
@@ -214,6 +252,25 @@ export async function releaseDoc(id: string, me: Viewer): Promise<void> {
 
 export async function removeDoc(id: string): Promise<void> {
   await deleteDoc(doc(authDb, 'documents', id));
+}
+
+/** AE Hub's departments and staff, for choosing who a document is hidden from. */
+export async function loadAudience(): Promise<{ departments: DocDepartment[]; people: DocPerson[] }> {
+  const [departments, users] = await Promise.all([getDocs(collection(authDb, 'departments')), getDocs(collection(authDb, 'users'))]);
+  return {
+    departments: departments.docs
+      .map(d => ({ id: d.id, name: str(d.data().name) || str(d.data().displayName) || (d.id === 'ceo' ? 'CEO Office' : d.id) }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    people: users.docs
+      .filter(d => {
+        const data = d.data();
+        const role = str(data.role).toLowerCase();
+        const status = str(data.accountStatus || data.status).toLowerCase();
+        return ['staff', 'admin', 'manager', 'ceo'].includes(role) && data.isDeleted !== true && !['fired', 'deleted', 'inactive'].includes(status);
+      })
+      .map(d => ({ uid: d.id, name: str(d.data().displayName) || str(d.data().fullName) || str(d.data().email) || 'Unnamed', email: str(d.data().email) }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
 }
 
 /** Uploads an image for a document to AE Hub's storage and returns its address. */

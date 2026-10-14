@@ -21,7 +21,7 @@ import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btn
 import { Overlay } from './task-board';
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
-import { DOC_FORMAT, docPath } from '@/modules/documents/doc-store';
+import { DOC_FORMAT, docPath, hiddenFromOf, isHiddenFrom, type HiddenFrom } from '@/modules/documents/doc-store';
 
 const CATEGORIES = ['Policy & Handbook', 'Finance & Budget', 'Operations', 'Onboarding', 'Templates', 'Technical', 'Legal', 'General'];
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -32,6 +32,8 @@ interface WsDocument {
   description: string; createdAt: string; downloadCount: number;
   /** Written in the workstation (opens in the editor) rather than uploaded. */
   written: boolean; othersCanEdit: boolean;
+  /** Departments and people the owner hid it from. */
+  hiddenFrom: HiddenFrom;
 }
 
 function toDocument(id: string, d: Record<string, unknown>): WsDocument {
@@ -41,7 +43,7 @@ function toDocument(id: string, d: Record<string, unknown>): WsDocument {
     category: String(d.category ?? 'General'), department: String(d.department ?? 'all'), uploadedBy: String(d.uploadedBy ?? ''),
     uploadedByUid: String(d.uploadedByUid ?? ''), description: String(d.description ?? ''), createdAt: String(d.createdAt ?? ''),
     downloadCount: Number(d.downloadCount ?? 0) || 0,
-    written: d.format === DOC_FORMAT, othersCanEdit: d.othersCanEdit === true,
+    written: d.format === DOC_FORMAT, othersCanEdit: d.othersCanEdit === true, hiddenFrom: hiddenFromOf(d),
   };
 }
 
@@ -83,8 +85,10 @@ export default function Documents() {
     () => { setDocs([]); setError('Documents could not be loaded.'); }), []);
   useEffect(() => (uid ? subscribeUserProfile(uid, p => setDepartment(String(p?.department ?? '').toLowerCase())) : undefined), [uid]);
 
-  // What this person can see: company-wide, their department's, and their own uploads.
-  const visible = (docs ?? []).filter(d => d.department === 'all' || (department && d.department.toLowerCase() === department) || d.uploadedByUid === uid);
+  // What this person can see: company-wide, their department's, and their own; the CEO sees everything.
+  const isCeo = access.kind === 'ceo';
+  const visible = (docs ?? []).filter(d => isCeo || d.uploadedByUid === uid
+    || ((d.department === 'all' || (department && d.department.toLowerCase() === department)) && !isHiddenFrom(d.hiddenFrom, { uid, department })));
   const term = search.trim().toLowerCase();
   const shown = visible.filter(d => {
     if (tab === 'company' && d.department !== 'all') return false;

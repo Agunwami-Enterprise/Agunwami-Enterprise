@@ -37,7 +37,9 @@ export function accessOf(article: Pick<SiteArticle, 'owner' | 'collaborators'>, 
 }
 
 export function permissionsOf(article: Pick<SiteArticle, 'owner' | 'collaborators'>, actor: Pick<ArticleActor, 'uid' | 'isCeo'>): ArticlePermissions {
-  const access = accessOf(article, actor.uid);
+  // The CEO reads every article: a viewer of those not shared with them.
+  const found = accessOf(article, actor.uid);
+  const access: ArticleAccess = found === 'none' && actor.isCeo ? 'viewer' : found;
   const rank = { none: 0, viewer: 1, editor: 2, unowned: 3, manager: 3, owner: 4 }[access];
   return {
     access,

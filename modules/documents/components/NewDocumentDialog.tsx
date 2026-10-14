@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, FileText, Loader2 } from 'lucide-react';
 import AeModal from '@/app/components/common/AeModal';
-import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocShare, type Viewer } from '../doc-store';
+import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocShare, type HiddenFrom, type Viewer } from '../doc-store';
+import HideFromPicker from './HideFromPicker';
 
 export default function NewDocumentDialog({ me, basePath, onClose }: { me: Viewer; basePath: string; onClose: () => void }) {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function NewDocumentDialog({ me, basePath, onClose }: { me: Viewe
   const [category, setCategory] = useState(DOC_TEMPLATES[0].category);
   const [share, setShare] = useState<DocShare>(me.department ? 'department' : 'private');
   const [othersCanEdit, setOthersCanEdit] = useState(false);
+  const [hiddenFrom, setHiddenFrom] = useState<HiddenFrom>({ departments: [], people: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const template = DOC_TEMPLATES.find(t => t.id === templateId) ?? DOC_TEMPLATES[0];
@@ -29,6 +31,8 @@ export default function NewDocumentDialog({ me, basePath, onClose }: { me: Viewe
         title: title.trim() || (template.id === 'blank' ? 'Untitled document' : `${template.label} – ${date}`),
         content: template.content(me.name, date),
         category, description: '', share, othersCanEdit: share !== 'private' && othersCanEdit,
+        // Departments are hidden from only when it's shared with the whole company.
+        hiddenFrom: share === 'private' ? { departments: [], people: [] } : { departments: share === 'all' ? hiddenFrom.departments : [], people: hiddenFrom.people },
       }, me);
       router.push(docPath(id, basePath));
     } catch {
@@ -93,6 +97,7 @@ export default function NewDocumentDialog({ me, basePath, onClose }: { me: Viewe
           <input type="checkbox" checked={share !== 'private' && othersCanEdit} disabled={share === 'private'} onChange={e => setOthersCanEdit(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
           <span>Others can edit<span className="block text-[12px] text-[#8a8a8a]">Everyone who can see it can change it, one person at a time. You can change this later.</span></span>
         </label>
+        <HideFromPicker value={hiddenFrom} onChange={setHiddenFrom} share={share} ownerUid={me.uid} />
         {error && <p role="alert" className="text-[13px] text-red-600">{error}</p>}
       </form>
     </AeModal>
