@@ -119,6 +119,50 @@ export default function DocumentsPage() {
   // The CEO can delete any workstation document or file, and the enterprise's own entries (e.g. samples).
   const canRemove = (f: DocFile, d: WorkDoc | undefined) => (d ? !!me && permissionsOf(d, me).canDelete : f.source.id === 'enterprise');
 
+  /** Deletes one row: a workstation document or file, or one of the enterprise's entries. */
+  async function deleteOne(f: DocFile, d: WorkDoc | undefined) {
+    if (d) {
+      await removeDoc(d.id);
+      return;
+    }
+    const res = await fetch(`/api/ceo/documents?id=${encodeURIComponent(f.id)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || 'It could not be deleted.');
+  }
+
+  // Selecting rows to delete several at once.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState<{ done: number; total: number } | null>(null);
+  const toggleSelected = (key: string) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  async function deleteSelected(rows: Array<{ f: DocFile; d: WorkDoc | undefined }>) {
+    if (!rows.length) return;
+    const ok = await confirm({
+      title: `Delete ${rows.length} item${rows.length === 1 ? '' : 's'}?`,
+      message: 'They’re removed for everyone (workstation files in AE Hub too). This can’t be undone.',
+      confirmLabel: `Delete ${rows.length}`, tone: 'danger',
+    });
+    if (!ok) return;
+    let failed = 0;
+    setBulkDeleting({ done: 0, total: rows.length });
+    for (const [i, { f, d }] of rows.entries()) {
+      try {
+        await deleteOne(f, d);
+      } catch {
+        failed++;
+      }
+      setBulkDeleting({ done: i + 1, total: rows.length });
+    }
+    setBulkDeleting(null);
+    setSelected(new Set());
+    if (failed) toast.error(`${rows.length - failed} deleted; ${failed} couldn’t be deleted.`);
+    else toast.success(`${rows.length} item${rows.length === 1 ? '' : 's'} deleted.`);
+    void feed.reload();
+  }
+
   async function removeRow(f: DocFile, d: WorkDoc | undefined) {
     const name = d?.title || f.name;
     const ok = await confirm({
@@ -129,12 +173,7 @@ export default function DocumentsPage() {
     if (!ok) return;
     setDeleting(f.key);
     try {
-      if (d) {
-        await removeDoc(d.id);
-      } else {
-        const res = await fetch(`/api/ceo/documents?id=${encodeURIComponent(f.id)}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || 'It could not be deleted.');
-      }
+      await deleteOne(f, d);
       toast.success(`“${name}” was deleted.`);
       void feed.reload();
     } catch (e) {
@@ -185,6 +224,11 @@ export default function DocumentsPage() {
       </span>
     );
   };
+
+  // The rows shown that can be deleted, and those of them selected.
+  const selectable = filtered.map(f => ({ f, d: hubDocOf(f) })).filter(r => canRemove(r.f, r.d));
+  const selectedRows = selectable.filter(r => selected.has(r.f.key));
+  const allSelected = selectable.length > 0 && selectedRows.length === selectable.length;
 
   if (feed.loading) return <SkeletonDocuments />;
   if (!feed.data) return <FeedError message={feed.error} onRetry={() => void feed.reload()} />;
@@ -271,12 +315,31 @@ export default function DocumentsPage() {
 
         {/* ── Files table ── */}
         <div>
-          <h2 className="mb-3 text-[14px] font-bold text-gray-800 dark:text-white">Files</h2>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <h2 className="text-[14px] font-bold text-gray-800 dark:text-white">Files</h2>
+            {selectedRows.length > 0 && (
+              <div className="ml-auto flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-[12px] dark:border-red-500/30 dark:bg-red-500/10">
+                <span className="font-semibold text-red-700 dark:text-red-300">{selectedRows.length} selected</span>
+                <button type="button" onClick={() => void deleteSelected(selectedRows)} disabled={!!bulkDeleting}
+                  className="rounded-lg bg-red-600 px-3 py-1 font-semibold text-white hover:bg-red-700 disabled:opacity-60">
+                  {bulkDeleting ? `Deleting ${bulkDeleting.done} of ${bulkDeleting.total}…` : 'Delete selected'}
+                </button>
+                <button type="button" onClick={() => setSelected(new Set())} disabled={!!bulkDeleting} className="font-semibold text-gray-600 hover:underline dark:text-gray-300">Clear</button>
+              </div>
+            )}
+          </div>
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-white/6 dark:bg-[#1e1e1e]">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-white/6">
+                    <th className="w-10 py-3 pl-5 pr-0 text-left">
+                      {selectable.length > 0 && (
+                        <input type="checkbox" aria-label="Select all" title="Select all you can delete" className="h-4 w-4 accent-[#f5bd02]"
+                          checked={allSelected} ref={el => { if (el) el.indeterminate = !allSelected && selectedRows.length > 0; }}
+                          onChange={() => setSelected(allSelected ? new Set() : new Set(selectable.map(r => r.f.key)))} />
+                      )}
+                    </th>
                     {['Name','Project','Type','Category','Date','Actions'].map((h, i) => (
                       <th
                         key={h}
@@ -291,7 +354,7 @@ export default function DocumentsPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-10 text-center text-[13px] text-gray-400">
+                      <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-gray-400">
                         No files found
                       </td>
                     </tr>
@@ -301,8 +364,14 @@ export default function DocumentsPage() {
                       return (
                         <tr
                           key={f.key}
-                          className="border-b border-gray-50 last:border-0 hover:bg-gray-50 dark:border-white/4 dark:hover:bg-white/3"
+                          className={`border-b border-gray-50 last:border-0 hover:bg-gray-50 dark:border-white/4 dark:hover:bg-white/3 ${selected.has(f.key) ? 'bg-amber-50/60 dark:bg-amber-500/5' : ''}`}
                         >
+                          <td className="w-10 py-3.5 pl-5 pr-0">
+                            {canRemove(f, hubDocOf(f)) && (
+                              <input type="checkbox" aria-label={`Select ${f.name}`} className="h-4 w-4 accent-[#f5bd02]"
+                                checked={selected.has(f.key)} onChange={() => toggleSelected(f.key)} />
+                            )}
+                          </td>
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <FileTypeIcon type={f.type} />

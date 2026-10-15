@@ -61,6 +61,8 @@ export interface WorkDoc {
   sharedDepartments: SharedDepartment[];
   othersCanEdit: boolean;
   orientation: DocOrientation;
+  /** Shown as one long page instead of separate pages (Google Docs' "Pageless"). */
+  pageless: boolean;
   /** An uploaded file opened for editing: the original, still downloadable. */
   originalFile: { name: string; url: string } | null;
   /** Made in the workstation (opens here: a document or a spreadsheet), rather than an uploaded file. */
@@ -108,6 +110,7 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     sharedDepartments: sharedDepartmentsOf(d),
     othersCanEdit: d.othersCanEdit === true,
     orientation: d.orientation === 'landscape' ? 'landscape' : 'portrait',
+    pageless: d.pageless === true,
     originalFile: str(d.originalFileUrl) ? { name: str(d.originalFileName) || 'Original file', url: str(d.originalFileUrl) } : null,
     written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT,
     kind: d.format === DOC_FORMAT ? 'doc' : d.format === SHEET_FORMAT ? 'sheet' : 'file',
@@ -200,6 +203,11 @@ export function fileDownloadHref(url: string, name: string): string {
   return `/api/documents/download?${new URLSearchParams({ url, name: fileNameOf(name, url) })}`;
 }
 
+/** A PDF shown in the page as it is (the browser's PDF viewer), e.g. a scanned one with no text to convert. */
+export function pdfViewHref(url: string, name: string): string {
+  return `/api/documents/download?${new URLSearchParams({ url, name: fileNameOf(name, url), inline: '1' })}`;
+}
+
 export function subscribeDoc(id: string, onDoc: (d: WorkDoc | null) => void, onError: () => void): Unsubscribe {
   return onSnapshot(doc(authDb, 'documents', id), snap => onDoc(snap.exists() ? toWorkDoc(snap.id, snap.data()) : null), onError);
 }
@@ -271,7 +279,7 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation' | 'project'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation' | 'pageless' | 'project'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
@@ -307,6 +315,7 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
     if (changes.project !== undefined) Object.assign(update, projectFields(changes.project));
     if (changes.description !== undefined) update.description = changes.description.trim();
     if (changes.orientation !== undefined) update.orientation = changes.orientation === 'landscape' ? 'landscape' : 'portrait';
+    if (changes.pageless !== undefined) update.pageless = changes.pageless === true;
     // Sharing is the owner's call.
     if (can.canShare && changes.share !== undefined) {
       if (changes.share === 'department' && current.aeDepartmentId) {
@@ -474,6 +483,27 @@ export async function convertFile(url: string, name: string): Promise<string> {
   const body = await res.json().catch(() => ({})) as { html?: string; error?: string };
   if (!res.ok || typeof body.html !== 'string') throw new Error(body.error || 'The file could not be opened.');
   return body.html;
+}
+
+/**
+ * Converted HTML for showing read-only: its inline (data:) images become blob
+ * addresses, which the editor shows (it only takes data: images once they're
+ * stored, see storeInlineImages).
+ */
+export function previewHtml(html: string): string {
+  if (!html.includes('src="data:') || typeof DOMParser === 'undefined') return html;
+  const page = new DOMParser().parseFromString(html, 'text/html');
+  for (const img of page.querySelectorAll<HTMLImageElement>('img[src^="data:"]')) {
+    const match = /^data:([^;,]+);base64,([^]*)$/.exec(img.getAttribute('src') ?? '');
+    if (!match) { img.remove(); continue; }
+    try {
+      const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+      img.src = URL.createObjectURL(new Blob([bytes], { type: match[1] }));
+    } catch {
+      img.remove();
+    }
+  }
+  return page.body.innerHTML;
 }
 
 /** Excel (.xlsx) and CSV files: shown and edited in the built-in spreadsheet. */

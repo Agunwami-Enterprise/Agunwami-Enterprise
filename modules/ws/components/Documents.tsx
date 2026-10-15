@@ -83,6 +83,8 @@ export default function Documents() {
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [converting, setConverting] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => onSnapshot(collection(authDb, 'documents'),
     snap => { setDocs(snap.docs.map(d => toDocument(d.id, d.data())).sort((a, b) => b.createdAt.localeCompare(a.createdAt))); setError(''); },
@@ -150,14 +152,44 @@ export default function Documents() {
     }
   }
 
+  const deleteOne = async (d: WsDocument) => {
+    await deleteDoc(doc(authDb, 'documents', d.id));
+    if (d.storagePath) await deleteObject(ref(storage, d.storagePath)).catch(() => undefined);
+  };
+
   async function remove(d: WsDocument) {
     if (!(await confirm({ title: `Delete ${d.name}?`, message: 'It’s removed for everyone, in AE Hub too. This can’t be undone.', confirmLabel: 'Delete', tone: 'danger' }))) return;
     try {
-      await deleteDoc(doc(authDb, 'documents', d.id));
-      if (d.storagePath) await deleteObject(ref(storage, d.storagePath)).catch(() => undefined);
+      await deleteOne(d);
     } catch {
       setError(`${d.name} could not be deleted.`);
     }
+  }
+
+  // Selecting several to delete at once: what you uploaded or wrote (the CEO: anything).
+  const canRemove = (d: WsDocument) => d.uploadedByUid === uid || isCeo;
+  const selectable = shown.filter(canRemove);
+  const selectedDocs = selectable.filter(d => selected.has(d.id));
+  const allSelected = selectable.length > 0 && selectedDocs.length === selectable.length;
+  const toggleSelected = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  async function removeSelected() {
+    const list = selectedDocs;
+    if (!list.length) return;
+    if (!(await confirm({ title: `Delete ${list.length} item${list.length === 1 ? '' : 's'}?`, message: 'They’re removed for everyone, in AE Hub too. This can’t be undone.', confirmLabel: `Delete ${list.length}`, tone: 'danger' }))) return;
+    let failed = 0;
+    setBulkDeleting({ done: 0, total: list.length });
+    for (const [i, d] of list.entries()) {
+      try { await deleteOne(d); } catch { failed++; }
+      setBulkDeleting({ done: i + 1, total: list.length });
+    }
+    setBulkDeleting(null);
+    setSelected(new Set());
+    setError(failed ? `${list.length - failed} deleted; ${failed} couldn’t be deleted.` : '');
   }
 
   return (
@@ -203,10 +235,36 @@ export default function Documents() {
         </div>
       }>
         {docs === null ? <Empty>Loading…</Empty> : shown.length === 0 ? <Empty>{visible.length === 0 ? 'No documents yet. Write one with “New document”, or upload a file.' : 'No documents match.'}</Empty> : (
+          <>
+          {selectable.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 border-b border-[#e5e5e5] pb-3 text-[13px] dark:border-white/10">
+              <label className="inline-flex items-center gap-2 font-medium text-[#525252] dark:text-gray-300">
+                <input type="checkbox" className="h-4 w-4 accent-[#f5bd02]" checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = !allSelected && selectedDocs.length > 0; }}
+                  onChange={() => setSelected(allSelected ? new Set() : new Set(selectable.map(d => d.id)))} />
+                Select all{selectable.length < shown.length ? ' you can delete' : ''}
+              </label>
+              {selectedDocs.length > 0 && (
+                <>
+                  <span className="text-[#8a8a8a]">{selectedDocs.length} selected</span>
+                  <button type="button" onClick={() => void removeSelected()} disabled={!!bulkDeleting}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#dc2626] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#b91c1c] disabled:opacity-60">
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden /> {bulkDeleting ? `Deleting ${bulkDeleting.done} of ${bulkDeleting.total}…` : 'Delete selected'}
+                  </button>
+                  <button type="button" onClick={() => setSelected(new Set())} disabled={!!bulkDeleting} className="text-[12px] font-semibold text-[#525252] hover:underline dark:text-gray-300">Clear</button>
+                </>
+              )}
+            </div>
+          )}
           <ul className="divide-y divide-[#e5e5e5] dark:divide-white/10">
             {shown.map(d => (
-              <li key={d.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <li key={d.id} className={`flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between ${selected.has(d.id) ? 'bg-[#fef9e7] dark:bg-[#f5bd02]/5' : ''}`}>
                 <div className="flex min-w-0 items-start gap-3">
+                  {selectable.length > 0 && (
+                    <span className="mt-2.5 w-4 shrink-0">
+                      {canRemove(d) && <input type="checkbox" aria-label={`Select ${d.name}`} className="h-4 w-4 accent-[#f5bd02]" checked={selected.has(d.id)} onChange={() => toggleSelected(d.id)} />}
+                    </span>
+                  )}
                   <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#fef3c7] text-[10px] font-bold text-[#806013] dark:bg-[#f5bd02]/15 dark:text-[#f5bd02]">{d.type === 'OTHER' ? 'FILE' : d.type}</span>
                   <div className="min-w-0">
                     <button type="button" onClick={() => void open(d)} disabled={!d.written && !d.url} className="block max-w-full truncate text-left text-[14px] font-semibold text-[#292929] hover:underline dark:text-white">{d.name}</button>
@@ -257,6 +315,7 @@ export default function Documents() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </Card>
 
