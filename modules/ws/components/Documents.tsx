@@ -21,14 +21,16 @@ import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btn
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, SHEET_FORMAT, canBecomeEditable, docPath, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, sharedDepartmentsOf, type SharedDepartment, type Viewer,
+  DOC_FORMAT, SHEET_FORMAT, canBecomeEditable, fileNameWithType, fileUrlOf, docPath, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, sharedDepartmentsOf, type SharedDepartment, type Viewer,
 } from '@/modules/documents/doc-store';
 import UploadDialog, { UPLOAD_CATEGORIES as CATEGORIES } from '@/modules/documents/components/UploadDialog';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
 
 
 interface WsDocument {
-  id: string; name: string; url: string; storagePath: string; size: number; formattedSize: string;
+  id: string; name: string; url: string; storagePath: string;
+  /** The file's name with its type (for files named without one). */
+  fileName: string; size: number; formattedSize: string;
   type: string; category: string; department: string; uploadedBy: string; uploadedByUid: string;
   description: string; createdAt: string; downloadCount: number;
   /** Written in the workstation (opens in the editor) rather than uploaded. */
@@ -37,11 +39,14 @@ interface WsDocument {
   aeDepartmentId: string; aeDepartmentName: string;
   /** Shared with these AE departments. */
   sharedDepartments: SharedDepartment[];
+  /** The project it's filed under ('' if none). */
+  projectId: string; projectName: string;
 }
 
 function toDocument(id: string, d: Record<string, unknown>): WsDocument {
   return {
-    id, name: String(d.name ?? 'Untitled'), url: String(d.url ?? ''), storagePath: String(d.storagePath ?? ''),
+    id, name: String(d.name || d.fileName || d.title || 'Untitled'), url: fileUrlOf(d), storagePath: String(d.storagePath ?? ''),
+    fileName: fileNameWithType(String(d.name || d.fileName || d.title || ''), fileUrlOf(d), String(d.type ?? '')),
     size: Number(d.size ?? 0) || 0, formattedSize: String(d.formattedSize ?? ''), type: String(d.type ?? 'OTHER'),
     category: String(d.category ?? 'General'), department: String(d.department ?? 'all'), uploadedBy: String(d.uploadedBy ?? ''),
     uploadedByUid: String(d.uploadedByUid ?? ''), description: String(d.description ?? ''), createdAt: String(d.createdAt ?? ''),
@@ -49,6 +54,7 @@ function toDocument(id: string, d: Record<string, unknown>): WsDocument {
     written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT, othersCanEdit: d.othersCanEdit === true,
     aeDepartmentId: String(d.aeDepartmentId ?? ''), aeDepartmentName: String(d.aeDepartmentName ?? ''),
     sharedDepartments: sharedDepartmentsOf(d),
+    projectId: String(d.projectId ?? ''), projectName: String(d.projectName ?? ''),
   };
 }
 
@@ -73,6 +79,7 @@ export default function Documents() {
   const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [project, setProject] = useState('');
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [converting, setConverting] = useState('');
@@ -100,15 +107,17 @@ export default function Documents() {
     if (tab === 'department' && scopeOf(d) !== 'department') return false;
     if (tab === 'mine' && d.uploadedByUid !== uid) return false;
     if (category && d.category !== category) return false;
+    if (project && d.projectId !== project) return false;
     if (term && ![d.name, d.description, d.uploadedBy, d.category].some(v => v.toLowerCase().includes(term))) return false;
     return true;
   });
   const totalBytes = visible.reduce((n, d) => n + d.size, 0);
+  const projectOptions = [...new Map(visible.filter(d => d.projectId).map(d => [d.projectId, d.projectName || 'Project'])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
   // Written documents open here, for editing when you can (you can switch to viewing there) and for reading otherwise.
   async function open(d: WsDocument) {
     // Word, text and web page files are shown in the document view; PDFs and others in the browser's viewer.
-    if (d.written || opensHere(d.name, d.url)) router.push(docPath(d.id));
+    if (d.written || opensHere(d.fileName, d.url)) router.push(docPath(d.id));
     else window.open(d.url, '_blank', 'noopener,noreferrer');
     await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
   }
@@ -127,13 +136,13 @@ export default function Documents() {
   async function editFile(d: WsDocument) {
     if (!(await confirm({
       title: `Edit ${d.name} here?`,
-      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. ${editNote(d.name, d.url)}${d.uploadedByUid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. ${editNote(d.fileName)}${d.uploadedByUid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Open in editor',
     }))) return;
     setConverting(d.id);
     setError('');
     try {
-      await makeFileEditable(d.id, me, d.name, d.url);
+      await makeFileEditable(d.id, me, d.fileName, d.url);
       router.push(docPath(d.id));
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : `${d.name} could not be opened for editing.`);
@@ -175,7 +184,7 @@ export default function Documents() {
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[{ id: 'all', label: 'All' }, { id: 'company', label: 'Company' }, { id: 'department', label: 'My Department' }, { id: 'mine', label: 'Mine' }]} />
 
       <Card title="Files" icon={FolderOpen} action={
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
           <label className="relative block sm:w-60">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a3a3a3]" aria-hidden />
             <input className={`${field} pl-9`} placeholder="Search documents" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search documents" />
@@ -184,6 +193,13 @@ export default function Documents() {
             <option value="">All categories</option>
             {CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
+          {/* Projects the documents here are filed under */}
+          {projectOptions.length > 0 && (
+            <select className={`${field} sm:w-48`} value={project} onChange={e => setProject(e.target.value)} aria-label="Project">
+              <option value="">All projects</option>
+              {projectOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          )}
         </div>
       }>
         {docs === null ? <Empty>Loading…</Empty> : shown.length === 0 ? <Empty>{visible.length === 0 ? 'No documents yet. Write one with “New document”, or upload a file.' : 'No documents match.'}</Empty> : (
@@ -201,6 +217,7 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2 pl-12 sm:pl-0">
+                  {d.projectName && <Pill label={d.projectName} tone="blue" />}
                   <Pill label={d.category} tone="gray" />
                   <Pill label={{ company: 'Company', department: d.department === 'departments' ? (d.sharedDepartments.length === 1 ? `${d.sharedDepartments[0].name} team` : `${d.sharedDepartments.length} departments`) : d.aeDepartmentName ? `${d.aeDepartmentName} team` : 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
                   {d.written ? (
@@ -211,12 +228,12 @@ export default function Documents() {
                     </button>
                   ) : (
                     <>
-                      {canBecomeEditable(d.name, d.url) && canEditDoc(d) && (
+                      {canBecomeEditable(d.fileName, d.url) && canEditDoc(d) && (
                         <button className={action} onClick={() => void editFile(d)} disabled={!!converting} aria-label={`Edit ${d.name}`} title="Open it in the editor to edit it">
                           {converting === d.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Pencil className="h-4 w-4" aria-hidden />} Edit
                         </button>
                       )}
-                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title={opensHere(d.name, d.url) ? 'Look at it here' : 'Open the file in a new tab'}>
+                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title={opensHere(d.fileName, d.url) ? 'Look at it here' : 'Open the file in a new tab'}>
                         <Eye className="h-4 w-4" aria-hidden /> View
                       </button>
                     </>
@@ -226,7 +243,7 @@ export default function Documents() {
                       <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
                     </button>
                   ) : d.url ? (
-                    <a className={action} href={fileDownloadHref(d.url, d.name)} download aria-label={`Download ${d.name}`} title="Download the file"
+                    <a className={action} href={fileDownloadHref(d.url, d.fileName)} download aria-label={`Download ${d.name}`} title="Download the file"
                       onClick={() => void updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined)}>
                       <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
                     </a>

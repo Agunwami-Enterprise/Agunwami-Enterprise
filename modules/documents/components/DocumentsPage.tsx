@@ -9,6 +9,8 @@ import { subscribeUserProfile } from '@/modules/settings/services';
 import { toast } from 'react-toastify';
 import NewDocumentDialog from './NewDocumentDialog';
 import UploadDialog from './UploadDialog';
+import { useProjects } from './ProjectPicker';
+import type { FeedSource } from '@/backend/modules/projects/projects.types';
 import {
   canBecomeEditable, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
 } from '../doc-store';
@@ -76,13 +78,13 @@ export default function DocumentsPage() {
     if (!me) return;
     const ok = await confirm({
       title: `Edit ${d.title} here?`,
-      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. ${editNote(d.title, d.fileUrl)}${d.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. ${editNote(d.fileName)}${d.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Open in editor',
     });
     if (!ok) return;
     setConverting(d.id);
     try {
-      await makeFileEditable(d.id, me, d.title, d.fileUrl);
+      await makeFileEditable(d.id, me, d.fileName, d.fileUrl);
       router.push(`/ceo/documents/${d.id}`);
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : `${d.title} could not be opened for editing.`);
@@ -90,13 +92,21 @@ export default function DocumentsPage() {
     }
   }
   const files: DocFile[] = feed.data?.items ?? [];
-  const sources = sourcesOf(files);
+  // A workstation file filed under a project is listed (and filtered) under that project.
+  const projects = useProjects();
+  const hubDocOf = (f: DocFile) => hubDocs.get(f.id) ?? (f.url ? hubByUrl.get(f.url) : undefined);
+  const sourceOf = (f: DocFile): FeedSource => {
+    const project = hubDocOf(f)?.project;
+    if (!project) return f.source;
+    return { id: project.id, name: project.name, kind: 'project', color: projects?.find(p => p.id === project.id)?.color || f.source.color };
+  };
+  const sources = sourcesOf(files.map(f => ({ source: sourceOf(f) })));
 
   const term = search.trim().toLowerCase();
   const filtered = files.filter(f => {
-    if (sourceF !== ALL_SOURCES && f.source.id !== sourceF) return false;
+    if (sourceF !== ALL_SOURCES && sourceOf(f).id !== sourceF) return false;
     if (tab !== 'all' && f.tab !== tab) return false;
-    if (term && ![f.name, f.category, f.source.name, f.uploadedBy ?? ''].some(v => v.toLowerCase().includes(term))) return false;
+    if (term && ![f.name, f.category, sourceOf(f).name, f.uploadedBy ?? ''].some(v => v.toLowerCase().includes(term))) return false;
     return true;
   });
 
@@ -119,16 +129,16 @@ export default function DocumentsPage() {
     if (!url) return <span className="text-[12px] text-gray-400" title="No download link was shared for this document">No file link</span>;
     return (
       <span className="inline-flex items-center gap-3">
-        {d && canEdit(d) && canBecomeEditable(d.title, url) && (
+        {d && canEdit(d) && canBecomeEditable(d.fileName, url) && (
           <button type="button" onClick={() => void editFile(d)} disabled={!!converting} title="Open it in the editor to edit it" className={link} style={{ color: '#f5bd02' }}>
             {converting === d.id ? 'Opening…' : 'Edit'}
           </button>
         )}
-        {d && opensHere(d.title, url)
+        {d && opensHere(d.fileName, url)
           ? <Link href={`/ceo/documents/${d.id}`} title="Look at it here" className={link} style={{ color: canEdit(d) ? undefined : '#f5bd02' }}>View</Link>
-          : <a href={url} target="_blank" rel="noopener noreferrer" title="Open the file in a new tab" className={link} style={{ color: d && canEdit(d) && canBecomeEditable(d.title, url) ? undefined : '#f5bd02' }}>View</a>}
+          : <a href={url} target="_blank" rel="noopener noreferrer" title="Open the file in a new tab" className={link} style={{ color: d && canEdit(d) && canBecomeEditable(d.fileName, url) ? undefined : '#f5bd02' }}>View</a>}
         {d
-          ? <a href={fileDownloadHref(url, d.title)} download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>
+          ? <a href={fileDownloadHref(url, d.fileName)} download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>
           : <a href={url} target="_blank" rel="noopener noreferrer" download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>}
       </span>
     );
@@ -262,7 +272,7 @@ export default function DocumentsPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-5 py-3.5"><SourceBadge source={f.source} /></td>
+                          <td className="px-5 py-3.5"><SourceBadge source={sourceOf(f)} /></td>
                           <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{f.type}</td>
                           <td className="px-5 py-3.5">
                             <span
@@ -274,7 +284,7 @@ export default function DocumentsPage() {
                           </td>
                           <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{formatDate(f.date)}</td>
                           <td className="px-5 py-3.5 text-right">
-                            {rowActions(f, hubDocs.get(f.id) ?? (f.url ? hubByUrl.get(f.url) : undefined))}
+                            {rowActions(f, hubDocOf(f))}
                           </td>
                         </tr>
                       );

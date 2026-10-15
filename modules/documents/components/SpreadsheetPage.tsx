@@ -26,10 +26,11 @@ import { subscribeUserProfile } from '@/modules/settings/services';
 import { compactSheets, parseSheets, prepareSheets, type StoredSheet } from '@/lib/documents/sheets';
 import DepartmentPicker from './DepartmentPicker';
 import SaveTemplateButton from './SaveTemplateButton';
+import ProjectPicker from './ProjectPicker';
 import { downloadSheets } from '../sheet-export';
 import {
   DOC_CATEGORIES, DocConflictError, convertSheetFile, defaultSheetFormat, editNote, fileDownloadHref, heldByOther, lockDoc, makeSheetEditable, permissionsOf, releaseDoc,
-  removeDoc, saveDoc, shareOf, subscribeDoc, type DocLock, type DocShare, type SharedDepartment, type Viewer, type WorkDoc,
+  removeDoc, saveDoc, shareOf, subscribeDoc, type DocLock, type DocProject, type DocShare, type SharedDepartment, type Viewer, type WorkDoc,
 } from '../doc-store';
 
 // The grid draws on a canvas in the browser: never on the server.
@@ -52,10 +53,10 @@ const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department:
 
 type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | { kind: 'locked'; by: DocLock } | { kind: 'view' };
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[] }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; project: DocProject | null }
 type Pending = Partial<Form & { sheets: true }>;
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, project: d.project });
 
 export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = '', startInView = false }: {
   id: string; basePath: string; isCeo: boolean; aeDepartmentId?: string; startInView?: boolean;
@@ -67,7 +68,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [] });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], project: null });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
@@ -137,7 +138,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
 
   // An uploaded Excel or CSV file: read it into the grid (read-only).
   const fileUrl = docData && isFile ? docData.fileUrl : '';
-  const fileName = docData?.title ?? '';
+  const fileName = docData?.fileName ?? '';
   useEffect(() => {
     if (!fileUrl) return;
     let cancelled = false;
@@ -277,7 +278,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
     if (!docData || !me) return;
     const ok = await confirm({
       title: `Edit ${docData.title}?`,
-      message: `It becomes a spreadsheet in the same place, shared the same way, and opens for editing. The original file stays available to download from the details. ${editNote(docData.title, docData.fileUrl)}${docData.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      message: `It becomes a spreadsheet in the same place, shared the same way, and opens for editing. The original file stays available to download from the details. ${editNote(docData.fileName)}${docData.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Edit it',
     });
     if (!ok) return;
@@ -387,7 +388,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
             </div>
           )}
           {isFile && docData ? (
-            <a href={fileDownloadHref(docData.fileUrl, docData.title)} download title="Download the original file" className={button}>
+            <a href={fileDownloadHref(docData.fileUrl, docData.fileName)} download title="Download the original file" className={button}>
               <Download className="h-4 w-4" aria-hidden="true" /> Download
             </a>
           ) : (
@@ -422,7 +423,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
       </div>
 
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
-      {fileError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{fileError} You can still download it.</p>}
+      {fileError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{fileError}{' '}{docData?.fileUrl && <a href={docData.fileUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Open the file</a>} or download it.</p>}
       {isFile && canEdit && !fileError && (
         <p role="status" className="flex items-center gap-2 rounded-lg border border-[#e5e5e5] bg-white px-4 py-2.5 text-[13px] text-[#525252] dark:border-white/10 dark:bg-[#1e1e1e] dark:text-gray-300">
           <Eye className="h-4 w-4 shrink-0" aria-hidden="true" /> This is the uploaded file, shown read-only. Choose Edit to turn it into a spreadsheet you can change.
@@ -468,6 +469,10 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
                   {!DOC_CATEGORIES.includes(form.category) && <option>{form.category}</option>}
                   {DOC_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Project <span className="font-normal text-[#a3a3a3]">(optional)</span></span>
+                <ProjectPicker className={panelField} value={form.project} disabled={!editing} onChange={project => setField('project', project)} />
               </label>
               <label className="block">
                 <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Description</span>
