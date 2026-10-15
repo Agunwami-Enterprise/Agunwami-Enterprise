@@ -383,6 +383,22 @@ export function fileNameOf(name: string, url = ''): string {
 
 export const isEditableFile = (name: string, url = '') => EDITABLE_FILE_TYPES.includes(fileExtOf(name, url));
 
+/**
+ * Files shown read-only in the document view (converted on the fly, the file itself unchanged).
+ * PDFs and images open in the browser's own viewer instead, which shows them as they are.
+ */
+export const isPreviewableFile = (name: string, url = '') => isEditableFile(name, url) && fileExtOf(name, url) !== 'pdf';
+
+/** An uploaded Word, PDF, text or web page file as HTML for the editor (converted on the server). */
+export async function convertFile(url: string, name: string): Promise<string> {
+  const res = await fetch('/api/documents/convert', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, name: fileNameOf(name, url) }),
+  });
+  const body = await res.json().catch(() => ({})) as { html?: string; error?: string };
+  if (!res.ok || typeof body.html !== 'string') throw new Error(body.error || 'The file could not be opened.');
+  return body.html;
+}
+
 /** What opening a file in the editor keeps, for the confirmation before it (PDFs keep less than Word files). */
 export function editNote(name: string, url = ''): string {
   return fileExtOf(name, url) === 'pdf'
@@ -424,12 +440,7 @@ export async function makeEditable(id: string, me: Viewer): Promise<void> {
   const fileUrl = str(data.url);
   const name = fileNameOf(str(data.name), fileUrl);
   if (!isEditableFile(name)) throw new Error('Only Word (.docx), PDF, text and web page files can be edited.');
-  const res = await fetch('/api/documents/convert', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: fileUrl, name }),
-  });
-  const body = await res.json().catch(() => ({})) as { html?: string; error?: string };
-  if (!res.ok || typeof body.html !== 'string') throw new Error(body.error || 'The file could not be opened for editing.');
-  const html = cleanPastedHtml(await storeInlineImages(body.html, me));
+  const html = cleanPastedHtml(await storeInlineImages(await convertFile(fileUrl, name), me));
   if (bytesOf(html) > MAX_CONTENT_BYTES) throw new Error('This file is too long to edit here. Download it instead.');
   const now = new Date();
   await updateDoc(ref_, {

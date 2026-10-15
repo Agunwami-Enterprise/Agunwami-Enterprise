@@ -33,6 +33,7 @@ import DepartmentPicker from './DepartmentPicker';
 import {
   DOC_CATEGORIES, DocConflictError, type DocOrientation, type SharedDepartment, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
+  convertFile, editNote, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable,
 } from '../doc-store';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -102,6 +103,10 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [spellcheck, setSpellcheck] = useState(true);
   const [words, setWords] = useState(0);
   const [uploads, setUploads] = useState(0);
+  // An uploaded file (not written here) is shown read-only, converted on the fly; Edit makes it a written document.
+  const [preview, setPreview] = useState<{ html: string } | { error: string } | null>(null);
+  const [converting, setConverting] = useState(false);
+  const previewRef = useRef<string | null>(null);
 
   const docRef = useRef<WorkDoc | null>(null);
   const baseRef = useRef('');
@@ -170,7 +175,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const showStored = useCallback((d: WorkDoc) => {
     if (!editor || editor.isDestroyed) return;
     // Loading isn't an edit: no save, and nothing to undo back past.
-    editor.chain().setMeta('addToHistory', false).setContent(d.content || '<p></p>', { emitUpdate: false }).run();
+    const content = d.written ? d.content : previewRef.current ?? '';
+    editor.chain().setMeta('addToHistory', false).setContent(content || '<p></p>', { emitUpdate: false }).run();
     setWords(editor.getText().split(/\s+/).filter(Boolean).length);
     setForm(formOf(d));
     baseRef.current = d.updatedAt;
@@ -198,6 +204,24 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     }, () => setLoadError('This document could not be loaded.'));
   }, [editor, id, showStored]);
 
+  const isFile = !!docData && !docData.written;
+  const previewable = !!docData && isFile && isPreviewableFile(docData.title, docData.fileUrl);
+  const fileUrl = docData && isFile ? docData.fileUrl : '';
+  const fileName = docData?.title ?? '';
+  useEffect(() => {
+    if (!previewable || !fileUrl) return;
+    let cancelled = false;
+    convertFile(fileUrl, fileName).then(html => {
+      if (cancelled) return;
+      previewRef.current = html;
+      setPreview({ html });
+      if (docRef.current) showStored(docRef.current);
+    }, e => {
+      if (!cancelled) setPreview({ error: e instanceof Error && e.message ? e.message : 'The file could not be shown here.' });
+    });
+    return () => { cancelled = true; };
+  }, [previewable, fileUrl, fileName, showStored]);
+
   // ── Edit lock: one person edits at a time ──
 
   const acquire = useCallback(async (force = false) => {
@@ -222,13 +246,35 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [wantEdit, setWantEdit] = useState(!startInView);
   useEffect(() => {
     if (!ready) return;
-    if (!canEdit || !wantEdit) {
+    // An uploaded file is only ever read here (Edit turns it into a written document first).
+    if (!canEdit || !wantEdit || isFile) {
       const t = setTimeout(() => setMode({ kind: 'view' }), 0);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => { setMode({ kind: 'checking' }); void acquire(); }, 0);
     return () => clearTimeout(t);
-  }, [ready, canEdit, wantEdit, acquire]);
+  }, [ready, canEdit, wantEdit, isFile, acquire]);
+
+  /** Turns the uploaded file into a written document (same place, same sharing) and starts editing it. */
+  async function editUpload() {
+    if (!docData || !me) return;
+    const ok = await confirm({
+      title: `Edit ${docData.title}?`,
+      message: `It becomes a written document in the same place, shared the same way, and opens for editing. The original file stays available to download from the details. ${editNote(docData.title, docData.fileUrl)}${docData.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      confirmLabel: 'Edit it',
+    });
+    if (!ok) return;
+    setConverting(true);
+    setError('');
+    try {
+      await makeEditable(id, me);
+      setWantEdit(true);
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : 'The file could not be opened for editing.');
+    } finally {
+      setConverting(false);
+    }
+  }
 
   /** Switches between Editing and Viewing; leaving Editing saves and lets someone else edit. */
   async function switchMode(next: 'editing' | 'viewing') {
@@ -454,7 +500,38 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     return <Centered><Loader2 className="h-6 w-6 animate-spin text-[#a3a3a3]" aria-hidden="true" /></Centered>;
   }
 
+  // PDFs, images and other files open in the browser's own viewer, which shows them as they are.
+  if (docData && isFile && !previewable) {
+    return (
+      <Centered>
+        <FileText className="h-10 w-10 text-[#a3a3a3]" aria-hidden="true" />
+        <p className="text-[16px] font-semibold text-[#292929] dark:text-white">{docData.title}</p>
+        <p className="max-w-md text-[14px] text-[#656565] dark:text-gray-400">This file opens in your browser’s own viewer.</p>
+        {error && <p role="alert" className="max-w-md text-[13px] text-red-600">{error}</p>}
+        <div className="flex flex-wrap justify-center gap-2">
+          {docData.fileUrl && (
+            <a href={docData.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-[#f5bd02] px-4 py-2 text-[14px] font-semibold text-[#1a1a1a] hover:opacity-90">
+              <Eye className="h-4 w-4" aria-hidden="true" /> Open the file
+            </a>
+          )}
+          {docData.fileUrl && (
+            <a href={fileDownloadHref(docData.fileUrl, docData.title)} download className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] px-4 py-2 text-[14px] font-medium text-[#292929] hover:bg-[#f5f5f5] dark:border-white/10 dark:text-gray-200">
+              <Download className="h-4 w-4" aria-hidden="true" /> Download
+            </a>
+          )}
+          {canEdit && isEditableFile(docData.title, docData.fileUrl) && (
+            <button type="button" onClick={() => void editUpload()} disabled={converting} className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] px-4 py-2 text-[14px] font-medium text-[#292929] hover:bg-[#f5f5f5] disabled:opacity-50 dark:border-white/10 dark:text-gray-200">
+              {converting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Pencil className="h-4 w-4" aria-hidden="true" />} Edit
+            </button>
+          )}
+        </div>
+        <Link href={basePath} className="text-[14px] font-semibold text-[#806013] hover:underline dark:text-[#f5bd02]">Back to Documents</Link>
+      </Centered>
+    );
+  }
+
   const status = mode.kind === 'loading' || !docData ? 'Loading…'
+    : isFile ? (previewable && !preview ? 'Opening the file…' : 'Uploaded file · read-only')
     : !editing ? (mode.kind === 'checking' ? 'Opening…' : canEdit && !wantEdit ? 'Viewing · switch to Editing to make changes' : 'Read-only')
       : saveState === 'saving' ? 'Saving…' : saveState === 'unsaved' ? 'Unsaved changes' : saveState === 'error' ? 'Not saved' : 'All changes saved';
   // Floating menus wrap on narrow screens instead of running off them.
@@ -489,8 +566,15 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
           </span>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* An uploaded file: Edit turns it into a document you can change */}
+          {isFile && canEdit && (
+            <button type="button" onClick={() => void editUpload()} disabled={converting} title="Turn it into a document you can edit"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#f5bd02] px-3 py-2 text-[13px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-50">
+              {converting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Pencil className="h-4 w-4" aria-hidden="true" />} Edit
+            </button>
+          )}
           {/* Editing or Viewing, for whoever can edit */}
-          {canEdit && (
+          {canEdit && !isFile && (
             <div role="radiogroup" aria-label="Mode" className="flex rounded-lg border border-[#e5e5e5] bg-white p-0.5 dark:border-white/10 dark:bg-transparent">
               {([['editing', 'Editing', Pencil, 'Edit the document'], ['viewing', 'Viewing', Eye, 'Read it without the editing tools']] as const).map(([value, label, Icon, hint]) => {
                 const on = value === 'editing' ? wantEdit : !wantEdit;
@@ -515,6 +599,12 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
               </button>
             ))}
           </div>
+          {isFile && docData ? (
+            <a href={fileDownloadHref(docData.fileUrl, docData.title)} download title="Download the original file"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] bg-white px-3 py-2 text-[13px] font-medium text-[#292929] hover:bg-[#f5f5f5] dark:border-white/10 dark:bg-transparent dark:text-gray-200 dark:hover:bg-white/5">
+              <Download className="h-4 w-4" aria-hidden="true" /> Download
+            </a>
+          ) : (
           <div className="relative">
             <button type="button" onClick={() => setDownloadOpen(v => !v)} aria-expanded={downloadOpen} disabled={!editor}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] bg-white px-3 py-2 text-[13px] font-medium text-[#292929] hover:bg-[#f5f5f5] dark:border-white/10 dark:bg-transparent dark:text-gray-200 dark:hover:bg-white/5">
@@ -533,6 +623,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
               </div>
             )}
           </div>
+          )}
           <button type="button" onClick={() => editor && printDoc(form.title, editor.getHTML(), form.orientation)} title="Print (Ctrl+P)" aria-label="Print"
             className="rounded-lg border border-[#e5e5e5] bg-white p-2 text-[#525252] hover:bg-[#f5f5f5] dark:border-white/10 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5">
             <Printer className="h-4 w-4" />
@@ -546,6 +637,16 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
       </div>
 
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
+      {isFile && preview && 'error' in preview && (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+          {preview.error} You can still download it.
+        </p>
+      )}
+      {isFile && can?.canEdit && (
+        <p role="status" className="flex items-center gap-2 rounded-lg border border-[#e5e5e5] bg-white px-4 py-2.5 text-[13px] text-[#525252] dark:border-white/10 dark:bg-[#1e1e1e] dark:text-gray-300">
+          <Eye className="h-4 w-4 shrink-0" aria-hidden="true" /> This is the uploaded file, shown read-only. Choose Edit to turn it into a document you can change.
+        </p>
+      )}
       {mode.kind === 'view' && can && !can.canEdit && (
         <p role="status" className="flex items-center gap-2 rounded-lg border border-[#e5e5e5] bg-white px-4 py-2.5 text-[13px] text-[#525252] dark:border-white/10 dark:bg-[#1e1e1e] dark:text-gray-300">
           <Eye className="h-4 w-4 shrink-0" aria-hidden="true" /> You can read this document. Only {docData?.owner.name || 'its owner'} can edit it{docData?.othersCanEdit ? '' : ' unless they let others edit'}.

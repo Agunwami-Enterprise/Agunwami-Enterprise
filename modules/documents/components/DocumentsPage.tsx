@@ -10,7 +10,7 @@ import { toast } from 'react-toastify';
 import NewDocumentDialog from './NewDocumentDialog';
 import UploadDialog from './UploadDialog';
 import {
-  downloadDocCopy, editNote, fileDownloadHref, isEditableFile, makeEditable, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
+  downloadDocCopy, editNote, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
 } from '../doc-store';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
 import {
@@ -124,7 +124,9 @@ export default function DocumentsPage() {
             {converting === d.id ? 'Opening…' : 'Edit'}
           </button>
         )}
-        <a href={url} target="_blank" rel="noopener noreferrer" title="Open the file in a new tab" className={link} style={{ color: d && canEdit(d) && isEditableFile(d.title, url) ? undefined : '#f5bd02' }}>View</a>
+        {d && isPreviewableFile(d.title, url)
+          ? <Link href={`/ceo/documents/${d.id}`} title="Read it here" className={link} style={{ color: canEdit(d) ? undefined : '#f5bd02' }}>View</Link>
+          : <a href={url} target="_blank" rel="noopener noreferrer" title="Open the file in a new tab" className={link} style={{ color: d && canEdit(d) && isEditableFile(d.title, url) ? undefined : '#f5bd02' }}>View</a>}
         {d
           ? <a href={fileDownloadHref(url, d.title)} download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>
           : <a href={url} target="_blank" rel="noopener noreferrer" download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>}

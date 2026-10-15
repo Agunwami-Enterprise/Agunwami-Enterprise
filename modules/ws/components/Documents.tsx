@@ -21,7 +21,7 @@ import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btn
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, docPath, downloadDocCopy, editNote, fileDownloadHref, isEditableFile, makeEditable, sharedDepartmentsOf, type SharedDepartment, type Viewer,
+  DOC_FORMAT, docPath, downloadDocCopy, editNote, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable, sharedDepartmentsOf, type SharedDepartment, type Viewer,
 } from '@/modules/documents/doc-store';
 import UploadDialog, { UPLOAD_CATEGORIES as CATEGORIES } from '@/modules/documents/components/UploadDialog';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
@@ -107,7 +107,8 @@ export default function Documents() {
 
   // Written documents open here, for editing when you can (you can switch to viewing there) and for reading otherwise.
   async function open(d: WsDocument) {
-    if (d.written) router.push(docPath(d.id));
+    // Word, text and web page files are shown in the document view; PDFs and others in the browser's viewer.
+    if (d.written || isPreviewableFile(d.name, d.url)) router.push(docPath(d.id));
     else window.open(d.url, '_blank', 'noopener,noreferrer');
     await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
   }
@@ -215,7 +216,7 @@ export default function Documents() {
                           {converting === d.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Pencil className="h-4 w-4" aria-hidden />} Edit
                         </button>
                       )}
-                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title="Open the file in a new tab">
+                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title={isPreviewableFile(d.name, d.url) ? 'Read it here' : 'Open the file in a new tab'}>
                         <Eye className="h-4 w-4" aria-hidden /> View
                       </button>
                     </>
