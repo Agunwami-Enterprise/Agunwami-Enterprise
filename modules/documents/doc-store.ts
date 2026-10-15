@@ -26,6 +26,8 @@ import { authDb, storage } from '@/lib/workstation/firebase';
 
 export const DOC_FORMAT = 'ae-doc';
 /** A spreadsheet made in the workstation (its sheets in `sheets`, as JSON; see lib/documents/sheets). */
+/** Marks records made in the workstation (AE Hub's own app adds documents to the same collection). */
+const CREATED_IN = 'workstation';
 export const SHEET_FORMAT = 'ae-sheet';
 export const DOC_CATEGORIES = ['General', 'Policy & Handbook', 'Finance & Budget', 'Operations', 'Onboarding', 'Templates', 'Technical', 'Legal', 'Meeting Notes', 'Reports'];
 /** How long an edit lock lasts without the editor renewing it. */
@@ -67,6 +69,8 @@ export interface WorkDoc {
   originalFile: { name: string; url: string } | null;
   /** Made in the workstation (opens here: a document or a spreadsheet), rather than an uploaded file. */
   written: boolean;
+  /** Made or uploaded in the workstation (not in AE Hub's own app): with no project, it's the enterprise's. */
+  fromWorkstation: boolean;
   kind: 'doc' | 'sheet' | 'file';
   /** A spreadsheet's sheets (JSON). */
   sheets: string;
@@ -113,6 +117,7 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     pageless: d.pageless === true,
     originalFile: str(d.originalFileUrl) ? { name: str(d.originalFileName) || 'Original file', url: str(d.originalFileUrl) } : null,
     written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT,
+    fromWorkstation: d.createdIn === CREATED_IN || d.format === DOC_FORMAT || d.format === SHEET_FORMAT,
     kind: d.format === DOC_FORMAT ? 'doc' : d.format === SHEET_FORMAT ? 'sheet' : 'file',
     sheets: d.format === SHEET_FORMAT ? str(d.sheets) : '',
     project: str(d.projectId) ? { id: str(d.projectId), name: str(d.projectName) || 'Project' } : null,
@@ -260,6 +265,7 @@ export async function createDoc(input: {
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
     // Made in the workstation only.
+    createdIn: CREATED_IN,
     format: input.sheets ? SHEET_FORMAT : DOC_FORMAT,
     content: input.sheets ? '' : input.content,
     ...(input.sheets ? { sheets: input.sheets } : {}),
@@ -407,7 +413,7 @@ export async function uploadFileDoc(file: File, opts: {
     name: file.name, url, storagePath, size: file.size, formattedSize: sizeLabel(file.size), dateModified: dayLabel(now),
     type: fileTypeOf(file.name, file.type), category: opts.category, ...placement, ...projectFields(opts.project),
     uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email, description: opts.description.trim(),
-    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0,
+    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0, createdIn: CREATED_IN,
   });
   return record.id;
 }
@@ -424,7 +430,7 @@ export async function addFileRecord(file: { url: string; name: string; size?: nu
     name: file.name, url: file.url, storagePath: '', size: file.size ?? 0, formattedSize: file.size ? sizeLabel(file.size) : '',
     dateModified: dayLabel(now), type: fileTypeOf(file.name, ''), category: 'General', department: 'private', sharedDepartments: [],
     uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email, description: '',
-    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0,
+    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0, createdIn: CREATED_IN,
   });
   return record.id;
 }

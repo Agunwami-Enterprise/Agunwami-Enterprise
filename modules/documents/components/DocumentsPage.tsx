@@ -10,7 +10,7 @@ import { toast } from 'react-toastify';
 import NewDocumentDialog from './NewDocumentDialog';
 import UploadDialog from './UploadDialog';
 import { useProjects } from './ProjectPicker';
-import type { FeedSource } from '@/backend/modules/projects/projects.types';
+import { ENTERPRISE_SOURCE, type FeedSource } from '@/backend/modules/projects/projects.types';
 import {
   canBecomeEditable, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, permissionsOf, removeDoc, subscribeDocs, type Viewer, type WorkDoc,
 } from '../doc-store';
@@ -67,7 +67,21 @@ export default function DocumentsPage() {
   // The workstation's documents (AE Hub's): written ones open here, read-only unless the CEO was given
   // editing; uploaded Word, text and web page files can be opened for editing by whoever can edit them.
   const [hubDocs, setHubDocs] = useState<Map<string, WorkDoc>>(new Map());
-  useEffect(() => (user?.uid ? subscribeDocs(setHubDocs, () => setHubDocs(new Map())) : undefined), [user?.uid]);
+  // Workstation documents seen while the page is open: one that's gone was deleted (here or elsewhere),
+  // so its row goes at once instead of waiting for AE Hub's report, which is cached for a minute.
+  const [seenHub, setSeenHub] = useState<{ ids: Set<string>; urls: Set<string> }>({ ids: new Set(), urls: new Set() });
+  useEffect(() => (user?.uid ? subscribeDocs(next => {
+    setHubDocs(next);
+    setSeenHub(prev => {
+      const ids = new Set(prev.ids);
+      const urls = new Set(prev.urls);
+      for (const d of next.values()) { ids.add(d.id); if (d.fileUrl) urls.add(d.fileUrl); }
+      return ids.size === prev.ids.size && urls.size === prev.urls.size ? prev : { ids, urls };
+    });
+  }, () => setHubDocs(new Map())) : undefined), [user?.uid]);
+  // Rows deleted here, hidden straight away.
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const markRemoved = (f: DocFile) => setRemoved(prev => new Set(prev).add(f.key));
   const me: Viewer | null = user ? { uid: user.uid, name: user.displayName || user.email || 'CEO', email: user.email || '', department, isCeo: true, aeDepartmentId: '' } : null;
   // AE Hub's feed may use its own ids: files are also matched by their address.
   const hubByUrl = new Map([...hubDocs.values()].filter(d => d.fileUrl).map(d => [d.fileUrl, d]));
@@ -91,13 +105,18 @@ export default function DocumentsPage() {
       setConverting('');
     }
   }
-  const files: DocFile[] = feed.data?.items ?? [];
+  const liveUrls = new Set([...hubDocs.values()].map(d => d.fileUrl).filter(Boolean));
+  const deletedHubDoc = (f: DocFile) => (seenHub.ids.has(f.id) && !hubDocs.has(f.id))
+    || (!!f.url && seenHub.urls.has(f.url) && !liveUrls.has(f.url) && !hubDocs.has(f.id));
+  const files: DocFile[] = (feed.data?.items ?? []).filter(f => !removed.has(f.key) && !deletedHubDoc(f));
   // A workstation file filed under a project is listed (and filtered) under that project.
   const projects = useProjects();
   const hubDocOf = (f: DocFile) => hubDocs.get(f.id) ?? (f.url ? hubByUrl.get(f.url) : undefined);
   const sourceOf = (f: DocFile): FeedSource => {
-    const project = hubDocOf(f)?.project;
-    if (!project) return f.source;
+    const d = hubDocOf(f);
+    const project = d?.project;
+    // Made in the workstation with no project: the enterprise's own, not AE Hub's (where it's stored).
+    if (!project) return d?.fromWorkstation ? ENTERPRISE_SOURCE : f.source;
     return { id: project.id, name: project.name, kind: 'project', color: projects?.find(p => p.id === project.id)?.color || f.source.color };
   };
   const sources = sourcesOf(files.map(f => ({ source: sourceOf(f) })));
@@ -151,6 +170,7 @@ export default function DocumentsPage() {
     for (const [i, { f, d }] of rows.entries()) {
       try {
         await deleteOne(f, d);
+        markRemoved(f);
       } catch {
         failed++;
       }
@@ -174,6 +194,7 @@ export default function DocumentsPage() {
     setDeleting(f.key);
     try {
       await deleteOne(f, d);
+      markRemoved(f);
       toast.success(`“${name}” was deleted.`);
       void feed.reload();
     } catch (e) {
