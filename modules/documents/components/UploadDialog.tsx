@@ -11,9 +11,10 @@ import { useRef, useState } from 'react';
 import { Loader2, Upload } from 'lucide-react';
 import AeModal from '@/app/components/common/AeModal';
 import {
-  MAX_FILE_BYTES, canBecomeEditable, editNote, fileExtOf, isSheetFile, makeFileEditable, sizeLabel, uploadFileDoc, type SharedDepartment, type Viewer,
+  MAX_FILE_BYTES, type DocProject, canBecomeEditable, editNote, fileExtOf, isSheetFile, makeFileEditable, sizeLabel, uploadFileDoc, type SharedDepartment, type Viewer,
 } from '../doc-store';
 import DepartmentPicker from './DepartmentPicker';
+import ProjectPicker from './ProjectPicker';
 
 export const UPLOAD_CATEGORIES = ['Policy & Handbook', 'Finance & Budget', 'Operations', 'Onboarding', 'Templates', 'Technical', 'Legal', 'General'];
 
@@ -47,6 +48,7 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
   const [share, setShare] = useState<Share>(team || department ? 'department' : 'all');
   const [departments, setDepartments] = useState<SharedDepartment[]>(team ? [team] : []);
   const [description, setDescription] = useState('');
+  const [project, setProject] = useState<DocProject | null>(null);
   // Word, PDF, text and web page files can be edited here. Most open in the editor unless unticked;
   // PDFs stay as they are unless ticked, since they're usually kept as they are.
   const [editChoice, setEditChoice] = useState<boolean | null>(null);
@@ -66,7 +68,7 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
     let id: string;
     try {
       id = await uploadFileDoc(file, {
-        category, description,
+        category, description, project,
         where: share === 'all' || share === 'private' ? { department: share } : share === 'departments' ? { departments } : team ? { team } : { department },
       }, me, setProgress);
     } catch (e) {
@@ -131,6 +133,10 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
           </label>
         </div>
         {share === 'departments' && <DepartmentPicker value={departments} onChange={setDepartments} ownTeamId={team?.id} />}
+        <label className="block">
+          <span className={label}>Project (optional: which project it belongs to)</span>
+          <ProjectPicker className={field} value={project} onChange={setProject} />
+        </label>
         <label className="block">
           <span className={label}>Description (optional)</span>
           <input className={field} value={description} maxLength={300} onChange={e => setDescription(e.target.value)} />

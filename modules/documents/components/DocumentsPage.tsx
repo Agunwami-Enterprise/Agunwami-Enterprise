@@ -9,6 +9,8 @@ import { subscribeUserProfile } from '@/modules/settings/services';
 import { toast } from 'react-toastify';
 import NewDocumentDialog from './NewDocumentDialog';
 import UploadDialog from './UploadDialog';
+import { useProjects } from './ProjectPicker';
+import type { FeedSource } from '@/backend/modules/projects/projects.types';
 import {
   canBecomeEditable, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
 } from '../doc-store';
@@ -90,13 +92,21 @@ export default function DocumentsPage() {
     }
   }
   const files: DocFile[] = feed.data?.items ?? [];
-  const sources = sourcesOf(files);
+  // A workstation file filed under a project is listed (and filtered) under that project.
+  const projects = useProjects();
+  const hubDocOf = (f: DocFile) => hubDocs.get(f.id) ?? (f.url ? hubByUrl.get(f.url) : undefined);
+  const sourceOf = (f: DocFile): FeedSource => {
+    const project = hubDocOf(f)?.project;
+    if (!project) return f.source;
+    return { id: project.id, name: project.name, kind: 'project', color: projects?.find(p => p.id === project.id)?.color || f.source.color };
+  };
+  const sources = sourcesOf(files.map(f => ({ source: sourceOf(f) })));
 
   const term = search.trim().toLowerCase();
   const filtered = files.filter(f => {
-    if (sourceF !== ALL_SOURCES && f.source.id !== sourceF) return false;
+    if (sourceF !== ALL_SOURCES && sourceOf(f).id !== sourceF) return false;
     if (tab !== 'all' && f.tab !== tab) return false;
-    if (term && ![f.name, f.category, f.source.name, f.uploadedBy ?? ''].some(v => v.toLowerCase().includes(term))) return false;
+    if (term && ![f.name, f.category, sourceOf(f).name, f.uploadedBy ?? ''].some(v => v.toLowerCase().includes(term))) return false;
     return true;
   });
 
@@ -262,7 +272,7 @@ export default function DocumentsPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-5 py-3.5"><SourceBadge source={f.source} /></td>
+                          <td className="px-5 py-3.5"><SourceBadge source={sourceOf(f)} /></td>
                           <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{f.type}</td>
                           <td className="px-5 py-3.5">
                             <span
@@ -274,7 +284,7 @@ export default function DocumentsPage() {
                           </td>
                           <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{formatDate(f.date)}</td>
                           <td className="px-5 py-3.5 text-right">
-                            {rowActions(f, hubDocs.get(f.id) ?? (f.url ? hubByUrl.get(f.url) : undefined))}
+                            {rowActions(f, hubDocOf(f))}
                           </td>
                         </tr>
                       );

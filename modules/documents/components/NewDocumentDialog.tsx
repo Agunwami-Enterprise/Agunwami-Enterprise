@@ -13,9 +13,10 @@ import { useRouter } from 'next/navigation';
 import { Check, FileSpreadsheet, FileText, Loader2, RectangleHorizontal, RectangleVertical, Trash2, Upload } from 'lucide-react';
 import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import { SHEET_TEMPLATES } from '@/lib/documents/sheets';
-import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocOrientation, type DocShare, type SharedDepartment, type Viewer } from '../doc-store';
+import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocOrientation, type DocProject, type DocShare, type SharedDepartment, type Viewer } from '../doc-store';
 import { addTemplate, deleteTemplate, getTemplate, isTemplateFile, listTemplates, templateFromFile, templateNameOf, type CustomTemplate } from '../template-store';
 import DepartmentPicker from './DepartmentPicker';
+import ProjectPicker from './ProjectPicker';
 
 type Kind = 'doc' | 'sheet';
 /** A choice in the grid: a built-in template ("b:<id>") or one the company added ("c:<id>"). */
@@ -41,6 +42,7 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
   const [departments, setDepartments] = useState<SharedDepartment[]>(team ? [team] : []);
   const [othersCanEdit, setOthersCanEdit] = useState(false);
   const [orientation, setOrientation] = useState<DocOrientation>('portrait');
+  const [project, setProject] = useState<DocProject | null>(null);
   const [custom, setCustom] = useState<CustomTemplate[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -109,6 +111,7 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
         team: share === 'department' ? team : undefined,
         departments: share === 'departments' ? departments : undefined,
         orientation,
+        project,
       }, me);
       await onCreated?.(id, name);
       router.push(docPath(id, basePath));
@@ -203,6 +206,10 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
           </label>
         </div>
         {share === 'departments' && <DepartmentPicker value={departments} onChange={setDepartments} ownTeamId={team?.id} />}
+        <label className="block">
+          <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Project <span className="font-normal text-[#a3a3a3]">(optional: which project it belongs to)</span></span>
+          <ProjectPicker className={field} value={project} onChange={setProject} />
+        </label>
         {kind === 'doc' && (
           <fieldset>
             <legend className="mb-2 text-[13px] font-medium text-[#525252] dark:text-gray-300">Page</legend>

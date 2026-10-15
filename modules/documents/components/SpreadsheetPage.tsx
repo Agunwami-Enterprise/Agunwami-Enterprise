@@ -26,10 +26,11 @@ import { subscribeUserProfile } from '@/modules/settings/services';
 import { compactSheets, parseSheets, prepareSheets, type StoredSheet } from '@/lib/documents/sheets';
 import DepartmentPicker from './DepartmentPicker';
 import SaveTemplateButton from './SaveTemplateButton';
+import ProjectPicker from './ProjectPicker';
 import { downloadSheets } from '../sheet-export';
 import {
   DOC_CATEGORIES, DocConflictError, convertSheetFile, defaultSheetFormat, editNote, fileDownloadHref, heldByOther, lockDoc, makeSheetEditable, permissionsOf, releaseDoc,
-  removeDoc, saveDoc, shareOf, subscribeDoc, type DocLock, type DocShare, type SharedDepartment, type Viewer, type WorkDoc,
+  removeDoc, saveDoc, shareOf, subscribeDoc, type DocLock, type DocProject, type DocShare, type SharedDepartment, type Viewer, type WorkDoc,
 } from '../doc-store';
 
 // The grid draws on a canvas in the browser: never on the server.
@@ -52,10 +53,10 @@ const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department:
 
 type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | { kind: 'locked'; by: DocLock } | { kind: 'view' };
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[] }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; project: DocProject | null }
 type Pending = Partial<Form & { sheets: true }>;
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, project: d.project });
 
 export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = '', startInView = false }: {
   id: string; basePath: string; isCeo: boolean; aeDepartmentId?: string; startInView?: boolean;
@@ -67,7 +68,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [] });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], project: null });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
@@ -468,6 +469,10 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
                   {!DOC_CATEGORIES.includes(form.category) && <option>{form.category}</option>}
                   {DOC_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Project <span className="font-normal text-[#a3a3a3]">(optional)</span></span>
+                <ProjectPicker className={panelField} value={form.project} disabled={!editing} onChange={project => setField('project', project)} />
               </label>
               <label className="block">
                 <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Description</span>

@@ -40,6 +40,8 @@ export type DocOrientation = 'portrait' | 'landscape';
 export type DocShare = 'private' | 'department' | 'departments' | 'all';
 /** An AE department a document is shared with. */
 export interface SharedDepartment { id: string; name: string }
+/** The project a document or file is filed under (one of the enterprise's projects). */
+export interface DocProject { id: string; name: string }
 
 export interface DocPerson { uid: string; name: string; email: string }
 export interface DocLock extends DocPerson { at: string }
@@ -66,6 +68,7 @@ export interface WorkDoc {
   kind: 'doc' | 'sheet' | 'file';
   /** A spreadsheet's sheets (JSON). */
   sheets: string;
+  project: DocProject | null;
   /** An uploaded file's address. */
   fileUrl: string;
   owner: DocPerson;
@@ -107,6 +110,7 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT,
     kind: d.format === DOC_FORMAT ? 'doc' : d.format === SHEET_FORMAT ? 'sheet' : 'file',
     sheets: d.format === SHEET_FORMAT ? str(d.sheets) : '',
+    project: str(d.projectId) ? { id: str(d.projectId), name: str(d.projectName) || 'Project' } : null,
     fileUrl: d.format === DOC_FORMAT || d.format === SHEET_FORMAT ? '' : str(d.url),
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
     createdAt: str(d.createdAt),
@@ -197,6 +201,11 @@ export function subscribeDoc(id: string, onDoc: (d: WorkDoc | null) => void, onE
   return onSnapshot(doc(authDb, 'documents', id), snap => onDoc(snap.exists() ? toWorkDoc(snap.id, snap.data()) : null), onError);
 }
 
+/** A project on the record (empty when none). */
+export function projectFields(project: DocProject | null | undefined) {
+  return { projectId: project?.id ?? '', projectName: project?.name ?? '' };
+}
+
 /** Where a team's document is kept: "team:<AE department id>", with the team on the record. */
 export function teamFields(team: { id: string; name: string }) {
   return { department: `team:${team.id}`, aeDepartmentId: team.id, aeDepartmentName: team.name };
@@ -211,6 +220,7 @@ export async function createDoc(input: {
   orientation?: DocOrientation;
   /** A spreadsheet instead of a document: its sheets (JSON). */
   sheets?: string;
+  project?: DocProject | null;
 }, me: Viewer): Promise<string> {
   const ref_ = doc(collection(authDb, 'documents'));
   const body = input.sheets ?? input.content;
@@ -230,6 +240,7 @@ export async function createDoc(input: {
     department,
     ...(input.team ? teamFields(input.team) : {}),
     sharedDepartments: input.share === 'departments' ? (input.departments ?? []).map(x => ({ id: x.id, name: x.name })) : [],
+    ...projectFields(input.project),
     uploadedBy: me.name,
     uploadedByUid: me.uid,
     uploadedByEmail: me.email,
@@ -257,7 +268,7 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation' | 'project'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
@@ -290,6 +301,7 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
       update.formattedSize = sizeLabel(bytesOf(changes.sheets));
     }
     if (changes.category !== undefined) update.category = changes.category;
+    if (changes.project !== undefined) Object.assign(update, projectFields(changes.project));
     if (changes.description !== undefined) update.description = changes.description.trim();
     if (changes.orientation !== undefined) update.orientation = changes.orientation === 'landscape' ? 'landscape' : 'portrait';
     // Sharing is the owner's call.
@@ -360,7 +372,7 @@ export function fileTypeOf(name: string, mime: string): string {
  * department, or an AE department's team. Returns the document's id.
  */
 export async function uploadFileDoc(file: File, opts: {
-  category: string; description: string;
+  category: string; description: string; project?: DocProject | null;
   where: { department: string } | { team: { id: string; name: string } } | { departments: SharedDepartment[] };
 }, me: DocPerson, onProgress?: (percent: number) => void): Promise<string> {
   if (file.size > MAX_FILE_BYTES) throw new Error('Files can be up to 25 MB.');
@@ -377,7 +389,7 @@ export async function uploadFileDoc(file: File, opts: {
   const record = doc(collection(authDb, 'documents'));
   await setDoc(record, {
     name: file.name, url, storagePath, size: file.size, formattedSize: sizeLabel(file.size), dateModified: dayLabel(now),
-    type: fileTypeOf(file.name, file.type), category: opts.category, ...placement,
+    type: fileTypeOf(file.name, file.type), category: opts.category, ...placement, ...projectFields(opts.project),
     uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email, description: opts.description.trim(),
     createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0,
   });

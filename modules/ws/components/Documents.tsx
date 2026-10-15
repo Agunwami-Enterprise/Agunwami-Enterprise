@@ -37,6 +37,8 @@ interface WsDocument {
   aeDepartmentId: string; aeDepartmentName: string;
   /** Shared with these AE departments. */
   sharedDepartments: SharedDepartment[];
+  /** The project it's filed under ('' if none). */
+  projectId: string; projectName: string;
 }
 
 function toDocument(id: string, d: Record<string, unknown>): WsDocument {
@@ -49,6 +51,7 @@ function toDocument(id: string, d: Record<string, unknown>): WsDocument {
     written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT, othersCanEdit: d.othersCanEdit === true,
     aeDepartmentId: String(d.aeDepartmentId ?? ''), aeDepartmentName: String(d.aeDepartmentName ?? ''),
     sharedDepartments: sharedDepartmentsOf(d),
+    projectId: String(d.projectId ?? ''), projectName: String(d.projectName ?? ''),
   };
 }
 
@@ -73,6 +76,7 @@ export default function Documents() {
   const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [project, setProject] = useState('');
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [converting, setConverting] = useState('');
@@ -100,10 +104,12 @@ export default function Documents() {
     if (tab === 'department' && scopeOf(d) !== 'department') return false;
     if (tab === 'mine' && d.uploadedByUid !== uid) return false;
     if (category && d.category !== category) return false;
+    if (project && d.projectId !== project) return false;
     if (term && ![d.name, d.description, d.uploadedBy, d.category].some(v => v.toLowerCase().includes(term))) return false;
     return true;
   });
   const totalBytes = visible.reduce((n, d) => n + d.size, 0);
+  const projectOptions = [...new Map(visible.filter(d => d.projectId).map(d => [d.projectId, d.projectName || 'Project'])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
   // Written documents open here, for editing when you can (you can switch to viewing there) and for reading otherwise.
   async function open(d: WsDocument) {
@@ -175,7 +181,7 @@ export default function Documents() {
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[{ id: 'all', label: 'All' }, { id: 'company', label: 'Company' }, { id: 'department', label: 'My Department' }, { id: 'mine', label: 'Mine' }]} />
 
       <Card title="Files" icon={FolderOpen} action={
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
           <label className="relative block sm:w-60">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a3a3a3]" aria-hidden />
             <input className={`${field} pl-9`} placeholder="Search documents" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search documents" />
@@ -184,6 +190,13 @@ export default function Documents() {
             <option value="">All categories</option>
             {CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
+          {/* Projects the documents here are filed under */}
+          {projectOptions.length > 0 && (
+            <select className={`${field} sm:w-48`} value={project} onChange={e => setProject(e.target.value)} aria-label="Project">
+              <option value="">All projects</option>
+              {projectOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          )}
         </div>
       }>
         {docs === null ? <Empty>Loading…</Empty> : shown.length === 0 ? <Empty>{visible.length === 0 ? 'No documents yet. Write one with “New document”, or upload a file.' : 'No documents match.'}</Empty> : (
@@ -201,6 +214,7 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2 pl-12 sm:pl-0">
+                  {d.projectName && <Pill label={d.projectName} tone="blue" />}
                   <Pill label={d.category} tone="gray" />
                   <Pill label={{ company: 'Company', department: d.department === 'departments' ? (d.sharedDepartments.length === 1 ? `${d.sharedDepartments[0].name} team` : `${d.sharedDepartments.length} departments`) : d.aeDepartmentName ? `${d.aeDepartmentName} team` : 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
                   {d.written ? (

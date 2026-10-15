@@ -31,10 +31,11 @@ import ImageDialog, { type ArticleImage } from '@/app/components/cpanel/article/
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
 import DepartmentPicker from './DepartmentPicker';
 import SaveTemplateButton from './SaveTemplateButton';
+import ProjectPicker from './ProjectPicker';
 import {
   DOC_CATEGORIES, DocConflictError, type DocOrientation, type SharedDepartment, DOC_FORMATS, defaultDocFormat, downloadDocument, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
-  convertFile, editNote, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable,
+  convertFile, editNote, type DocProject, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable,
 } from '../doc-store';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -46,12 +47,12 @@ type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | {
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 type LinkState = { from: number; to: number; href: string; newTab: boolean; selectedText: string; editing: boolean };
 type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string; showCaption: boolean } };
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; orientation: DocOrientation }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; orientation: DocOrientation; project: DocProject | null }
 type Pending = Partial<Form> & { content?: boolean };
 
 const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department: 'My department', departments: 'Departments I choose…', all: 'Everyone in the company' };
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, orientation: d.orientation });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, orientation: d.orientation, project: d.project });
 const timeAgo = (iso: string) => {
   if (!iso) return '';
   const date = new Date(iso);
@@ -89,7 +90,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], orientation: 'portrait' });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], orientation: 'portrait', project: null });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
@@ -729,6 +730,10 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
                 </select>
               </label>
               <label className="block">
+                <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Project <span className="font-normal text-[#a3a3a3]">(optional)</span></span>
+                <ProjectPicker className={panelField} value={form.project} disabled={!editing} onChange={project => setField('project', project)} />
+              </label>
+              <label className="block">
                 <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Description <span className="font-normal text-[#a3a3a3]">(shown in the list)</span></span>
                 <textarea className={`${panelField} min-h-[70px]`} value={form.description} maxLength={300} disabled={!editing} onChange={e => setField('description', e.target.value)} />
               </label>
@@ -827,6 +832,7 @@ function DocFacts({ doc: d, form }: { doc: WorkDoc; form: Form }) {
     <section className="rounded-xl border border-[#e5e5e5] bg-white p-5 dark:border-white/10 dark:bg-[#1e1e1e]">
       <dl className="space-y-3">
         {row('Category', form.category)}
+        {form.project && row('Project', form.project.name)}
         {form.description && row('Description', form.description)}
         {row('Shared with', shareText)}
         {row('Page', form.orientation === 'landscape' ? 'Landscape' : 'Portrait')}
