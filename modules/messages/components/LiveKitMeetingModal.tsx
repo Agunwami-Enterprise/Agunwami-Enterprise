@@ -271,16 +271,16 @@ export default function LiveKitMeetingModal({
 
   return (
     <AeOverlay onClose={() => undefined} dismissible={false} label="Live meeting" className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-zinc-900 rounded-3xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden border border-zinc-800 shadow-2xl relative">
+      <div className="bg-zinc-900 rounded-2xl md:rounded-3xl w-full max-w-6xl h-[94dvh] md:h-[85vh] flex flex-col overflow-hidden border border-zinc-800 shadow-2xl relative">
 
         {/* Top Room Header */}
-        <div className="px-5 py-3.5 bg-zinc-950/90 border-b border-zinc-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+        <div className="px-3 sm:px-5 py-3 sm:py-3.5 bg-zinc-950/90 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="w-8 h-8 shrink-0 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
               <Video className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-white tracking-wide">{roomTitle}</h2>
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-bold text-white tracking-wide">{roomTitle}</h2>
               <p className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 LiveKit Cloud Connected
@@ -288,7 +288,7 @@ export default function LiveKitMeetingModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {/* Invite Staff Button */}
             <button
               onClick={() => setShowInviteDrawer(prev => !prev)}
@@ -298,7 +298,7 @@ export default function LiveKitMeetingModal({
                   : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700"
               }`}
             >
-              <UserPlus className="w-3.5 h-3.5" /> Invite Staff
+              <UserPlus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Invite Staff</span><span className="sm:hidden">Invite</span>
             </button>
 
             {/* Exit Room Button */}
@@ -306,7 +306,7 @@ export default function LiveKitMeetingModal({
               onClick={onClose}
               className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
             >
-              <X className="w-4 h-4" /> Exit Room
+              <X className="w-4 h-4" /> <span className="hidden sm:inline">Exit Room</span><span className="sm:hidden">Exit</span>
             </button>
           </div>
         </div>
@@ -339,7 +339,7 @@ export default function LiveKitMeetingModal({
 
           {/* In-Call Invite Staff Sidebar Drawer */}
           {showInviteDrawer && (
-            <div className="w-72 bg-zinc-900 border-l border-zinc-800 flex flex-col shrink-0 animate-fadeIn p-4 space-y-3 z-20">
+            <div className="absolute inset-y-0 right-0 w-full sm:static sm:w-72 bg-zinc-900 border-l border-zinc-800 flex flex-col shrink-0 animate-fadeIn p-4 space-y-3 z-20">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
                   <UserPlus className="w-3.5 h-3.5 text-amber-400" /> Manage Staff Invites
