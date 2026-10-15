@@ -6,7 +6,9 @@
  * (fetched from AE Hub's storage, which the browser can't read directly; only
  * AE Hub's own storage is fetched), or a file sent with the request (a
  * template being added). Images in Word and PDF files come back inline (data:
- * addresses); the editor stores them.
+ * addresses); the editor stores them. A PDF's page design (a letterhead: header,
+ * footer, watermark) comes back as `background` { src, top, bottom, landscape },
+ * shown behind every page.
  */
 
 import { NextResponse } from 'next/server';
@@ -49,8 +51,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ html: result.value || '<p></p>', warnings: result.messages.filter(m => m.type === 'warning').length });
     }
     if (ext === 'pdf') {
-      const { html } = await pdfToHtml(new Uint8Array(buffer));
-      return NextResponse.json({ html, warnings: 0 });
+      // A designed page (a letterhead) also comes back as `background`, drawn without its text.
+      const { html, background } = await pdfToHtml(new Uint8Array(buffer));
+      return NextResponse.json({ html, background, warnings: 0 });
     }
     const text = buffer.toString('utf-8');
     return NextResponse.json({ html: ext === 'html' || ext === 'htm' ? text : textToHtml(text), warnings: 0 });

@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import { Check, FileSpreadsheet, FileText, Loader2, RectangleHorizontal, RectangleVertical, Trash2, Upload } from 'lucide-react';
 import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import { SHEET_TEMPLATES } from '@/lib/documents/sheets';
-import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocOrientation, type DocProject, type DocShare, type SharedDepartment, type Viewer } from '../doc-store';
+import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocOrientation, type DocProject, type DocShare, type Letterhead, type SharedDepartment, type Viewer } from '../doc-store';
 import {
   addTemplate, deleteTemplate, getTemplate, hideBuiltInTemplate, isTemplateFile, listTemplates, restoreBuiltInTemplates, templateFromFile, templateNameOf, type CustomTemplate,
 } from '../template-store';
@@ -125,11 +125,18 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
       let name: string;
       let content = '';
       let sheets: string | undefined;
+      let letterhead: Letterhead | null = null;
+      let pageOrientation = orientation;
       if (choice.startsWith('c:')) {
         const template = added.find(t => `c:${t.id}` === choice);
         const body = await getTemplate(choice.slice(2));
         name = initial?.title || template?.label || 'Untitled document';
         if (kind === 'sheet') sheets = body.sheets; else content = body.content;
+        // A letterhead template keeps its page design, on the page it was made for.
+        if (kind === 'doc' && body.letterhead) {
+          letterhead = body.letterhead;
+          pageOrientation = body.orientation;
+        }
       } else if (kind === 'sheet') {
         const template = SHEET_TEMPLATES.find(t => `b:${t.id}` === choice) ?? SHEET_TEMPLATES[0];
         name = initial?.title || (template.id === 'blank-sheet' ? 'Untitled spreadsheet' : template.label);
@@ -144,8 +151,9 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
         category, description: '', share, othersCanEdit: share !== 'private' && othersCanEdit,
         team: share === 'department' ? team : undefined,
         departments: share === 'departments' ? departments : undefined,
-        orientation,
+        orientation: pageOrientation,
         project,
+        letterhead,
       }, me);
       await onCreated?.(id, name);
       router.push(docPath(id, basePath));

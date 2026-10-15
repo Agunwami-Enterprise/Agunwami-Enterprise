@@ -22,7 +22,7 @@ import { useAuth } from '@/lib/workstation/auth-context';
 import { deniedHref } from '@/lib/workstation/access-denied';
 import { subscribeUserProfile } from '@/modules/settings/services';
 import { articleExtensions } from '@/app/components/cpanel/article/extensions';
-import { Pagination, setPaginated } from '@/app/components/cpanel/article/pagination';
+import { Pagination, setLetterhead, setPaginated } from '@/app/components/cpanel/article/pagination';
 import Toolbar, { Divider, ToolButton, applyFontSize, clearFormatting, currentFontSize } from '@/app/components/cpanel/article/Toolbar';
 import TableMenu, { tableElement } from '@/app/components/cpanel/article/TableMenu';
 import FindReplace from '@/app/components/cpanel/article/FindReplace';
@@ -36,7 +36,7 @@ import ProjectPicker from './ProjectPicker';
 import {
   DOC_CATEGORIES, DocConflictError, type DocOrientation, type SharedDepartment, DOC_FORMATS, defaultDocFormat, downloadDocument, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
-  convertFile, previewHtml, editNote, type DocProject, fileDownloadHref, fileExtOf, pdfViewHref, isEditableFile, isPreviewableFile, makeEditable,
+  convertFile, previewHtml, previewLetterhead, type Letterhead, editNote, type DocProject, fileDownloadHref, fileExtOf, pdfViewHref, isEditableFile, isPreviewableFile, makeEditable,
 } from '../doc-store';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -48,12 +48,12 @@ type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | {
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 type LinkState = { from: number; to: number; href: string; newTab: boolean; selectedText: string; editing: boolean };
 type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string; showCaption: boolean } };
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; orientation: DocOrientation; pageless: boolean; project: DocProject | null }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; orientation: DocOrientation; pageless: boolean; project: DocProject | null; letterhead: Letterhead | null }
 type Pending = Partial<Form> & { content?: boolean };
 
 const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department: 'My department', departments: 'Departments I choose…', all: 'Everyone in the company' };
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, orientation: d.orientation, pageless: d.pageless, project: d.project });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, orientation: d.orientation, pageless: d.pageless, project: d.project, letterhead: d.letterhead });
 const timeAgo = (iso: string) => {
   if (!iso) return '';
   const date = new Date(iso);
@@ -91,7 +91,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], orientation: 'portrait', pageless: false, project: null });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], orientation: 'portrait', pageless: false, project: null, letterhead: null });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
@@ -109,7 +109,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [words, setWords] = useState(0);
   const [uploads, setUploads] = useState(0);
   // An uploaded file (not written here) is shown read-only, converted on the fly; Edit makes it a written document.
-  const [preview, setPreview] = useState<{ html: string } | { error: string } | null>(null);
+  const [preview, setPreview] = useState<{ html: string; letterhead: Letterhead | null; landscape: boolean } | { error: string } | null>(null);
   const [converting, setConverting] = useState(false);
   const previewRef = useRef<string | null>(null);
 
@@ -218,10 +218,11 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   useEffect(() => {
     if (!previewable || !fileUrl) return;
     let cancelled = false;
-    convertFile(fileUrl, fileName).then(previewHtml).then(html => {
+    convertFile(fileUrl, fileName).then(converted => {
       if (cancelled) return;
+      const html = previewHtml(converted.html);
       previewRef.current = html;
-      setPreview({ html });
+      setPreview({ html, letterhead: previewLetterhead(converted.letterhead), landscape: converted.landscape });
       if (docRef.current) showStored(docRef.current);
     }, e => {
       if (!cancelled) setPreview({ error: e instanceof Error && e.message ? e.message : 'The file could not be shown here.' });
@@ -315,6 +316,13 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   useEffect(() => {
     if (editor && !editor.isDestroyed) setPaginated(editor.view, !pageless);
   }, [editor, pageless]);
+  // The letterhead behind every page: the document's, or (an uploaded PDF being shown) the file's own.
+  const filePreview = preview && 'html' in preview ? preview : null;
+  const letterhead = docData?.written ? form.letterhead : filePreview?.letterhead ?? null;
+  const landscape = docData && !docData.written && filePreview ? filePreview.landscape : form.orientation === 'landscape';
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) setLetterhead(editor.view, letterhead ? { ...letterhead, landscape } : null);
+  }, [editor, letterhead, landscape]);
 
   useEffect(() => {
     viewRef.current = { zoom, spellcheck };
@@ -448,7 +456,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
       const key = e.key.toLowerCase();
       const run = (action: () => void) => { e.preventDefault(); action(); };
       if (key === 's') return run(() => void flushRef.current());
-      if (key === 'p' && !e.shiftKey) return run(() => printDoc(form.title, editor.getHTML(), form.orientation));
+      if (key === 'p' && !e.shiftKey) return run(() => printDoc(form.title, editor.getHTML(), form.orientation, form.letterhead));
       if (!editor.isFocused) return;
       if (key === 'f' && !e.shiftKey) run(() => setFind({ replace: false }));
       else if (key === '/') run(() => setShortcuts(true));
@@ -462,7 +470,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editor, form.title, form.orientation, openLink]);
+  }, [editor, form.title, form.orientation, form.letterhead, openLink]);
 
   // ── Actions ──
 
@@ -639,7 +647,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
                 {docData && [...DOC_FORMATS].sort((a, b) => Number(b.id === defaultDocFormat(docData)) - Number(a.id === defaultDocFormat(docData))).map(item => (
                   <button key={item.id} type="button" onClick={() => {
                     setDownloadOpen(false);
-                    void downloadDocument(form.title, editor.getHTML(), form.orientation, item.id).catch(e => setError(e instanceof Error ? e.message : 'The download could not be made.'));
+                    void downloadDocument(form.title, editor.getHTML(), form.orientation, item.id, form.letterhead).catch(e => setError(e instanceof Error ? e.message : 'The download could not be made.'));
                   }}
                     className="block w-full px-3 py-2 text-left text-[13px] text-[#292929] hover:bg-[#f5f5f5] dark:text-gray-200 dark:hover:bg-white/5">
                     {item.label}{docData.originalFile && item.id === defaultDocFormat(docData) ? <span className="block text-[11px] text-[#8a8a8a]">Same type as the uploaded file</span> : null}
@@ -655,7 +663,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
             )}
           </div>
           )}
-          <button type="button" onClick={() => editor && printDoc(form.title, editor.getHTML(), form.orientation)} title="Print (Ctrl+P)" aria-label="Print"
+          <button type="button" onClick={() => editor && printDoc(form.title, editor.getHTML(), form.orientation, form.letterhead)} title="Print (Ctrl+P)" aria-label="Print"
             className="rounded-lg border border-[#e5e5e5] bg-white p-2 text-[#525252] hover:bg-[#f5f5f5] dark:border-white/10 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5">
             <Printer className="h-4 w-4" />
           </button>
@@ -730,8 +738,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
           )}
           {/* The page */}
           <div className="px-0 py-0 sm:px-3 sm:py-6 md:px-8 md:py-10">
-            <div data-orientation={form.orientation}
-              className={`mx-auto w-full rounded-sm bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06)] transition-[max-width] duration-200 ${form.orientation === 'landscape' ? 'max-w-[1120px]' : 'max-w-[860px]'}`}>
+            <div data-orientation={landscape ? 'landscape' : 'portrait'}
+              className={`mx-auto w-full rounded-sm bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06)] transition-[max-width] duration-200 ${landscape ? 'max-w-[1120px]' : 'max-w-[860px]'}`}>
               {mode.kind === 'loading' && <p className="flex items-center gap-2 px-5 py-10 text-[14px] text-[#8a8a8a] sm:px-10 md:px-16"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…</p>}
               {pdfAsIs && docData
                 ? <iframe src={pdfViewHref(docData.fileUrl, docData.fileName)} title={docData.title} className="block h-[80vh] w-full rounded-sm" />
@@ -761,6 +769,16 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
                 <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Project <span className="font-normal text-[#a3a3a3]">(optional)</span></span>
                 <ProjectPicker className={panelField} value={form.project} disabled={!editing} onChange={project => setField('project', project)} />
               </label>
+              {form.letterhead && (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-[#e5e5e5] px-3 py-2 text-[13px] dark:border-white/10">
+                  <span className="text-[#525252] dark:text-gray-300">
+                    Letterhead <span className="block text-[12px] text-[#a3a3a3]">Behind every page{pageless ? ' (shown in Pages view)' : ''}</span>
+                  </span>
+                  {editing && (
+                    <button type="button" onClick={() => setField('letterhead', null)} className="text-[12px] font-semibold text-red-600 hover:underline dark:text-red-400">Remove</button>
+                  )}
+                </div>
+              )}
               <label className="block">
                 <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Description <span className="font-normal text-[#a3a3a3]">(shown in the list)</span></span>
                 <textarea className={`${panelField} min-h-[70px]`} value={form.description} maxLength={300} disabled={!editing} onChange={e => setField('description', e.target.value)} />
@@ -807,7 +825,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
                   </a>
                 </p>
               )}
-              {editor && !isFile && <SaveTemplateButton me={me} kind="doc" title={form.title || docData.title} category={form.category} body={() => editor.getHTML()} />}
+              {editor && !isFile && <SaveTemplateButton me={me} kind="doc" title={form.title || docData.title} category={form.category} body={() => editor.getHTML()}
+                letterhead={docData.letterhead} orientation={form.orientation} />}
               {can.canDelete && (
                 <button type="button" onClick={() => void remove()} className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">
                   <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete document

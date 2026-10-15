@@ -7,7 +7,7 @@
  */
 
 import { cleanPastedHtml } from '@/app/components/cpanel/article/extensions';
-import { isEditableFile, isSheetFile, storeInlineImages, type Viewer } from './doc-store';
+import { convertedFrom, isEditableFile, isSheetFile, storeInlineImages, storeLetterhead, type DocOrientation, type Letterhead, type Viewer } from './doc-store';
 
 export interface CustomTemplate {
   id: string;
@@ -45,14 +45,19 @@ export async function restoreBuiltInTemplates(): Promise<void> {
   }), 'The templates could not be restored.');
 }
 
-/** A template's contents: HTML for a document, sheets (JSON) for a spreadsheet. */
-export async function getTemplate(id: string): Promise<{ content: string; sheets: string }> {
-  const { template } = await json<{ template: { content: string; sheets: string } }>(
+/** A template's contents: HTML for a document (with its letterhead and page orientation), sheets (JSON) for a spreadsheet. */
+export interface TemplateContents { content: string; sheets: string; letterhead: Letterhead | null; orientation: DocOrientation }
+
+export async function getTemplate(id: string): Promise<TemplateContents> {
+  const { template } = await json<{ template: TemplateContents }>(
     await fetch(`/api/documents/templates?id=${encodeURIComponent(id)}`, { cache: 'no-store' }), 'That template could not be loaded.');
   return template;
 }
 
-export async function addTemplate(input: { label: string; description: string; category: string; kind: 'doc' | 'sheet'; content?: string; sheets?: string }, me: Viewer): Promise<string> {
+export async function addTemplate(input: {
+  label: string; description: string; category: string; kind: 'doc' | 'sheet'; content?: string; sheets?: string;
+  letterhead?: Letterhead | null; orientation?: DocOrientation;
+}, me: Viewer): Promise<string> {
   const { id } = await json<{ id: string }>(await fetch('/api/documents/templates', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...input, createdBy: me.name }),
   }), 'The template could not be saved.');
@@ -66,8 +71,10 @@ export async function deleteTemplate(id: string): Promise<void> {
 /** Files that can become templates: documents (Word, PDF, text, web page) and spreadsheets (Excel, CSV). */
 export const isTemplateFile = (name: string) => isEditableFile(name) || isSheetFile(name);
 
-/** A file's contents as a template (converted on the server; images in Word files are stored). */
-export async function templateFromFile(file: File, me: Viewer): Promise<{ kind: 'doc' | 'sheet'; content?: string; sheets?: string }> {
+/** A file's contents as a template (converted on the server; its images and a PDF's letterhead are stored). */
+export async function templateFromFile(file: File, me: Viewer): Promise<{
+  kind: 'doc' | 'sheet'; content?: string; sheets?: string; letterhead?: Letterhead | null; orientation?: DocOrientation;
+}> {
   const sheet = isSheetFile(file.name);
   if (!sheet && !isEditableFile(file.name)) throw new Error('Templates can be Word (.docx), PDF, text, web page, Excel (.xlsx) or CSV files.');
   const form = new FormData();
@@ -77,8 +84,13 @@ export async function templateFromFile(file: File, me: Viewer): Promise<{ kind: 
     const { sheets } = await json<{ sheets: unknown[] }>(res, 'The spreadsheet could not be read.');
     return { kind: 'sheet', sheets: JSON.stringify(sheets) };
   }
-  const { html } = await json<{ html: string }>(res, 'The file could not be read.');
-  return { kind: 'doc', content: cleanPastedHtml(await storeInlineImages(html, me)) };
+  const converted = await convertedFrom(res);
+  return {
+    kind: 'doc',
+    content: cleanPastedHtml(await storeInlineImages(converted.html, me)),
+    letterhead: await storeLetterhead(converted.letterhead, me),
+    orientation: converted.landscape ? 'landscape' : 'portrait',
+  };
 }
 
 /** The name a file suggests for its template. */
