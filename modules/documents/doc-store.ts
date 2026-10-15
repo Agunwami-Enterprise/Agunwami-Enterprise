@@ -361,7 +361,7 @@ export async function uploadFileDoc(file: File, opts: {
 // ── Editing uploaded files ──────────────────────────────────────────────────
 
 /** Uploaded files that can be opened in the editor (keep in step with /api/documents/convert). */
-export const EDITABLE_FILE_TYPES = ['docx', 'txt', 'md', 'html', 'htm'];
+export const EDITABLE_FILE_TYPES = ['docx', 'pdf', 'txt', 'md', 'html', 'htm'];
 /** A file's type (extension), from its name or, for files named without one, its address. */
 export function fileExtOf(name: string, url = ''): string {
   const fromName = /\.([a-z0-9]{1,5})$/i.exec(name.trim())?.[1];
@@ -382,6 +382,13 @@ export function fileNameOf(name: string, url = ''): string {
 }
 
 export const isEditableFile = (name: string, url = '') => EDITABLE_FILE_TYPES.includes(fileExtOf(name, url));
+
+/** What opening a file in the editor keeps, for the confirmation before it (PDFs keep less than Word files). */
+export function editNote(name: string, url = ''): string {
+  return fileExtOf(name, url) === 'pdf'
+    ? 'A PDF comes across as text: headings, paragraphs, lists and simple tables. Images and the exact layout aren’t kept, and a scanned PDF has no text to edit.'
+    : 'Some Word formatting may look different.';
+}
 
 /** Images that came inline (data: addresses, e.g. from a Word file) go to storage instead. */
 async function storeInlineImages(html: string, me: Pick<Viewer, 'uid'>): Promise<string> {
@@ -416,7 +423,7 @@ export async function makeEditable(id: string, me: Viewer): Promise<void> {
   if (!permissionsOf(current, me).canEdit) throw new Error('You can’t edit this file. Ask its owner to let others edit it.');
   const fileUrl = str(data.url);
   const name = fileNameOf(str(data.name), fileUrl);
-  if (!isEditableFile(name)) throw new Error('Only Word (.docx), text and web page files can be edited.');
+  if (!isEditableFile(name)) throw new Error('Only Word (.docx), PDF, text and web page files can be edited.');
   const res = await fetch('/api/documents/convert', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: fileUrl, name }),
   });

@@ -21,7 +21,7 @@ import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btn
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, docPath, downloadDocCopy, fileDownloadHref, isEditableFile, makeEditable, sharedDepartmentsOf, type SharedDepartment, type Viewer,
+  DOC_FORMAT, docPath, downloadDocCopy, editNote, fileDownloadHref, isEditableFile, makeEditable, sharedDepartmentsOf, type SharedDepartment, type Viewer,
 } from '@/modules/documents/doc-store';
 import UploadDialog, { UPLOAD_CATEGORIES as CATEGORIES } from '@/modules/documents/components/UploadDialog';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
@@ -126,7 +126,7 @@ export default function Documents() {
   async function editFile(d: WsDocument) {
     if (!(await confirm({
       title: `Edit ${d.name} here?`,
-      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. Some Word formatting may look different.${d.uploadedByUid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. ${editNote(d.name, d.url)}${d.uploadedByUid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Open in editor',
     }))) return;
     setConverting(d.id);

@@ -10,7 +10,7 @@ import { toast } from 'react-toastify';
 import NewDocumentDialog from './NewDocumentDialog';
 import UploadDialog from './UploadDialog';
 import {
-  downloadDocCopy, fileDownloadHref, isEditableFile, makeEditable, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
+  downloadDocCopy, editNote, fileDownloadHref, isEditableFile, makeEditable, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
 } from '../doc-store';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
 import {
@@ -76,7 +76,7 @@ export default function DocumentsPage() {
     if (!me) return;
     const ok = await confirm({
       title: `Edit ${d.title} here?`,
-      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. Some Word formatting may look different.${d.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. ${editNote(d.title, d.fileUrl)}${d.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Open in editor',
     });
     if (!ok) return;
