@@ -25,6 +25,8 @@ import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase
 import { authDb, storage } from '@/lib/workstation/firebase';
 
 export const DOC_FORMAT = 'ae-doc';
+/** A spreadsheet made in the workstation (its sheets in `sheets`, as JSON; see lib/documents/sheets). */
+export const SHEET_FORMAT = 'ae-sheet';
 export const DOC_CATEGORIES = ['General', 'Policy & Handbook', 'Finance & Budget', 'Operations', 'Onboarding', 'Templates', 'Technical', 'Legal', 'Meeting Notes', 'Reports'];
 /** How long an edit lock lasts without the editor renewing it. */
 export const LOCK_MS = 2 * 60 * 1000;
@@ -59,8 +61,11 @@ export interface WorkDoc {
   orientation: DocOrientation;
   /** An uploaded file opened for editing: the original, still downloadable. */
   originalFile: { name: string; url: string } | null;
-  /** Written in the workstation (opens in the editor), rather than an uploaded file. */
+  /** Made in the workstation (opens here: a document or a spreadsheet), rather than an uploaded file. */
   written: boolean;
+  kind: 'doc' | 'sheet' | 'file';
+  /** A spreadsheet's sheets (JSON). */
+  sheets: string;
   /** An uploaded file's address. */
   fileUrl: string;
   owner: DocPerson;
@@ -99,8 +104,10 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     othersCanEdit: d.othersCanEdit === true,
     orientation: d.orientation === 'landscape' ? 'landscape' : 'portrait',
     originalFile: str(d.originalFileUrl) ? { name: str(d.originalFileName) || 'Original file', url: str(d.originalFileUrl) } : null,
-    written: d.format === DOC_FORMAT,
-    fileUrl: d.format === DOC_FORMAT ? '' : str(d.url),
+    written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT,
+    kind: d.format === DOC_FORMAT ? 'doc' : d.format === SHEET_FORMAT ? 'sheet' : 'file',
+    sheets: d.format === SHEET_FORMAT ? str(d.sheets) : '',
+    fileUrl: d.format === DOC_FORMAT || d.format === SHEET_FORMAT ? '' : str(d.url),
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
     createdAt: str(d.createdAt),
     updatedAt: str(d.updatedAt),
@@ -161,12 +168,18 @@ export async function openDocument(id: string, basePath: string): Promise<{ kind
   return str(data.url) ? { kind: 'file', href: str(data.url) } : null;
 }
 
-/** Downloads a written document as a Word file, from the list (without opening it). */
+/** Downloads a document or spreadsheet from the list (without opening it), in the type it was uploaded as. */
 export async function downloadDocCopy(id: string): Promise<void> {
   const snap = await getDoc(doc(authDb, 'documents', id));
   if (!snap.exists()) throw new Error('This document was deleted.');
   const d = toWorkDoc(id, snap.data());
-  downloadWord(d.title, d.content, d.orientation);
+  if (d.kind === 'sheet') {
+    const [{ downloadSheets }, { parseSheets }] = await Promise.all([import('./sheet-export'), import('@/lib/documents/sheets')]);
+    await downloadSheets(d.title, parseSheets(d.sheets), defaultSheetFormat(d));
+    return;
+  }
+  // In the type it came as (an uploaded .docx downloads as .docx).
+  await downloadDocument(d.title, d.content, d.orientation, defaultDocFormat(d));
 }
 
 /** Every document in Documents, written and uploaded, live (the CEO's page uses it for who can do what). */
@@ -196,8 +209,12 @@ export async function createDoc(input: {
   /** With sharing "departments": the AE departments that see it. */
   departments?: SharedDepartment[];
   orientation?: DocOrientation;
+  /** A spreadsheet instead of a document: its sheets (JSON). */
+  sheets?: string;
 }, me: Viewer): Promise<string> {
   const ref_ = doc(collection(authDb, 'documents'));
+  const body = input.sheets ?? input.content;
+  if (bytesOf(body) > MAX_CONTENT_BYTES) throw new Error('This is too large to save here.');
   const now = new Date();
   const department = input.share === 'department' ? me.department || 'all' : input.share;
   await setDoc(ref_, {
@@ -205,10 +222,10 @@ export async function createDoc(input: {
     name: input.title.trim() || 'Untitled document',
     url: `${window.location.origin}${docPath(ref_.id)}`,
     storagePath: '',
-    size: bytesOf(input.content),
-    formattedSize: sizeLabel(bytesOf(input.content)),
+    size: bytesOf(body),
+    formattedSize: sizeLabel(bytesOf(body)),
     dateModified: dayLabel(now),
-    type: 'DOC',
+    type: input.sheets ? 'XLS' : 'DOC',
     category: input.category,
     department,
     ...(input.team ? teamFields(input.team) : {}),
@@ -220,9 +237,10 @@ export async function createDoc(input: {
     downloadCount: 0,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
-    // Written documents only.
-    format: DOC_FORMAT,
-    content: input.content,
+    // Made in the workstation only.
+    format: input.sheets ? SHEET_FORMAT : DOC_FORMAT,
+    content: input.sheets ? '' : input.content,
+    ...(input.sheets ? { sheets: input.sheets } : {}),
     othersCanEdit: input.othersCanEdit,
     orientation: input.orientation ?? 'portrait',
     updatedBy: me.name,
@@ -239,10 +257,13 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
+  }
+  if (changes.sheets !== undefined && bytesOf(changes.sheets) > MAX_CONTENT_BYTES) {
+    throw new Error('This spreadsheet is too large to save. Move some sheets into another spreadsheet.');
   }
   return runTransaction(authDb, async tx => {
     const snap = await tx.get(doc(authDb, 'documents', id));
@@ -262,6 +283,11 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
       update.content = changes.content;
       update.size = bytesOf(changes.content);
       update.formattedSize = sizeLabel(bytesOf(changes.content));
+    }
+    if (changes.sheets !== undefined) {
+      update.sheets = changes.sheets;
+      update.size = bytesOf(changes.sheets);
+      update.formattedSize = sizeLabel(bytesOf(changes.sheets));
     }
     if (changes.category !== undefined) update.category = changes.category;
     if (changes.description !== undefined) update.description = changes.description.trim();
@@ -399,15 +425,76 @@ export async function convertFile(url: string, name: string): Promise<string> {
   return body.html;
 }
 
+/** Excel (.xlsx) and CSV files: shown and edited in the built-in spreadsheet. */
+export const isSheetFile = (name: string, url = '') => ['xlsx', 'csv'].includes(fileExtOf(name, url));
+
+/** An uploaded Excel or CSV file as sheets (JSON), converted on the server. */
+export async function convertSheetFile(url: string, name: string): Promise<string> {
+  const res = await fetch('/api/documents/convert-sheet', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, name: fileNameOf(name, url) }),
+  });
+  const body = await res.json().catch(() => ({})) as { sheets?: unknown; error?: string };
+  if (!res.ok || !Array.isArray(body.sheets)) throw new Error(body.error || 'The spreadsheet could not be opened.');
+  return JSON.stringify(body.sheets);
+}
+
+/** An uploaded Excel or CSV file becomes a spreadsheet you can edit here (same place, same sharing). */
+export async function makeSheetEditable(id: string, me: Viewer): Promise<void> {
+  const ref_ = doc(authDb, 'documents', id);
+  const snap = await getDoc(ref_);
+  if (!snap.exists()) throw new Error('This file was deleted.');
+  const data = snap.data();
+  if (data.format === SHEET_FORMAT) return;
+  const current = toWorkDoc(id, data);
+  if (!permissionsOf(current, me).canEdit) throw new Error('You can’t edit this file. Ask its owner to let others edit it.');
+  const fileUrl = str(data.url);
+  const name = fileNameOf(str(data.name), fileUrl);
+  if (!isSheetFile(name)) throw new Error('Only Excel (.xlsx) and CSV files open in the spreadsheet.');
+  const sheets = await convertSheetFile(fileUrl, name);
+  if (bytesOf(sheets) > MAX_CONTENT_BYTES) throw new Error('This spreadsheet is too large to edit here. Download it instead.');
+  const now = new Date();
+  await updateDoc(ref_, {
+    format: SHEET_FORMAT,
+    sheets,
+    content: '',
+    type: 'XLS',
+    name: name.replace(/\.[^.]+$/, '') || name,
+    originalFileName: name,
+    originalFileUrl: fileUrl,
+    url: `${window.location.origin}${docPath(id)}`,
+    size: bytesOf(sheets),
+    formattedSize: sizeLabel(bytesOf(sheets)),
+    othersCanEdit: data.othersCanEdit === true,
+    updatedAt: now.toISOString(),
+    updatedBy: me.name,
+    dateModified: dayLabel(now),
+    lock: null,
+    serverUpdatedAt: serverTimestamp(),
+    ...(current.owner.uid ? {} : { uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email }),
+  });
+}
+
+/** Uploaded files shown here (in the document view or the spreadsheet) rather than in the browser's viewer. */
+export const opensHere = (name: string, url = '') => isPreviewableFile(name, url) || isSheetFile(name, url);
+
+/** Uploaded files that can be turned into a document or spreadsheet to edit. */
+export const canBecomeEditable = (name: string, url = '') => isEditableFile(name, url) || isSheetFile(name, url);
+
+/** Turns an uploaded file into a document (Word, PDF, text, web page) or a spreadsheet (Excel, CSV). */
+export function makeFileEditable(id: string, me: Viewer, name: string, url = ''): Promise<void> {
+  return isSheetFile(name, url) ? makeSheetEditable(id, me) : makeEditable(id, me);
+}
+
 /** What opening a file in the editor keeps, for the confirmation before it (PDFs keep less than Word files). */
 export function editNote(name: string, url = ''): string {
+  if (isSheetFile(name, url)) return 'Values, formulas, formatting, merged cells, column widths and frozen rows come across. Charts, images and comments aren’t kept.';
   return fileExtOf(name, url) === 'pdf'
     ? 'A PDF comes across as text: headings, paragraphs, lists and simple tables. Images and the exact layout aren’t kept, and a scanned PDF has no text to edit.'
     : 'Some Word formatting may look different.';
 }
 
 /** Images that came inline (data: addresses, e.g. from a Word file) go to storage instead. */
-async function storeInlineImages(html: string, me: Pick<Viewer, 'uid'>): Promise<string> {
+export async function storeInlineImages(html: string, me: Pick<Viewer, 'uid'>): Promise<string> {
   if (!html.includes('src="data:')) return html;
   const page = new DOMParser().parseFromString(html, 'text/html');
   const images = Array.from(page.querySelectorAll<HTMLImageElement>('img[src^="data:"]')).slice(0, 40);
@@ -505,17 +592,53 @@ function download(name: string, blob: Blob) {
 
 const fileName = (title: string) => (title.trim() || 'document').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
 
-/** Downloads a Word document (.doc), which Word, Google Docs and LibreOffice open. */
-export function downloadWord(title: string, html: string, orientation: DocOrientation = 'portrait') {
-  const landscape = orientation === 'landscape';
-  // Word reads the page size and orientation from its own section style.
-  const head = '<meta name="ProgId" content="Word.Document"><xml><w:WordDocument xmlns:w="urn:schemas-microsoft-com:office:word"><w:View>Print</w:View></w:WordDocument></xml>'
-    + `<style>@page WordSection1{size:${landscape ? '11.0in 8.5in' : '8.5in 11.0in'};mso-page-orientation:${orientation};margin:1.0in}div.WordSection1{page:WordSection1}</style>`;
-  download(`${fileName(title)}.doc`, new Blob(['﻿', standalone(title, `<div class="WordSection1">${html}</div>`, orientation, head)], { type: 'application/msword' }));
-}
-
 export function downloadHtml(title: string, html: string, orientation: DocOrientation = 'portrait') {
   download(`${fileName(title)}.html`, new Blob([standalone(title, html, orientation)], { type: 'text/html' }));
+}
+
+export type DocFormat = 'docx' | 'pdf' | 'html' | 'txt' | 'md';
+export const DOC_FORMATS: { id: DocFormat; label: string }[] = [
+  { id: 'docx', label: 'Word document (.docx)' },
+  { id: 'pdf', label: 'PDF (print, then Save as PDF)' },
+  { id: 'html', label: 'Web page (.html)' },
+  { id: 'txt', label: 'Plain text (.txt)' },
+  { id: 'md', label: 'Markdown (.md)' },
+];
+
+/** A document downloads as the type it was uploaded as (a .docx stays a .docx, a .txt a .txt); otherwise as Word. */
+export function defaultDocFormat(d: Pick<WorkDoc, 'originalFile'>): DocFormat {
+  const ext = d.originalFile ? fileExtOf(d.originalFile.name, d.originalFile.url) : '';
+  return ext === 'htm' ? 'html' : (['docx', 'pdf', 'html', 'txt', 'md'] as const).find(f => f === ext) ?? 'docx';
+}
+
+/** A spreadsheet downloads as the type it was uploaded as (.xlsx or .csv); otherwise as Excel. */
+export function defaultSheetFormat(d: Pick<WorkDoc, 'originalFile'>): 'xlsx' | 'csv' {
+  return d.originalFile && fileExtOf(d.originalFile.name, d.originalFile.url) === 'csv' ? 'csv' : 'xlsx';
+}
+
+/** The document's text, a paragraph per line. */
+function htmlToText(html: string): string {
+  const page = new DOMParser().parseFromString(html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|h[1-6]|li|tr|blockquote|pre|figcaption)>/gi, '$&\n'), 'text/html');
+  page.querySelectorAll('td, th').forEach(cell => cell.append('\t'));
+  return (page.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+}
+
+/** Downloads a document in the chosen format (Word is made on the server; PDF goes through printing). */
+export async function downloadDocument(title: string, html: string, orientation: DocOrientation, format: DocFormat): Promise<void> {
+  if (format === 'pdf') { printDoc(title, html, orientation); return; }
+  if (format === 'html') { downloadHtml(title, html, orientation); return; }
+  if (format === 'txt') { download(`${fileName(title)}.txt`, new Blob([htmlToText(html)], { type: 'text/plain;charset=utf-8' })); return; }
+  if (format === 'md') {
+    const { default: TurndownService } = await import('turndown');
+    const markdown = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-', codeBlockStyle: 'fenced' }).turndown(html);
+    download(`${fileName(title)}.md`, new Blob([markdown], { type: 'text/markdown;charset=utf-8' }));
+    return;
+  }
+  const res = await fetch('/api/documents/export', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html, title, orientation }),
+  });
+  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || 'The Word file could not be made.');
+  download(`${fileName(title)}.docx`, await res.blob());
 }
 
 /** Opens the print dialog for the document; choose "Save as PDF" there for a PDF. */

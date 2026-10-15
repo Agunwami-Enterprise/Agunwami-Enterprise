@@ -10,7 +10,7 @@ import { toast } from 'react-toastify';
 import NewDocumentDialog from './NewDocumentDialog';
 import UploadDialog from './UploadDialog';
 import {
-  downloadDocCopy, editNote, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
+  canBecomeEditable, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
 } from '../doc-store';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
 import {
@@ -82,7 +82,7 @@ export default function DocumentsPage() {
     if (!ok) return;
     setConverting(d.id);
     try {
-      await makeEditable(d.id, me);
+      await makeFileEditable(d.id, me, d.title, d.fileUrl);
       router.push(`/ceo/documents/${d.id}`);
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : `${d.title} could not be opened for editing.`);
@@ -111,7 +111,7 @@ export default function DocumentsPage() {
           <Link href={`/ceo/documents/${f.id}`} title={canEdit(d) ? 'Open it to edit (you can switch to viewing)' : 'Open it to read'} className={link} style={{ color: '#f5bd02' }}>
             {canEdit(d) ? 'Edit' : 'View'}
           </Link>
-          <button type="button" onClick={() => void download(f)} title="Download as a Word document" className={`${link} text-gray-500 dark:text-gray-400`}>Download</button>
+          <button type="button" onClick={() => void download(f)} title="Download it (in the type it was uploaded as, else Word or Excel)" className={`${link} text-gray-500 dark:text-gray-400`}>Download</button>
         </span>
       );
     }
@@ -119,14 +119,14 @@ export default function DocumentsPage() {
     if (!url) return <span className="text-[12px] text-gray-400" title="No download link was shared for this document">No file link</span>;
     return (
       <span className="inline-flex items-center gap-3">
-        {d && canEdit(d) && isEditableFile(d.title, url) && (
+        {d && canEdit(d) && canBecomeEditable(d.title, url) && (
           <button type="button" onClick={() => void editFile(d)} disabled={!!converting} title="Open it in the editor to edit it" className={link} style={{ color: '#f5bd02' }}>
             {converting === d.id ? 'Opening…' : 'Edit'}
           </button>
         )}
-        {d && isPreviewableFile(d.title, url)
-          ? <Link href={`/ceo/documents/${d.id}`} title="Read it here" className={link} style={{ color: canEdit(d) ? undefined : '#f5bd02' }}>View</Link>
-          : <a href={url} target="_blank" rel="noopener noreferrer" title="Open the file in a new tab" className={link} style={{ color: d && canEdit(d) && isEditableFile(d.title, url) ? undefined : '#f5bd02' }}>View</a>}
+        {d && opensHere(d.title, url)
+          ? <Link href={`/ceo/documents/${d.id}`} title="Look at it here" className={link} style={{ color: canEdit(d) ? undefined : '#f5bd02' }}>View</Link>
+          : <a href={url} target="_blank" rel="noopener noreferrer" title="Open the file in a new tab" className={link} style={{ color: d && canEdit(d) && canBecomeEditable(d.title, url) ? undefined : '#f5bd02' }}>View</a>}
         {d
           ? <a href={fileDownloadHref(url, d.title)} download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>
           : <a href={url} target="_blank" rel="noopener noreferrer" download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>}

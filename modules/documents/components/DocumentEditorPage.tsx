@@ -30,8 +30,9 @@ import LinkDialog, { type LinkTarget } from '@/app/components/cpanel/article/Lin
 import ImageDialog, { type ArticleImage } from '@/app/components/cpanel/article/ImageDialog';
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
 import DepartmentPicker from './DepartmentPicker';
+import SaveTemplateButton from './SaveTemplateButton';
 import {
-  DOC_CATEGORIES, DocConflictError, type DocOrientation, type SharedDepartment, downloadHtml, downloadWord, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
+  DOC_CATEGORIES, DocConflictError, type DocOrientation, type SharedDepartment, DOC_FORMATS, defaultDocFormat, downloadDocument, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
   convertFile, editNote, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable,
 } from '../doc-store';
@@ -611,15 +612,23 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
               <Download className="h-4 w-4" aria-hidden="true" /> Download <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
             {downloadOpen && editor && (
-              <div className="absolute right-0 top-full z-30 mt-1 w-56 rounded-lg border border-[#e5e5e5] bg-white py-1 shadow-xl dark:border-white/10 dark:bg-[#1e1e1e]" onMouseLeave={() => setDownloadOpen(false)}>
-                {[
-                  { label: 'Word document (.doc)', run: () => downloadWord(form.title, editor.getHTML(), form.orientation) },
-                  { label: 'PDF (print, then Save as PDF)', run: () => printDoc(form.title, editor.getHTML(), form.orientation) },
-                  { label: 'Web page (.html)', run: () => downloadHtml(form.title, editor.getHTML(), form.orientation) },
-                ].map(item => (
-                  <button key={item.label} type="button" onClick={() => { item.run(); setDownloadOpen(false); }}
-                    className="block w-full px-3 py-2 text-left text-[13px] text-[#292929] hover:bg-[#f5f5f5] dark:text-gray-200 dark:hover:bg-white/5">{item.label}</button>
+              <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-lg border border-[#e5e5e5] bg-white py-1 shadow-xl dark:border-white/10 dark:bg-[#1e1e1e]" onMouseLeave={() => setDownloadOpen(false)}>
+                {/* The type it came as first (an uploaded .docx downloads as .docx), then the others */}
+                {docData && [...DOC_FORMATS].sort((a, b) => Number(b.id === defaultDocFormat(docData)) - Number(a.id === defaultDocFormat(docData))).map(item => (
+                  <button key={item.id} type="button" onClick={() => {
+                    setDownloadOpen(false);
+                    void downloadDocument(form.title, editor.getHTML(), form.orientation, item.id).catch(e => setError(e instanceof Error ? e.message : 'The download could not be made.'));
+                  }}
+                    className="block w-full px-3 py-2 text-left text-[13px] text-[#292929] hover:bg-[#f5f5f5] dark:text-gray-200 dark:hover:bg-white/5">
+                    {item.label}{docData.originalFile && item.id === defaultDocFormat(docData) ? <span className="block text-[11px] text-[#8a8a8a]">Same type as the uploaded file</span> : null}
+                  </button>
                 ))}
+                {docData?.originalFile && (
+                  <a href={fileDownloadHref(docData.originalFile.url, docData.originalFile.name)} download onClick={() => setDownloadOpen(false)}
+                    className="block w-full border-t border-[#f0f0f0] px-3 py-2 text-left text-[13px] text-[#292929] hover:bg-[#f5f5f5] dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/5">
+                    Original upload ({docData.originalFile.name})
+                  </a>
+                )}
               </div>
             )}
           </div>
@@ -765,6 +774,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
                   </a>
                 </p>
               )}
+              {editor && !isFile && <SaveTemplateButton me={me} kind="doc" title={form.title || docData.title} category={form.category} body={() => editor.getHTML()} />}
               {can.canDelete && (
                 <button type="button" onClick={() => void remove()} className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">
                   <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete document

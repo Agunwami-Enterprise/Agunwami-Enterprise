@@ -21,7 +21,7 @@ import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btn
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, docPath, downloadDocCopy, editNote, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable, sharedDepartmentsOf, type SharedDepartment, type Viewer,
+  DOC_FORMAT, SHEET_FORMAT, canBecomeEditable, docPath, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, sharedDepartmentsOf, type SharedDepartment, type Viewer,
 } from '@/modules/documents/doc-store';
 import UploadDialog, { UPLOAD_CATEGORIES as CATEGORIES } from '@/modules/documents/components/UploadDialog';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
@@ -46,7 +46,7 @@ function toDocument(id: string, d: Record<string, unknown>): WsDocument {
     category: String(d.category ?? 'General'), department: String(d.department ?? 'all'), uploadedBy: String(d.uploadedBy ?? ''),
     uploadedByUid: String(d.uploadedByUid ?? ''), description: String(d.description ?? ''), createdAt: String(d.createdAt ?? ''),
     downloadCount: Number(d.downloadCount ?? 0) || 0,
-    written: d.format === DOC_FORMAT, othersCanEdit: d.othersCanEdit === true,
+    written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT, othersCanEdit: d.othersCanEdit === true,
     aeDepartmentId: String(d.aeDepartmentId ?? ''), aeDepartmentName: String(d.aeDepartmentName ?? ''),
     sharedDepartments: sharedDepartmentsOf(d),
   };
@@ -108,7 +108,7 @@ export default function Documents() {
   // Written documents open here, for editing when you can (you can switch to viewing there) and for reading otherwise.
   async function open(d: WsDocument) {
     // Word, text and web page files are shown in the document view; PDFs and others in the browser's viewer.
-    if (d.written || isPreviewableFile(d.name, d.url)) router.push(docPath(d.id));
+    if (d.written || opensHere(d.name, d.url)) router.push(docPath(d.id));
     else window.open(d.url, '_blank', 'noopener,noreferrer');
     await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
   }
@@ -133,7 +133,7 @@ export default function Documents() {
     setConverting(d.id);
     setError('');
     try {
-      await makeEditable(d.id, me);
+      await makeFileEditable(d.id, me, d.name, d.url);
       router.push(docPath(d.id));
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : `${d.name} could not be opened for editing.`);
@@ -211,18 +211,18 @@ export default function Documents() {
                     </button>
                   ) : (
                     <>
-                      {isEditableFile(d.name, d.url) && canEditDoc(d) && (
+                      {canBecomeEditable(d.name, d.url) && canEditDoc(d) && (
                         <button className={action} onClick={() => void editFile(d)} disabled={!!converting} aria-label={`Edit ${d.name}`} title="Open it in the editor to edit it">
                           {converting === d.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Pencil className="h-4 w-4" aria-hidden />} Edit
                         </button>
                       )}
-                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title={isPreviewableFile(d.name, d.url) ? 'Read it here' : 'Open the file in a new tab'}>
+                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title={opensHere(d.name, d.url) ? 'Look at it here' : 'Open the file in a new tab'}>
                         <Eye className="h-4 w-4" aria-hidden /> View
                       </button>
                     </>
                   )}
                   {d.written ? (
-                    <button className={action} onClick={() => void download(d)} aria-label={`Download ${d.name}`} title="Download as a Word document">
+                    <button className={action} onClick={() => void download(d)} aria-label={`Download ${d.name}`} title="Download it (in the type it was uploaded as, else Word or Excel)">
                       <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
                     </button>
                   ) : d.url ? (
