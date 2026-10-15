@@ -14,8 +14,11 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 
-/** A break before the block at `pos`: `fill` is the page's empty space left, `after` the margin under the block before it. */
-interface PageBreak { pos: number; fill: number; after: number }
+/**
+ * A break before the block at `pos`: `fill` is the page's empty space left, `after` the margin under
+ * the block before it and `before` the margin above the block after it (both cancelled at the break).
+ */
+interface PageBreak { pos: number; fill: number; after: number; before: number }
 interface PaginationState { enabled: boolean; breaks: PageBreak[] }
 
 export const paginationKey = new PluginKey<PaginationState>('pagination');
@@ -25,7 +28,8 @@ const pageHeight = (width: number, landscape: boolean) => Math.round(width * (la
 /** The gap between sheets, in pixels. */
 const GAP = 24;
 
-const same = (a: PageBreak[], b: PageBreak[]) => a.length === b.length && a.every((x, i) => x.pos === b[i].pos && Math.abs(x.fill - b[i].fill) < 2);
+const same = (a: PageBreak[], b: PageBreak[]) => a.length === b.length
+  && a.every((x, i) => x.pos === b[i].pos && Math.abs(x.fill - b[i].fill) < 2 && x.after === b[i].after && x.before === b[i].before);
 
 /** Where pages break: before each top-level block that doesn't fit on the current page. */
 function measure(view: EditorView): PageBreak[] {
@@ -50,7 +54,7 @@ function measure(view: EditorView): PageBreak[] {
     const above = used === 0 ? 0 : Math.max(marginTop, prevMarginBottom) - prevMarginBottom;
     const height = el.offsetHeight;
     if (used > 0 && used + above + height > content) {
-      breaks.push({ pos: offset, fill: Math.max(0, content - used), after: prevMarginBottom });
+      breaks.push({ pos: offset, fill: Math.max(0, content - used), after: prevMarginBottom, before: marginTop });
       used = height % content;
     } else {
       used += above + height;
@@ -62,7 +66,7 @@ function measure(view: EditorView): PageBreak[] {
 }
 
 /** The space at the bottom of one sheet, the gap with its page number, and the top margin of the next. */
-function breakWidget(view: EditorView, { fill, after }: PageBreak, page: number): HTMLElement {
+function breakWidget(view: EditorView, { fill, after, before }: PageBreak, page: number): HTMLElement {
   const dom = view.dom as HTMLElement;
   const style = getComputedStyle(dom);
   const padLeft = parseFloat(style.paddingLeft) || 0;
@@ -73,8 +77,9 @@ function breakWidget(view: EditorView, { fill, after }: PageBreak, page: number)
   el.className = 'page-break';
   el.contentEditable = 'false';
   el.setAttribute('aria-hidden', 'true');
-  // The negative top margin cancels the margin under the block before it (the next block's is removed in CSS).
-  el.style.cssText = `margin: -${after}px -${padRight}px 0 -${padLeft}px; height: ${fill + padBottom + GAP + padTop}px; user-select: none;`;
+  // Negative margins cancel the margins of the blocks either side, so a page starts at its top margin
+  // and the blocks themselves (and so their measured sizes) don't change with the breaks.
+  el.style.cssText = `margin: -${after}px -${padRight}px -${before}px -${padLeft}px; height: ${fill + padBottom + GAP + padTop}px; user-select: none;`;
   const gap = document.createElement('div');
   gap.className = 'page-break-gap';
   gap.style.cssText = `position: relative; top: ${fill + padBottom}px; height: ${GAP}px;`;
@@ -110,7 +115,7 @@ export const Pagination = Extension.create<{ enabled: boolean }>({
           const s = paginationKey.getState(state);
           if (!s?.enabled || !s.breaks.length) return null;
           return DecorationSet.create(state.doc, s.breaks.map((b, i) => Decoration.widget(b.pos, view => breakWidget(view, b, i + 2), {
-            side: -1, ignoreSelection: true, key: `page-${i + 2}-${b.pos}-${Math.round(b.fill)}-${Math.round(b.after)}`,
+            side: -1, ignoreSelection: true, key: `page-${i + 2}-${b.pos}-${Math.round(b.fill)}-${b.after}-${b.before}`,
           })));
         },
         attributes(state): Record<string, string> {
