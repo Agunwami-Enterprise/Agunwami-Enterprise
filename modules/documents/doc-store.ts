@@ -21,7 +21,7 @@ import {
   collection, deleteDoc, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc, type Unsubscribe,
 } from 'firebase/firestore';
 import { cleanPastedHtml } from '@/app/components/cpanel/article/extensions';
-import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase/storage';
+import { deleteObject, getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase/storage';
 import { authDb, storage } from '@/lib/workstation/firebase';
 
 export const DOC_FORMAT = 'ae-doc';
@@ -352,8 +352,12 @@ export async function releaseDoc(id: string, me: Viewer): Promise<void> {
   }).catch(() => undefined);
 }
 
+/** Deletes a document, and the file it stored in AE Hub's storage, if any (a chat attachment saved to Documents stays with the chat). */
 export async function removeDoc(id: string): Promise<void> {
+  const snap = await getDoc(doc(authDb, 'documents', id)).catch(() => null);
+  const storagePath = snap?.exists() ? str(snap.data().storagePath) : '';
   await deleteDoc(doc(authDb, 'documents', id));
+  if (storagePath) await deleteObject(ref(storage, storagePath)).catch(() => undefined);
 }
 
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;

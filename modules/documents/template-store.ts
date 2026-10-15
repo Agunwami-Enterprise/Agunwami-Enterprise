@@ -26,9 +26,23 @@ async function json<T>(res: Response, fallback: string): Promise<T> {
   return body;
 }
 
-export async function listTemplates(): Promise<CustomTemplate[]> {
-  const { templates } = await json<{ templates: CustomTemplate[] }>(await fetch('/api/documents/templates', { cache: 'no-store' }), 'Templates could not be loaded.');
-  return templates;
+/** The company's templates, the built-in ones the CEO removed, and whether you can remove built-in ones (the CEO). */
+export async function listTemplates(): Promise<{ templates: CustomTemplate[]; hidden: string[]; canManageBuiltIns: boolean }> {
+  const body = await json<{ templates: CustomTemplate[]; hidden?: string[]; canManageBuiltIns?: boolean }>(
+    await fetch('/api/documents/templates', { cache: 'no-store' }), 'Templates could not be loaded.');
+  return { templates: body.templates ?? [], hidden: body.hidden ?? [], canManageBuiltIns: !!body.canManageBuiltIns };
+}
+
+/** Removes a built-in template for everyone (the CEO). */
+export async function hideBuiltInTemplate(id: string): Promise<void> {
+  await json(await fetch(`/api/documents/templates?builtin=${encodeURIComponent(id)}`, { method: 'DELETE' }), 'The template could not be removed.');
+}
+
+/** Brings back the built-in templates the CEO removed. */
+export async function restoreBuiltInTemplates(): Promise<void> {
+  await json(await fetch('/api/documents/templates', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ restoreBuiltIns: true }),
+  }), 'The templates could not be restored.');
 }
 
 /** A template's contents: HTML for a document, sheets (JSON) for a spreadsheet. */
