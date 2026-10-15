@@ -30,6 +30,15 @@ import type {
   ProjectTopItems,
   CreateProjectDto,
   UpdateProjectDto,
+  FeedSource,
+  ProjectAttendanceEntry,
+  ProjectAttendanceStatus,
+  ProjectDocument,
+  ProjectFeedKey,
+  ProjectFeedStatus,
+  ProjectPayment,
+  ProjectTimeTracking,
+  ProjectTrainingCourse,
 } from './projects.types';
 
 type StoredProject = Record<string, unknown> & {
@@ -65,6 +74,10 @@ interface ProjectMetricsData {
   recentRecords?: ProjectRecordsTable;
   analytics?: ProjectAnalyticsData;
   notifications?: ProjectNotification[];
+  timeTracking?: ProjectTimeTracking;
+  documents?: ProjectDocument[];
+  payments?: ProjectPayment[];
+  training?: ProjectTrainingCourse[];
 }
 
 const METRICS_TIMEOUT_MS = 5_000;
@@ -292,6 +305,7 @@ function parseMetrics(data: DataRecord): ProjectCardMetric[] {
     'revenueSeries', 'trend', 'series', 'status', 'id', 'name', 'subtitle', 'approvals',
     'pendingApprovals', 'staff', 'departments', 'tasks', 'activity', 'activities', 'feed',
     'events', 'analytics', 'topItems', 'recentRecords', 'notifications',
+    'timeTracking', 'documents', 'payments', 'training',
   ]);
   return Object.entries(data)
     .filter(([key, value]) => !excludedKeys.has(key) && value != null && typeof value !== 'object')
@@ -691,6 +705,121 @@ function parseNotifications(raw: unknown): ProjectNotification[] | undefined {
     : undefined;
 }
 
+// ── Page feeds: timeTracking, documents, payments, training ─────────────────
+
+const FEED_LIMIT = 200;
+const httpLink = (value: unknown) => {
+  const link = stringValue(value);
+  return link && /^https?:\/\//i.test(link) ? link : undefined;
+};
+const isoOrNull = (value: unknown) => {
+  const date = dateString(value);
+  return date && !Number.isNaN(Date.parse(date)) ? new Date(date).toISOString() : null;
+};
+const ATTENDANCE_STATUSES: ProjectAttendanceStatus[] = ['Clocked in', 'Clocked out', 'On leave', 'Not clocked in'];
+
+/** Optional `timeTracking`: today's attendance. */
+function parseTimeTracking(raw: unknown): ProjectTimeTracking | undefined {
+  const data = asRecord(raw);
+  if (!data) return undefined;
+  const staff = records(data.staff).flatMap(item => {
+    const name = stringValue(item.name);
+    if (!name) return [];
+    const status = ATTENDANCE_STATUSES.find(value => value.toLowerCase() === String(item.status ?? '').trim().toLowerCase())
+      ?? 'Not clocked in';
+    return [{
+      id: stringValue(item.id) ?? name,
+      name,
+      ...(stringValue(item.department) ? { department: stringValue(item.department) } : {}),
+      status,
+      clockIn: isoOrNull(item.clockIn),
+      clockOut: isoOrNull(item.clockOut),
+      hoursToday: Math.max(0, numberValue(item.hoursToday) ?? 0),
+    } satisfies ProjectAttendanceEntry];
+  });
+  const count = (key: string, status: ProjectAttendanceStatus) =>
+    numberValue(data[key]) ?? staff.filter(member => member.status === status).length;
+  return {
+    date: stringValue(data.date) ?? new Date().toISOString().slice(0, 10),
+    activeStaff: numberValue(data.activeStaff) ?? staff.length,
+    clockedIn: count('clockedIn', 'Clocked in'),
+    clockedOut: count('clockedOut', 'Clocked out'),
+    onLeave: count('onLeave', 'On leave'),
+    notClockedIn: count('notClockedIn', 'Not clocked in'),
+    hoursToday: numberValue(data.hoursToday) ?? staff.reduce((total, member) => total + member.hoursToday, 0),
+    staff,
+    hoursByDay: records(data.hoursByDay).flatMap(item => {
+      const date = stringValue(item.date);
+      const hours = numberValue(item.hours);
+      return date && hours != null ? [{ date, hours }] : [];
+    }),
+  };
+}
+
+/** Optional `documents`. */
+function parseDocuments(raw: unknown): ProjectDocument[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return records(raw).flatMap(item => {
+    const name = stringValue(item.name ?? item.title);
+    if (!name) return [];
+    return [{
+      id: stringValue(item.id) ?? name,
+      name,
+      type: stringValue(item.type) ?? 'File',
+      category: stringValue(item.category) ?? 'General',
+      ...(stringValue(item.department) ? { department: stringValue(item.department) } : {}),
+      ...(stringValue(item.uploadedBy) ? { uploadedBy: stringValue(item.uploadedBy) } : {}),
+      ...(stringValue(item.size) ? { size: stringValue(item.size) } : {}),
+      ...(httpLink(item.url) ? { url: httpLink(item.url) } : {}),
+      createdAt: isoOrNull(item.createdAt),
+    } satisfies ProjectDocument];
+  }).slice(0, FEED_LIMIT);
+}
+
+/** Optional `payments`. */
+function parsePayments(raw: unknown): ProjectPayment[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return records(raw).flatMap(item => {
+    const amount = numberValue(item.amount);
+    if (amount == null) return [];
+    const direction = String(item.direction ?? '').toLowerCase() === 'incoming' ? 'incoming' : 'outgoing';
+    return [{
+      id: stringValue(item.id) ?? `${amount}-${stringValue(item.createdAt) ?? ''}`,
+      ...(stringValue(item.reference) ? { reference: stringValue(item.reference) } : {}),
+      description: stringValue(item.description) ?? 'Payment',
+      ...(stringValue(item.party) ? { party: stringValue(item.party) } : {}),
+      amount: Math.abs(amount),
+      currency: (stringValue(item.currency) ?? 'NGN').toUpperCase(),
+      direction,
+      category: stringValue(item.category) ?? 'Payment',
+      status: stringValue(item.status) ?? 'Pending',
+      createdAt: isoOrNull(item.createdAt),
+    } satisfies ProjectPayment];
+  }).slice(0, FEED_LIMIT);
+}
+
+/** Optional `training`. */
+function parseTraining(raw: unknown): ProjectTrainingCourse[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return records(raw).flatMap(item => {
+    const title = stringValue(item.title ?? item.name);
+    if (!title) return [];
+    return [{
+      id: stringValue(item.id) ?? title,
+      title,
+      category: stringValue(item.category) ?? 'General',
+      ...(stringValue(item.level) ? { level: stringValue(item.level) } : {}),
+      ...(stringValue(item.instructor) ? { instructor: stringValue(item.instructor) } : {}),
+      ...(stringValue(item.duration) ? { duration: stringValue(item.duration) } : {}),
+      hours: Math.max(0, numberValue(item.hours) ?? 0),
+      status: stringValue(item.status) ?? 'Published',
+      learners: Math.max(0, numberValue(item.learners) ?? 0),
+      completionRate: Math.max(0, Math.min(100, numberValue(item.completionRate) ?? 0)),
+      modules: Math.max(0, numberValue(item.modules) ?? 0),
+    } satisfies ProjectTrainingCourse];
+  }).slice(0, FEED_LIMIT);
+}
+
 function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const outer = asRecord(response);
   if (!outer) throw new Error('Metrics endpoint response must be a JSON object.');
@@ -725,6 +854,10 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
   const recentRecords = parseRecordsTable(data.recentRecords);
   const analytics = parseAnalytics(data.analytics);
   const notifications = parseNotifications(data.notifications);
+  const timeTracking = parseTimeTracking(data.timeTracking);
+  const documents = parseDocuments(data.documents);
+  const payments = parsePayments(data.payments);
+  const training = parseTraining(data.training);
   const pendingApprovals = Array.isArray(data.pendingApprovals)
     ? data.pendingApprovals.length
     : numberValue(asRecord(data.pendingApprovals)?.count ?? data.pendingApprovals);
@@ -769,6 +902,10 @@ function parseMetricsResponse(response: unknown): ProjectMetricsData {
     ...(recentRecords ? { recentRecords } : {}),
     ...(analytics ? { analytics } : {}),
     ...(notifications ? { notifications } : {}),
+    ...(timeTracking ? { timeTracking } : {}),
+    ...(documents ? { documents } : {}),
+    ...(payments ? { payments } : {}),
+    ...(training ? { training } : {}),
   };
 }
 
@@ -823,13 +960,13 @@ function normalizeMetricsUrl(endpoint: string): string {
 }
 
 /** Derives a sibling action endpoint, e.g. `/api/enterprise/metrics` → `/api/enterprise/tasks`. */
-function projectActionUrl(project: StoredProject | undefined, action: 'leave-requests' | 'tasks'): URL {
+function projectActionUrl(project: StoredProject | undefined, action: 'leave-requests' | 'tasks' | 'staff'): URL {
   if (!project || typeof project.apiEndpoint !== 'string' || !project.apiEndpoint.trim()) {
     throw new Error('The selected project has no configured metrics endpoint.');
   }
   const url = new URL(normalizeMetricsUrl(project.apiEndpoint));
   if (!url.pathname.endsWith('/metrics')) {
-    throw new Error(`The selected project endpoint does not support ${action === 'tasks' ? 'project task creation' : 'leave-request updates'}.`);
+    throw new Error(`The selected project endpoint does not support ${action === 'tasks' ? 'project task creation' : action === 'staff' ? 'staff changes' : 'leave-request updates'}.`);
   }
   url.pathname = `${url.pathname.slice(0, -'metrics'.length)}${action}`;
   return url;
@@ -1084,6 +1221,31 @@ export async function listProjectRecords(): Promise<ProjectRecord[]> {
   });
 }
 
+/** A staff change AE sends to a project for someone in a linked department. */
+export interface ProjectStaffAction {
+  action: 'transfer' | 'position' | 'suspend' | 'reactivate' | 'remove';
+  uid: string;
+  email?: string;
+  /**
+   * The project's department id: where to move them (transfer), or the
+   * department the change is meant for (position, remove), so a project can
+   * skip it when they're in another department there.
+   */
+  department?: string;
+  /** Position: the department admin or staff ("position"; a transfer lands as staff). */
+  admin?: boolean;
+  /** The position's title in AE, for projects that store a title. */
+  position?: string;
+  reason?: string;
+}
+
+export interface ProjectDepartmentOptions {
+  projectId: string;
+  projectName: string;
+  /** `ceo` marks the project's CEO department, which only CEO Office links to. */
+  departments: Array<{ id: string; name: string; ceo: boolean }>;
+}
+
 export class ProjectsService {
   /**
    * Project cards with endpoint data. Responses are cached for a minute;
@@ -1110,6 +1272,32 @@ export class ProjectsService {
       })))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit);
+  }
+
+  /**
+   * One page feed (timeTracking, documents, payments or training) from every
+   * project that has a metrics endpoint, labelled with the project, plus how
+   * each project fared so the page can say which ones are missing.
+   */
+  static async getProjectFeed<K extends ProjectFeedKey>(key: K): Promise<{
+    entries: Array<{ source: FeedSource; data: NonNullable<ProjectCardData[K]> }>;
+    projects: ProjectFeedStatus[];
+  }> {
+    const projects = (await ProjectsService.getProjectsOverview()).filter(project => project.apiEndpoint);
+    const entries: Array<{ source: FeedSource; data: NonNullable<ProjectCardData[K]> }> = [];
+    const statuses = projects.map(project => {
+      const source: FeedSource = { id: project.id, name: project.name, color: project.color || '#3b82f6', kind: 'project' };
+      const data = project[key];
+      if (data != null) entries.push({ source, data: data as NonNullable<ProjectCardData[K]> });
+      return {
+        ...source,
+        ...(project.status === 'error' ? { error: project.endpointError || 'The metrics endpoint failed.' } : {}),
+        ...(project.status !== 'error' && data == null ? { missing: true } : {}),
+        ...(project.stale ? { stale: true } : {}),
+        ...(project.lastSyncedAt ? { lastSyncedAt: project.lastSyncedAt } : {}),
+      } satisfies ProjectFeedStatus;
+    });
+    return { entries, projects: statuses };
   }
 
   static async getProjectLeaveRequests(): Promise<{
@@ -1171,6 +1359,61 @@ export class ProjectsService {
    * endpoint and token; the website C-panel creates projects without them
    * (`requireMetrics: false`) and adds them later from the dashboard.
    */
+  /** Each project's public site (the origin of its metrics endpoint), for status checks. */
+  static async getProjectSites(): Promise<Array<{ id: string; name: string; url: string }>> {
+    const projects = await listProjectRecords();
+    return projects.flatMap(project => {
+      try {
+        const endpoint = typeof project.apiEndpoint === 'string' ? project.apiEndpoint : '';
+        const id = String(project._id || project.id || '');
+        return endpoint && id ? [{ id, name: String(project.name || id), url: new URL(endpoint).origin }] : [];
+      } catch {
+        return [];
+      }
+    });
+  }
+
+  /**
+   * Each project's departments (from its metrics), for linking AE departments
+   * to project departments on the Departments page.
+   */
+  static async getProjectDepartmentOptions(): Promise<ProjectDepartmentOptions[]> {
+    const projects = await ProjectsService.getProjectsOverview();
+    return projects
+      .filter(project => project.apiEndpoint && project.hasApiToken !== false)
+      .map(project => ({
+        projectId: project.id,
+        projectName: project.name,
+        departments: (project.departments ?? [])
+          .filter(department => department.id)
+          .map(department => ({
+            id: department.id,
+            name: department.name || department.id,
+            ceo: department.id.toLowerCase() === 'ceo',
+          })),
+      }));
+  }
+
+  /**
+   * Sends a staff change to a project's staff endpoint (next to its metrics
+   * endpoint). The project may reply with the person's email and staff id
+   * after the change (a department change can give new ones).
+   */
+  static async sendStaffAction(projectId: string, payload: ProjectStaffAction): Promise<{ skipped?: string; email?: string; staffId?: string }> {
+    const project = (await listProjectRecords()).find(record => record.id === projectId);
+    if (!project) throw new Error('That project no longer exists.');
+    const url = projectActionUrl(project, 'staff');
+    const { response, body } = await callProjectEndpoint(url, storedApiToken(project), { method: 'POST', body: payload });
+    if (!response.ok) throw new Error(httpErrorMessage('Project staff endpoint', response, body));
+    const record = asRecord(body);
+    if (record?.success !== true) throw new Error('Project staff endpoint did not confirm the change.');
+    return {
+      ...(typeof record.skipped === 'string' ? { skipped: record.skipped } : {}),
+      ...(typeof record.email === 'string' && record.email ? { email: record.email.trim().toLowerCase() } : {}),
+      ...(typeof record.aehubId === 'string' && record.aehubId ? { staffId: record.aehubId } : typeof record.staffId === 'string' && record.staffId ? { staffId: record.staffId } : {}),
+    };
+  }
+
   static async createProject(dto: CreateProjectDto, { requireMetrics = true } = {}): Promise<ProjectCardData> {
     const endpoint = dto.apiEndpoint?.trim() || null;
     if (!endpoint && requireMetrics) {

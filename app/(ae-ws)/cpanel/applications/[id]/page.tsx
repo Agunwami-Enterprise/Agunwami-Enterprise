@@ -1,9 +1,9 @@
-import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
-import { ApplicationDetailView } from '@/app/components/cpanel/ApplicationDetailView';
-import { getApplication } from '@/backend/modules/site-content';
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { ApplicationDetailView } from "@/app/components/cpanel/ApplicationDetailView";
+import { getApplication } from "@/backend/modules/site-content";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -13,10 +13,11 @@ export async function generateMetadata({
   const { id } = await params;
   const application = await getApplication(id);
   if (!application) {
-    return { title: 'Application Not Found | C-Panel' };
+    return { title: "Application Not Found | C-Panel" };
   }
   const name =
-    `${application.firstName} ${application.lastName}`.trim() || application.email;
+    `${application.firstName} ${application.lastName}`.trim() ||
+    application.email;
   return {
     title: `${name} - Application | C-Panel`,
   };

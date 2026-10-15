@@ -82,7 +82,7 @@ export function PartnershipsManager({ categories }: { categories: SitePartnershi
   };
 
   return (
-    <div className="mx-auto max-w-[1075px]">
+    <div className="w-full">
       <PageHeader title="Partnership Categories"
         subtitle={`${order.length} categor${order.length === 1 ? 'y' : 'ies'} · displayed on the Partnerships page`}
         action={<AddButton onClick={() => setEditing('new')}>Add Category</AddButton>} />

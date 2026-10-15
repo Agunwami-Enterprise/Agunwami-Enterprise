@@ -1,28 +1,27 @@
 /**
  * /api/ceo/documents
  *
- * GET: Lists executive and corporate documents.
+ * GET: The Documents page list: the enterprise's documents plus each project's
+ *      reported documents, labelled by source.
  * POST: Registers a new corporate document.
  */
 
 import { NextResponse } from 'next/server';
 import { requireCeoSession } from '@/lib/workstation/api-auth';
 import { DocumentsService } from '@/backend/modules/documents';
+import { getDocumentsFeed } from '@/backend/modules/documents/documents.feed';
 
-export async function GET(request: Request) {
+const errorMessage = (err: unknown) => (err instanceof Error && err.message) || 'Internal error';
+
+export async function GET() {
   const auth = await requireCeoSession();
   if (auth.error) return auth.error;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const category = (searchParams.get('category') as any) || undefined;
-    const search = searchParams.get('search') || undefined;
-
-    const docs = await DocumentsService.getDocuments({ category, search });
-    return NextResponse.json(docs);
-  } catch (err: any) {
+    return NextResponse.json(await getDocumentsFeed());
+  } catch (err) {
     console.error('[/api/ceo/documents] error:', err);
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }
 
@@ -37,8 +36,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create document' }, { status: 400 });
     }
     return NextResponse.json(created, { status: 201 });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[/api/ceo/documents POST] error:', err);
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }

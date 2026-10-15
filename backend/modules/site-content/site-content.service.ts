@@ -16,6 +16,7 @@ import {
   slugify,
 } from './site-content.defaults';
 import { readCollection, readSettings, updateCollection, writeSettings } from './site-content.store';
+import { APPLICATION_LIMITS, firstInvalidApplicationStep } from './application-rules';
 import {
   ProjectAlreadyExistsError,
   ProjectValidationError,
@@ -25,13 +26,22 @@ import {
 } from '../projects/projects.service';
 import {
   APPLICATION_STATUSES,
-  ARTICLE_CATEGORIES,
+  ARTICLE_FONTS,
+  ARTICLE_ROLES,
+  MAX_CATEGORY_LENGTH,
+  MAX_TAGS,
+  MAX_TAG_LENGTH,
+  SEO_DESCRIPTION_MAX,
+  SEO_TITLE_MAX,
   PROJECT_KINDS,
   SITE_ICON_NAMES,
   type ApplicationStatus,
+  type ArticleCategoryInfo,
+  type ArticleCollaborator,
+  type ArticlePerson,
+  type ArticleRole,
   type PartnershipApplication,
   type SiteArticle,
-  type SiteArticleCategory,
   type SiteIconName,
   type SitePartnershipCategory,
   type ProjectKind,
@@ -40,6 +50,7 @@ import {
   type SiteSettings,
   type SiteTeamMember,
 } from './site-content.types';
+import { LOCK_MS, heldByOther, permissionsOf, type ArticleActor, type ArticlePermissions } from './article-access';
 
 export class SiteContentValidationError extends Error {
   constructor(message: string) {
@@ -52,6 +63,22 @@ export class SiteContentNotFoundError extends Error {
   constructor(what: string) {
     super(`${what} not found.`);
     this.name = 'SiteContentNotFoundError';
+  }
+}
+
+/** Not allowed for this person (e.g. editing an article they only have view access to). */
+export class SiteContentForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SiteContentForbiddenError';
+  }
+}
+
+/** Clashes with someone else's work (e.g. they're editing the article, or saved newer changes). */
+export class SiteContentConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SiteContentConflictError';
   }
 }
 
@@ -103,20 +130,57 @@ function uniqueSlug(base: string, taken: Iterable<string>, fallback: string): st
   return slug;
 }
 
+const COLOR = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+)\s*)?\))$/i;
+const FONT_FAMILIES = new Set(ARTICLE_FONTS.map(f => f.css.replace(/\s+/g, ' ').trim()));
+
+// What the C-panel article editor produces (see app/components/cpanel/article/extensions.ts).
 const ARTICLE_HTML: sanitizeHtml.IOptions = {
   allowedTags: [
-    'p', 'br', 'h2', 'h3', 'h4', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'code', 'pre',
+    'p', 'br', 'h2', 'h3', 'h4', 'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'code', 'pre', 'span', 'sub', 'sup',
     'blockquote', 'ul', 'ol', 'li', 'a', 'img', 'hr', 'figure', 'figcaption',
+    'table', 'colgroup', 'col', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+    // Checklists: <ul data-type="taskList"><li data-checked><label><input type="checkbox"></label><div>…</div></li>
+    'label', 'input', 'div',
   ],
   allowedAttributes: {
     a: ['href', 'target', 'rel'],
-    img: ['src', 'alt', 'title'],
+    // data-description: the image's description when the writer chose not to show it.
+    img: ['src', 'alt', 'title', 'data-description'],
     p: ['style'], h2: ['style'], h3: ['style'], h4: ['style'],
+    span: ['style'], mark: ['style', 'data-color'],
+    ul: ['data-type'], li: ['data-type', 'data-checked'],
+    input: ['type', 'checked', 'disabled'],
+    th: ['colspan', 'rowspan', 'style'], td: ['colspan', 'rowspan', 'style'],
+    table: ['style'], col: ['style'],
   },
-  allowedStyles: { '*': { 'text-align': [/^(left|right|center|justify)$/] } },
+  allowedStyles: {
+    '*': {
+      'text-align': [/^(left|right|center|justify)$/],
+      color: [COLOR],
+      'background-color': [COLOR],
+      'font-size': [/^([89]|[1-6]\d|7[0-2])(\.\d)?px$/],
+      'font-family': [/^[\w\s,"'-]{1,80}$/],
+      'line-height': [/^(1|1\.15|1\.5|1\.85|2|2\.5)$/],
+      'margin-left': [/^(2|4|6|8|10|12)em$/],
+      'min-width': [/^\d{1,4}px$/],
+      width: [/^\d{1,4}px$/],
+    },
+  },
   allowedSchemes: ['http', 'https', 'mailto'],
+  // Only checkboxes (checklists) among inputs, always read-only on the site.
+  exclusiveFilter: frame => frame.tag === 'input' && frame.attribs.type !== 'checkbox',
   transformTags: {
     a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer' }),
+    input: (tagName, attribs) => ({ tagName, attribs: { ...attribs, disabled: '' } }),
+    span: (tagName, attribs) => {
+      // Fonts outside the editor's list are dropped.
+      const style = (attribs.style ?? '').split(';').filter(rule => {
+        const [prop, ...rest] = rule.split(':');
+        if (prop?.trim().toLowerCase() !== 'font-family') return true;
+        return FONT_FAMILIES.has(rest.join(':').replace(/\s+/g, ' ').trim());
+      }).join(';');
+      return { tagName, attribs: { ...attribs, style } };
+    },
   },
 };
 
@@ -452,10 +516,53 @@ function estimateReadTime(html: string): string {
   return `${Math.max(1, Math.round(words / 220))} min read`;
 }
 
-export async function saveArticle(input: Input, id?: string): Promise<SiteArticle> {
+/** An article as listed in the C-panel: with what this person may do; private fields are left out where they have no access. */
+export type ArticleListItem = SiteArticle & { permissions: ArticlePermissions };
+
+export async function listArticlesFor(actor: ArticleActor): Promise<ArticleListItem[]> {
+  const now = Date.now();
+  return (await listArticles()).map(article => {
+    const permissions = permissionsOf(article, actor);
+    // Only a lock that hasn't lapsed means someone is editing.
+    const lock = article.lock && now - Date.parse(article.lock.at) < LOCK_MS ? article.lock : null;
+    if (permissions.canView) return { ...article, lock, permissions };
+    return { ...article, body: '', pullQuote: '', collaborators: [], lock: null, permissions };
+  });
+}
+
+/** Tags: trimmed, without duplicates (ignoring case), at most MAX_TAGS. */
+function tagList(raw: unknown): string[] {
+  const tags: string[] = [];
+  for (const value of Array.isArray(raw) ? raw : []) {
+    if (typeof value !== 'string') continue;
+    const tag = value.trim().replace(/\s+/g, ' ');
+    if (!tag) continue;
+    if (tag.length > MAX_TAG_LENGTH) throw new SiteContentValidationError(`Tags can be up to ${MAX_TAG_LENGTH} characters ("${tag.slice(0, 20)}…").`);
+    if (!tags.some(t => t.toLowerCase() === tag.toLowerCase())) tags.push(tag);
+  }
+  if (tags.length > MAX_TAGS) throw new SiteContentValidationError(`An article can have up to ${MAX_TAGS} tags.`);
+  return tags;
+}
+
+const personOf = (actor: ArticleActor): ArticlePerson => ({ uid: actor.uid, name: actor.name, email: actor.email });
+
+function findArticle(articles: SiteArticle[], id: string): SiteArticle {
+  const article = articles.find(a => a.id === id);
+  if (!article) throw new SiteContentNotFoundError('Article');
+  return article;
+}
+
+/**
+ * Saves an article. A new one belongs to whoever creates it. Changes need
+ * edit access, publishing or unpublishing needs manage access, and a save is
+ * refused while someone else has the article open, or if it was saved by
+ * someone else after `baseUpdatedAt` (when the editor opened it).
+ */
+export async function saveArticle(input: Input, actor: ArticleActor, id?: string): Promise<SiteArticle> {
   const title = text(input, 'title', { required: true, max: 160, label: 'Title' });
-  const category = input.category as SiteArticleCategory;
-  if (!ARTICLE_CATEGORIES.includes(category)) throw new SiteContentValidationError('Choose a category.');
+  const requested = text(input, 'category', { max: MAX_CATEGORY_LENGTH, label: 'Category' });
+  const category = (await listArticleCategories()).find(c => sameName(c.name, requested))?.name;
+  if (!category) throw new SiteContentValidationError('Choose a category.');
   const body = sanitizeArticleHtml(typeof input.body === 'string' ? input.body : '');
   if (body.length > 200_000) throw new SiteContentValidationError('The article is too long.');
   const published = input.published === true;
@@ -469,8 +576,26 @@ export async function saveArticle(input: Input, id?: string): Promise<SiteArticl
   await updateCollection('articles', defaultArticles, articles => {
     const existing = id ? articles.find(a => a.id === id) : undefined;
     if (id && !existing) throw new SiteContentNotFoundError('Article');
-    const slug = existing?.slug ?? uniqueSlug(title, articles.map(a => a.slug), 'article');
-    const image = url(input, 'image', { label: 'Card image URL' });
+    if (existing) {
+      const can = permissionsOf(existing, actor);
+      if (!can.canEdit) throw new SiteContentForbiddenError('You can’t edit this article. Ask its owner for edit access.');
+      if (existing.published !== published && !can.canPublish) {
+        throw new SiteContentForbiddenError(`Only the owner or a manager can ${published ? 'publish' : 'unpublish'} this article.`);
+      }
+      const other = heldByOther(existing.lock, actor.uid);
+      if (other) throw new SiteContentConflictError(`${other.name || other.email} is editing this article right now, so it can’t be saved.`);
+      const base = typeof input.baseUpdatedAt === 'string' ? input.baseUpdatedAt : '';
+      if (base && existing.updatedAt && base !== existing.updatedAt) {
+        throw new SiteContentConflictError(`${existing.updatedBy || 'Someone'} saved changes after you opened this article. Copy your changes, reload, and add them again.`);
+      }
+    }
+    // The URL slug can be changed in SEO settings; otherwise it's made from the first title and kept.
+    const requestedSlug = slugify(text(input, 'slug', { max: 120, label: 'URL slug' }));
+    const others = articles.filter(a => a.id !== existing?.id).map(a => a.slug);
+    const slug = requestedSlug && requestedSlug !== existing?.slug
+      ? uniqueSlug(requestedSlug, others, 'article')
+      : existing?.slug ?? uniqueSlug(title, others, 'article');
+    const image = url(input, 'image', { label: 'Feature image URL' });
     saved = {
       id: existing?.id ?? slug,
       slug,
@@ -486,6 +611,17 @@ export async function saveArticle(input: Input, id?: string): Promise<SiteArticl
       heroImage: url(input, 'heroImage', { label: 'Hero image URL' }) || image,
       body,
       pullQuote: text(input, 'pullQuote', { max: 400, label: 'Pull quote' }),
+      showToc: input.showToc !== false,
+      seoTitle: text(input, 'seoTitle', { max: SEO_TITLE_MAX, label: 'Meta title' }),
+      seoDescription: text(input, 'seoDescription', { max: SEO_DESCRIPTION_MAX, label: 'Meta description' }),
+      seoImage: url(input, 'seoImage', { label: 'Social share image URL' }),
+      noIndex: input.noIndex === true,
+      tags: tagList(input.tags),
+      owner: existing ? existing.owner ?? null : personOf(actor),
+      collaborators: existing?.collaborators ?? [],
+      lock: existing ? existing.lock ?? null : null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor.name || actor.email,
       published,
     };
     return existing ? articles.map(a => (a.id === existing.id ? saved! : a)) : [...articles, saved];
@@ -493,11 +629,95 @@ export async function saveArticle(input: Input, id?: string): Promise<SiteArticl
   return saved!;
 }
 
-export async function deleteArticle(id: string): Promise<void> {
+/** Deleting is for the owner, and the CEO (even without access to the article). */
+export async function deleteArticle(id: string, actor: ArticleActor): Promise<void> {
   await updateCollection('articles', defaultArticles, articles => {
-    if (!articles.some(a => a.id === id)) throw new SiteContentNotFoundError('Article');
+    const article = findArticle(articles, id);
+    if (!permissionsOf(article, actor).canDelete) throw new SiteContentForbiddenError('Only the article’s owner or the CEO can delete it.');
     return articles.filter(a => a.id !== id);
   });
+}
+
+function updateArticle(id: string, change: (article: SiteArticle) => SiteArticle): Promise<SiteArticle> {
+  let saved: SiteArticle | undefined;
+  return updateCollection('articles', defaultArticles, articles => {
+    const article = findArticle(articles, id);
+    saved = change(article);
+    return articles.map(a => (a.id === id ? saved! : a));
+  }).then(() => saved!);
+}
+
+function personInput(raw: unknown, label: string): ArticlePerson {
+  const value = (raw && typeof raw === 'object' ? raw : {}) as Input;
+  const uid = text(value, 'uid', { max: 128, label });
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid)) throw new SiteContentValidationError(`Choose a person for ${label.toLowerCase()}.`);
+  return { uid, name: text(value, 'name', { max: 120, label: 'Name' }), email: text(value, 'email', { max: 200, label: 'Email' }) };
+}
+
+/** Sets who else has access, for the owner and managers. The owner is never in the list. */
+export async function setArticleCollaborators(id: string, input: Input, actor: ArticleActor): Promise<SiteArticle> {
+  const list = Array.isArray(input.collaborators) ? input.collaborators : [];
+  if (list.length > 50) throw new SiteContentValidationError('An article can be shared with up to 50 people.');
+  const collaborators: ArticleCollaborator[] = [];
+  for (const raw of list) {
+    const person = personInput(raw, 'Access');
+    const role = (raw as Input).role as ArticleRole;
+    if (!ARTICLE_ROLES.includes(role)) throw new SiteContentValidationError('Choose view, edit or manage access.');
+    if (!collaborators.some(c => c.uid === person.uid)) collaborators.push({ ...person, role });
+  }
+  return updateArticle(id, article => {
+    if (!permissionsOf(article, actor).canShare) throw new SiteContentForbiddenError('Only the owner or a manager can share this article.');
+    return { ...article, collaborators: collaborators.filter(c => c.uid !== article.owner?.uid) };
+  });
+}
+
+/** Hands the article to someone else (owner only); the previous owner keeps manage access. */
+export async function transferArticleOwnership(id: string, input: Input, actor: ArticleActor): Promise<SiteArticle> {
+  const next = personInput(input.owner, 'New owner');
+  return updateArticle(id, article => {
+    if (!permissionsOf(article, actor).canTransfer) throw new SiteContentForbiddenError('Only the owner can hand this article to someone else.');
+    if (next.uid === actor.uid) return article;
+    const others = (article.collaborators ?? []).filter(c => c.uid !== next.uid && c.uid !== actor.uid);
+    return { ...article, owner: next, collaborators: [{ ...personOf(actor), role: 'manager' }, ...others] };
+  });
+}
+
+/** Makes `actor` the owner of an article from before sharing (one with no owner). */
+export async function claimArticle(id: string, actor: ArticleActor): Promise<SiteArticle> {
+  return updateArticle(id, article => {
+    if (!permissionsOf(article, actor).canClaim) throw new SiteContentConflictError('This article already has an owner.');
+    return { ...article, owner: personOf(actor), collaborators: (article.collaborators ?? []).filter(c => c.uid !== actor.uid) };
+  });
+}
+
+export interface ArticleLockResult { locked: boolean; lock: SiteArticle['lock'] }
+
+/**
+ * The edit lock: whoever opens an article to edit it holds it (their page
+ * renews it every minute); others get it read-only until it's released or
+ * lapses. The owner and managers can take it over.
+ */
+export async function lockArticle(id: string, input: Input, actor: ArticleActor): Promise<ArticleLockResult> {
+  const action = input.action === 'release' ? 'release' : 'acquire';
+  let result: ArticleLockResult = { locked: false, lock: null };
+  await updateArticle(id, article => {
+    const can = permissionsOf(article, actor);
+    if (action === 'release') {
+      result = { locked: false, lock: null };
+      return article.lock?.uid === actor.uid ? { ...article, lock: null } : article;
+    }
+    if (!can.canEdit) throw new SiteContentForbiddenError('You can’t edit this article.');
+    const other = heldByOther(article.lock, actor.uid);
+    if (other && input.force !== true) {
+      result = { locked: false, lock: other };
+      return article;
+    }
+    if (other && !can.canShare && !can.canClaim) throw new SiteContentForbiddenError('Only the owner or a manager can take over editing.');
+    const lock = { ...personOf(actor), at: new Date().toISOString() };
+    result = { locked: true, lock };
+    return { ...article, lock };
+  });
+  return result;
 }
 
 // ── Partnership categories ──────────────────────────────────────────────────
@@ -566,20 +786,27 @@ const APPLICATION_TEXT_FIELDS = [
 ] as const;
 
 /** Stores a submission of the public /partnerships/apply form. */
-export async function submitApplication(input: Input): Promise<PartnershipApplication> {
-  const email = text(input, 'email', { required: true, max: 200, label: 'Email' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new SiteContentValidationError('Enter a valid email address.');
+export async function submitApplication(
+  input: Input,
+  { flaggedAsSpam = false }: { flaggedAsSpam?: boolean } = {},
+): Promise<PartnershipApplication> {
+  // Same rules the form checks step by step, so this only fails for requests
+  // that skipped the form.
+  const invalid = firstInvalidApplicationStep(input);
+  if (invalid) throw new SiteContentValidationError(Object.values(invalid.errors)[0]);
+  const email = text(input, 'email', { required: true, max: APPLICATION_LIMITS.email, label: 'Email' });
   const application: PartnershipApplication = {
     id: randomUUID(),
     status: 'pending',
     submittedAt: new Date().toISOString(),
-    firstName: text(input, 'firstName', { required: true, max: 80, label: 'First name' }),
-    lastName: text(input, 'lastName', { required: true, max: 80, label: 'Last name' }),
+    ...(flaggedAsSpam ? { flaggedAsSpam: true } : {}),
+    firstName: text(input, 'firstName', { required: true, max: APPLICATION_LIMITS.name, label: 'First name' }),
+    lastName: text(input, 'lastName', { required: true, max: APPLICATION_LIMITS.name, label: 'Last name' }),
     email,
     helpNeeded: list(input, 'helpNeeded', { max: 20, itemMax: 120 }),
     challenges: list(input, 'challenges', { max: 20, itemMax: 120 }),
     services: list(input, 'services', { max: 20, itemMax: 120 }),
-    ...Object.fromEntries(APPLICATION_TEXT_FIELDS.map(key => [key, text(input, key, { max: 3000 })])),
+    ...Object.fromEntries(APPLICATION_TEXT_FIELDS.map(key => [key, text(input, key, { max: APPLICATION_LIMITS.text })])),
   } as PartnershipApplication;
   await updateCollection('applications', noApplications, applications => [...applications, application]);
   return application;
@@ -600,13 +827,81 @@ export async function deleteApplication(id: string): Promise<void> {
   });
 }
 
+// ── Article categories (kept in the site settings) ─────────────────────────
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function categoryName(input: Input, key: string): string {
+  return text(input, key, { required: true, max: MAX_CATEGORY_LENGTH, label: 'Category name' }).replace(/\s+/g, ' ');
+}
+
+/** The categories in order, with how many articles each has; includes any category an article still uses. */
+export async function listArticleCategories(): Promise<ArticleCategoryInfo[]> {
+  const [{ articleCategories }, articles] = await Promise.all([getSettings(), listArticles()]);
+  const names = [...articleCategories];
+  for (const article of articles) {
+    if (article.category && !names.some(n => sameName(n, article.category))) names.push(article.category);
+  }
+  return names.map(name => ({ name, articles: articles.filter(a => sameName(a.category, name)).length }));
+}
+
+async function writeArticleCategories(names: string[]): Promise<void> {
+  await writeSettings({ ...await getSettings(), articleCategories: names });
+}
+
+export async function addArticleCategory(input: Input): Promise<ArticleCategoryInfo[]> {
+  const name = categoryName(input, 'name');
+  const current = await listArticleCategories();
+  if (current.some(c => sameName(c.name, name))) throw new SiteContentValidationError(`There is already a "${name}" category.`);
+  if (current.length >= 50) throw new SiteContentValidationError('There can be up to 50 categories.');
+  await writeArticleCategories([...current.map(c => c.name), name]);
+  return listArticleCategories();
+}
+
+/** Renames a category, moving its articles with it. */
+export async function renameArticleCategory(input: Input): Promise<ArticleCategoryInfo[]> {
+  const from = text(input, 'from', { required: true, max: 200, label: 'Category' });
+  const to = categoryName(input, 'to');
+  const current = await listArticleCategories();
+  const existing = current.find(c => sameName(c.name, from));
+  if (!existing) throw new SiteContentNotFoundError('Category');
+  if (!sameName(from, to) && current.some(c => sameName(c.name, to))) throw new SiteContentValidationError(`There is already a "${to}" category.`);
+  if (existing.articles > 0) {
+    await updateCollection('articles', defaultArticles, articles =>
+      articles.map(a => (sameName(a.category, existing.name) ? { ...a, category: to } : a)));
+  }
+  await writeArticleCategories(current.map(c => (c.name === existing.name ? to : c.name)));
+  return listArticleCategories();
+}
+
+/** Removes an empty category; one with articles must be emptied (or renamed) first. */
+export async function removeArticleCategory(name: string): Promise<ArticleCategoryInfo[]> {
+  const current = await listArticleCategories();
+  const existing = current.find(c => sameName(c.name, name));
+  if (!existing) throw new SiteContentNotFoundError('Category');
+  if (existing.articles > 0) {
+    throw new SiteContentValidationError(`${existing.articles} article${existing.articles === 1 ? ' is' : 's are'} in "${existing.name}". Move ${existing.articles === 1 ? 'it' : 'them'} to another category first.`);
+  }
+  if (current.length <= 1) throw new SiteContentValidationError('Keep at least one category.');
+  await writeArticleCategories(current.filter(c => c !== existing).map(c => c.name));
+  return listArticleCategories();
+}
+
 // ── Settings ────────────────────────────────────────────────────────────────
 
 export async function getSettings(): Promise<SiteSettings> {
   const defaults = defaultSettings();
   const stored = await readSettings();
   if (!stored) return defaults;
-  return { ...defaults, ...stored, footer: { ...defaults.footer, ...(stored.footer ?? {}) } };
+  const categories = Array.isArray(stored.articleCategories)
+    ? stored.articleCategories.filter((c): c is string => typeof c === 'string' && !!c.trim())
+    : [];
+  return {
+    ...defaults,
+    ...stored,
+    articleCategories: categories.length ? categories : defaults.articleCategories,
+    footer: { ...defaults.footer, ...(stored.footer ?? {}) },
+  };
 }
 
 function color(input: Input, key: string, label: string): string {
@@ -633,6 +928,8 @@ export async function saveSettings(input: Input): Promise<SiteSettings> {
   const opacity = Number(footerInput.backgroundOpacity);
 
   const settings: SiteSettings = {
+    // Managed on their own (article categories), so kept as they are.
+    articleCategories: (await getSettings()).articleCategories,
     companyName: text(input, 'companyName', { required: true, max: 80, label: 'Company name' }),
     tagline: text(input, 'tagline', { max: 120, label: 'Tagline' }),
     location: text(input, 'location', { max: 120, label: 'Location' }),

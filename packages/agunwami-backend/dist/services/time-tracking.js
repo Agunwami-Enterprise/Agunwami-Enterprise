@@ -2,6 +2,8 @@
 // ─── Time Tracking Services ───────────────────────────────────────────────────
 // All clock-in / clock-out / break operations for staff members.
 // Writes to: /timeTracking/{uid}/days/{YYYY-MM-DD} and /timeTrackingLive/{uid}
+// Every function takes an optional `db` for apps whose clock-in data lives in
+// a different Firebase project than the business data.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.monthId = exports.todayId = void 0;
 exports.subscribeToday = subscribeToday;
@@ -19,36 +21,38 @@ const time_1 = require("../utils/time");
 Object.defineProperty(exports, "todayId", { enumerable: true, get: function () { return time_1.todayId; } });
 Object.defineProperty(exports, "monthId", { enumerable: true, get: function () { return time_1.monthId; } });
 // ── Collection refs ──────────────────────────────────────────────────────────
-function dayRef(uid, dateId) {
-    return (0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'timeTracking', uid, 'days', dateId);
+function dayRef(db, uid, dateId) {
+    return (0, firestore_1.doc)(db, 'timeTracking', uid, 'days', dateId);
 }
-function liveRef(uid) {
-    return (0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'timeTrackingLive', uid);
+function liveRef(db, uid) {
+    return (0, firestore_1.doc)(db, 'timeTrackingLive', uid);
 }
 // ── Real-time subscriptions ──────────────────────────────────────────────────
+// On a read error each subscription calls back with an empty result (so
+// callers stop loading) and passes the error to `onError`.
 /** Subscribe to today's time-tracking document for a user. */
-function subscribeToday(uid, cb) {
+function subscribeToday(uid, cb, db = (0, firebase_instance_1.getDb)(), onError) {
     if (!uid) {
         cb(null);
         return () => { };
     }
-    return (0, firestore_1.onSnapshot)(dayRef(uid, (0, time_1.todayId)()), (snap) => cb(snap.exists() ? snap.data() : null), (err) => console.warn('[agunwami-backend] subscribeToday error:', err));
+    return (0, firestore_1.onSnapshot)(dayRef(db, uid, (0, time_1.todayId)()), (snap) => cb(snap.exists() ? snap.data() : null), (err) => { console.warn('[agunwami-backend] subscribeToday error:', err); cb(null); onError?.(err); });
 }
 /** Subscribe to a user's monthly summary document. */
-function subscribeMonthlySummary(uid, month, cb) {
+function subscribeMonthlySummary(uid, month, cb, db = (0, firebase_instance_1.getDb)(), onError) {
     if (!uid) {
         cb(null);
         return () => { };
     }
-    return (0, firestore_1.onSnapshot)((0, firestore_1.doc)((0, firebase_instance_1.getDb)(), 'timeTracking', uid, 'monthlySummary', month), (snap) => cb(snap.exists() ? snap.data() : null), (err) => console.warn('[agunwami-backend] subscribeMonthlySummary error:', err));
+    return (0, firestore_1.onSnapshot)((0, firestore_1.doc)(db, 'timeTracking', uid, 'monthlySummary', month), (snap) => cb(snap.exists() ? snap.data() : null), (err) => { console.warn('[agunwami-backend] subscribeMonthlySummary error:', err); cb(null); onError?.(err); });
 }
 /** Subscribe to the live team presence collection. */
-function subscribeLiveTeam(cb) {
-    return (0, firestore_1.onSnapshot)((0, firestore_1.collection)((0, firebase_instance_1.getDb)(), 'timeTrackingLive'), (snap) => cb(snap.docs.map((d) => ({ uid: d.id, ...d.data() }))), (err) => console.warn('[agunwami-backend] subscribeLiveTeam error:', err));
+function subscribeLiveTeam(cb, db = (0, firebase_instance_1.getDb)(), onError) {
+    return (0, firestore_1.onSnapshot)((0, firestore_1.collection)(db, 'timeTrackingLive'), (snap) => cb(snap.docs.map((d) => ({ uid: d.id, ...d.data() }))), (err) => { console.warn('[agunwami-backend] subscribeLiveTeam error:', err); cb([]); onError?.(err); });
 }
 /** Fetch a specific day document (one-time read). */
-async function getDay(uid, dateId) {
-    const snap = await (0, firestore_1.getDoc)(dayRef(uid, dateId));
+async function getDay(uid, dateId, db = (0, firebase_instance_1.getDb)()) {
+    const snap = await (0, firestore_1.getDoc)(dayRef(db, uid, dateId));
     return snap.exists() ? snap.data() : null;
 }
 // ── Live totals helper ────────────────────────────────────────────────────────
@@ -72,15 +76,14 @@ function computeLiveTotals(sessions, now) {
     };
 }
 // ── Internal helpers ─────────────────────────────────────────────────────────
-async function syncLive(uid, info, status, todayClockIn) {
-    const db = (0, firebase_instance_1.getDb)();
+async function syncLive(db, uid, info, status, todayClockIn) {
     const payload = {
         name: info.name, role: info.role, department: info.department,
         status, lastUpdated: (0, firestore_1.serverTimestamp)(),
     };
     if (todayClockIn !== undefined)
         payload.todayClockIn = todayClockIn;
-    await (0, firestore_1.setDoc)(liveRef(uid), payload, { merge: true });
+    await (0, firestore_1.setDoc)(liveRef(db, uid), payload, { merge: true });
     // Keep users/{uid} in sync for aehub and workstation compatibility
     try {
         const userStatusMap = {
@@ -112,21 +115,21 @@ function closeLastSession(sessions, end) {
 }
 // ── Clock actions ─────────────────────────────────────────────────────────────
 /** Clock a staff member in for today. Creates a new day document. */
-async function clockIn(uid, info) {
+async function clockIn(uid, info, db = (0, firebase_instance_1.getDb)()) {
     const now = firestore_1.Timestamp.now();
     const dayDoc = {
         date: (0, time_1.todayId)(), clockIn: now, clockOut: null, status: 'onshift',
         totalWorkedMinutes: 0, totalBreakMinutes: 0,
         sessions: [{ type: 'work', start: now, end: null }],
     };
-    await (0, firestore_1.setDoc)(dayRef(uid, (0, time_1.todayId)()), dayDoc);
-    await syncLive(uid, info, 'onshift', now);
+    await (0, firestore_1.setDoc)(dayRef(db, uid, (0, time_1.todayId)()), dayDoc);
+    await syncLive(db, uid, info, 'onshift', now);
 }
 /** Start a break session. */
-async function startBreak(uid, info) {
+async function startBreak(uid, info, db = (0, firebase_instance_1.getDb)()) {
     const now = firestore_1.Timestamp.now();
-    const ref = dayRef(uid, (0, time_1.todayId)());
-    await (0, firestore_1.runTransaction)((0, firebase_instance_1.getDb)(), async (tx) => {
+    const ref = dayRef(db, uid, (0, time_1.todayId)());
+    await (0, firestore_1.runTransaction)(db, async (tx) => {
         const snap = await tx.get(ref);
         if (!snap.exists())
             return;
@@ -135,13 +138,13 @@ async function startBreak(uid, info) {
         sessions.push({ type: 'break', start: now, end: null });
         tx.update(ref, { sessions, status: 'onbreak' });
     });
-    await syncLive(uid, info, 'onbreak');
+    await syncLive(db, uid, info, 'onbreak');
 }
 /** End a break and resume work. */
-async function resumeWork(uid, info) {
+async function resumeWork(uid, info, db = (0, firebase_instance_1.getDb)()) {
     const now = firestore_1.Timestamp.now();
-    const ref = dayRef(uid, (0, time_1.todayId)());
-    await (0, firestore_1.runTransaction)((0, firebase_instance_1.getDb)(), async (tx) => {
+    const ref = dayRef(db, uid, (0, time_1.todayId)());
+    await (0, firestore_1.runTransaction)(db, async (tx) => {
         const snap = await tx.get(ref);
         if (!snap.exists())
             return;
@@ -150,13 +153,13 @@ async function resumeWork(uid, info) {
         sessions.push({ type: 'work', start: now, end: null });
         tx.update(ref, { sessions, status: 'onshift' });
     });
-    await syncLive(uid, info, 'onshift');
+    await syncLive(db, uid, info, 'onshift');
 }
 /** Clock a staff member out for today. Calculates totals from sessions. */
-async function clockOut(uid, info) {
+async function clockOut(uid, info, db = (0, firebase_instance_1.getDb)()) {
     const now = firestore_1.Timestamp.now();
-    const ref = dayRef(uid, (0, time_1.todayId)());
-    await (0, firestore_1.runTransaction)((0, firebase_instance_1.getDb)(), async (tx) => {
+    const ref = dayRef(db, uid, (0, time_1.todayId)());
+    await (0, firestore_1.runTransaction)(db, async (tx) => {
         const snap = await tx.get(ref);
         if (!snap.exists())
             return;
@@ -177,5 +180,5 @@ async function clockOut(uid, info) {
             totalBreakMinutes: Math.round(breakMs / 60000),
         });
     });
-    await syncLive(uid, info, 'offshift');
+    await syncLive(db, uid, info, 'offshift');
 }

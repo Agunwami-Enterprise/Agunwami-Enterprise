@@ -1,9 +1,11 @@
 'use client';
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import { useEffect, useState } from 'react';
 import { markAllNotifsRead, subscribeNotifications } from '@/modules/notifications/services';
 import { categoryColors, timeAgo, useProjectNotifications } from '@/modules/notifications/project-notifications';
 import { useAuth } from '@/lib/workstation/auth-context';
+import { useInAppPreferences } from '@/modules/settings/use-in-app-preferences';
 import { SkeletonNotifications } from '@/app/components/ceo/Skeleton';
 
 type NotifTab    = 'notifications' | 'announcements';
@@ -34,17 +36,26 @@ export default function NotificationsPage() {
   const [search, setSearch] = useState('');
   const [notifs,   setNotifs]   = useState<Notif[]>([]);
   const [loading,  setLoading]  = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.uid) {
       if (!authLoading) setLoading(false);
       return;
     }
-    return subscribeNotifications(user.uid, (data) => { setNotifs(data as Notif[]); setLoading(false); });
+    return subscribeNotifications(
+      user.uid,
+      (data) => { setNotifs(data as Notif[]); setLoading(false); },
+      (error) => setLoadError(error.message || 'Unknown error'),
+    );
   }, [user?.uid, authLoading]);
 
   // Project-wide events reported by each project's metrics endpoint.
   const project = useProjectNotifications();
+  // Settings → Notifications decides which categories appear.
+  const inApp = useInAppPreferences();
+  const projectItems = project.items.filter(n => inApp[n.category]);
+  const shownNotifs = notifs.filter(n => inApp[n.category]);
 
   /* Create Announcement modal */
   const [showAnn,    setShowAnn]    = useState(false);
@@ -56,20 +67,20 @@ export default function NotificationsPage() {
   const term = search.trim().toLowerCase();
   const matches = (title: string, body: string) =>
     !term || title.toLowerCase().includes(term) || body.toLowerCase().includes(term);
-  const filtered = filter === 'projects' ? [] : notifs.filter(n =>
+  const filtered = filter === 'projects' ? [] : shownNotifs.filter(n =>
     (filter === 'all' || n.category === filter) && matches(n.title, n.body));
-  const filteredProject = project.items.filter(n =>
+  const filteredProject = projectItems.filter(n =>
     (filter === 'all' || filter === 'projects' || n.category === filter) && matches(n.title, n.message));
 
-  const unread = notifs.filter(n => !n.read).length;
+  const unread = shownNotifs.filter(n => !n.read).length;
   const countFor = (key: NotifFilter) => key === 'all'
-    ? notifs.length + project.items.length
+    ? shownNotifs.length + projectItems.length
     : key === 'projects'
-      ? project.items.length
-      : notifs.filter(n => n.category === key).length + project.items.filter(n => n.category === key).length;
+      ? projectItems.length
+      : shownNotifs.filter(n => n.category === key).length + projectItems.filter(n => n.category === key).length;
 
   async function markAllRead() {
-    const ids = notifs.filter(n => !n.read).map(n => n.id);
+    const ids = shownNotifs.filter(n => !n.read).map(n => n.id);
     setNotifs(prev => prev.map(n => ({ ...n, read: true, tag: '' })));
     await markAllNotifsRead(ids).catch(err => console.error('[Notifications] Could not mark as read:', err));
   }
@@ -97,6 +108,19 @@ export default function NotificationsPage() {
             </button>
           </div>
         </div>
+
+        {loadError && (
+          <p role="alert" className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-[12px] text-red-700 dark:bg-red-500/10 dark:text-red-300">
+            Your notifications could not be loaded: {loadError}
+          </p>
+        )}
+
+        {Object.values(inApp).some(on => !on) && (
+          <p className="mb-4 rounded-xl bg-gray-50 px-4 py-2.5 text-[12px] text-gray-600 dark:bg-white/5 dark:text-gray-400">
+            Some categories are hidden. Change this in{' '}
+            <a href="/ceo/settings?tab=notifications" className="font-semibold text-[#d97706] hover:underline">Settings → Notifications</a>.
+          </p>
+        )}
 
         {/* Stat cards */}
         <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -300,9 +324,9 @@ export default function NotificationsPage() {
 
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
+    <AeOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
+    </AeOverlay>
   );
 }
 

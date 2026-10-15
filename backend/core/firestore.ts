@@ -356,6 +356,30 @@ export async function listDocs(collection: string, pageSize = 50): Promise<Fires
 }
 
 /**
+ * Like listDocs, but returns null when the collection can't be read (no
+ * credentials or a failed request), so callers can tell that from "empty".
+ */
+export async function listDocsOrNull(collection: string, pageSize = 50): Promise<FirestoreDoc[] | null> {
+  const token = await getAdminAuthToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${FIREBASE_CONFIG.firestoreBaseUrl}/${collection}?pageSize=${pageSize}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      console.error(`[backend/core/firestore] Failed to list ${collection}:`, res.status);
+      return null;
+    }
+    const data = await res.json();
+    return (data.documents || []).map(rawDocToObject).filter(Boolean) as FirestoreDoc[];
+  } catch (err) {
+    console.error(`[backend/core/firestore] Failed to list ${collection}:`, err);
+    return null;
+  }
+}
+
+/**
  * Run a structured query on a collection.
  */
 export async function queryCollection(

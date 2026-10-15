@@ -11,14 +11,15 @@ const shift_1 = require("../constants/shift");
 /**
  * Subscribes to the user's Firestore profile in real time.
  * Calls `cb` immediately and on every update.
- * Returns an unsubscribe function.
+ * Returns an unsubscribe function. Pass `db` when profiles live in a
+ * different Firebase project than the business data; on a read error `cb`
+ * receives null and `onError` the error.
  */
-function subscribeUserProfile(uid, cb) {
+function subscribeUserProfile(uid, cb, db = (0, firebase_instance_1.getDb)(), onError) {
     if (!uid) {
         cb(null);
         return () => { };
     }
-    const db = (0, firebase_instance_1.getDb)();
     return (0, firestore_1.onSnapshot)((0, firestore_1.doc)(db, 'users', uid), (snap) => {
         if (!snap.exists()) {
             cb(null);
@@ -94,10 +95,11 @@ function subscribeUserProfile(uid, cb) {
             // ── Shift hours (only shiftStartTime & shiftEndTime) ─────────────────
             shiftStartTime: d.shiftStartTime || shift_1.DEFAULT_SHIFT_START,
             shiftEndTime: d.shiftEndTime || shift_1.DEFAULT_SHIFT_END,
+            timeZone: d.timeZone || undefined,
         });
     }, (err) => {
-        if (err.code !== 'permission-denied') {
-            console.warn('[agunwami-backend] UserProfile snapshot error:', err);
-        }
+        console.warn('[agunwami-backend] UserProfile snapshot error:', err);
+        cb(null);
+        onError?.(err);
     });
 }

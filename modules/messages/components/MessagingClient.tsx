@@ -1,5 +1,6 @@
 "use client";
 
+import { AeOverlay, useConfirm } from '@/app/components/common/AeModal';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import {
@@ -16,7 +17,11 @@ import {
   uploadBytes,
   getDownloadURL,
 } from "firebase/storage";
-import { rtdb, db, storage } from "@/lib/workstation/firebase";
+// Users, activities (meetings), staff tasks and leave requests live in the
+// workstation (AE Hub) Firebase project, where staff and the CEO are signed in,
+// exactly as on AE Hub's own messages page. The enterprise data project has no
+// signed-in user, so its rules refused these reads and the page stayed empty.
+import { rtdb, authDb as db, storage } from "@/lib/workstation/firebase";
 import { useAuth } from "@/lib/workstation/auth-context";
 import {
   storeLocalSticker,
@@ -31,6 +36,7 @@ import {
   Smile, Paperclip, Calendar, Zap, Hash, Trash2, Shield, Clock,
   LogOut, Settings, UserPlus, ClipboardList, Edit3, Crown,
   Camera, Upload, Sticker, Image as ImageIcon, FileText, AtSign, AlertTriangle, AlertCircle, Bookmark, Reply,
+  Bell, BellOff, SlidersHorizontal, MessagesSquare,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import {
@@ -40,6 +46,18 @@ import {
   StaffArrangementStatus,
 } from "@/utils/staffArrangementUtils";
 import AttendeeInviteSelector from "./AttendeeInviteSelector";
+import MessageSettings from "./MessageSettings";
+import {
+  AddThreadPeopleModal, CreateThreadModal, LinkTasksModal, ThreadBar, ThreadNotice, ThreadsPanel,
+} from "./Threads";
+import {
+  addThreadMembers, createThread, deleteThread, joinThread, leaveThread, setTaskLinked, setThreadStatus,
+  type ThreadFields, type ThreadRef, type ThreadSender, type ThreadSummary,
+} from "../threads";
+import {
+  DRAFT_STORAGE_KEYS, playMessageChime, setConversationMuted, showDesktopAlert, useMessagePreferences,
+  type MessagePreferences,
+} from "../preferences";
 import UserScheduleDrawer from "./UserScheduleDrawer";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
@@ -47,10 +65,10 @@ const LiveKitMeetingModal = dynamic(() => import("./LiveKitMeetingModal"), { ssr
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-interface Conversation {
+interface Conversation extends ThreadFields {
   id: string;
   name?: string;
-  type?: "direct" | "group" | "community";
+  type?: "direct" | "group" | "community" | "thread";
   memberIds: Record<string, boolean>;
   adminIds?: Record<string, boolean>;
   createdById?: string;
@@ -64,6 +82,8 @@ interface Conversation {
   avatarColor?: string;
   initials?: string;
   photoURL?: string;
+  /** Summaries of this group's threads (see ../threads). */
+  threads?: Record<string, ThreadSummary>;
 }
 
 interface Message {
@@ -90,6 +110,8 @@ interface Message {
     text: string;
     type?: string;
   };
+  /** Set on the note a thread leaves in its parent chat. */
+  threadRef?: ThreadRef;
 }
 
 interface StaffMember {
@@ -450,15 +472,17 @@ function getInitials(name?: string | null) {
     : name.slice(0, 2).toUpperCase();
 }
 
-function formatTimestamp(ms?: number) {
+function formatTimestamp(ms?: number, timeFormat: MessagePreferences["timeFormat"] = "12h") {
   if (!ms) return "";
-  return new Date(ms).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  return new Date(ms).toLocaleTimeString("en-US", timeFormat === "24h"
+    ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
+    : { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function formatDate(ms?: number) {
+function formatDate(ms?: number, timeFormat: MessagePreferences["timeFormat"] = "12h") {
   if (!ms) return "";
   const diff = Date.now() - ms;
-  if (diff < 86_400_000) return formatTimestamp(ms);
+  if (diff < 86_400_000) return formatTimestamp(ms, timeFormat);
   if (diff < 604_800_000) return new Date(ms).toLocaleDateString("en-US", { weekday: "short" });
   return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -697,10 +721,12 @@ function DateSeparator({ ms }: { ms: number }) {
 
 // ─── Assign Task Modal (Communities) ───────────────────────────────────────────
 
-function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves = [] }: {
+function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves = [], onCreated }: {
   isOpen: boolean; onClose: () => void;
   convo: Conversation | null; myUid: string; myName: string;
   approvedLeaves?: ApprovedLeaveRecord[];
+  /** Called with the new task, e.g. to link it to the thread it was created in. */
+  onCreated?: (task: { id: string; title: string }) => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -741,7 +767,7 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
     }
     setSaving(true);
     try {
-      await addDoc(collection(db, "staffTasks"), {
+      const created = await addDoc(collection(db, "staffTasks"), {
         task: title.trim(),
         title: title.trim(),
         description: description.trim(),
@@ -752,11 +778,12 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
         status: "Pending",
         createdById: myUid,
         createdByName: myName,
-        sourceType: "community",
+        sourceType: convo?.type === "thread" ? "thread" : "community",
         sourceConvId: convo?.id,
         createdAt: fsTimestamp(),
       });
       toast.success("Task assigned!");
+      onCreated?.({ id: created.id, title: title.trim() });
       onClose(); setTitle(""); setDescription(""); setDueDate(""); setAssigneeId("");
     } catch { toast.error("Failed to assign task."); }
     finally { setSaving(false); }
@@ -764,7 +791,7 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
 
   if (!isOpen) return null;
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="assign-task-modal-title" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <AeOverlay onClose={onClose} label="Assign task" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
@@ -829,7 +856,7 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -1032,7 +1059,7 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
   const TypeIcon = convo.type === "community" ? Hash : Users;
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="group-settings-modal-title" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <AeOverlay onClose={onClose} label="Group settings" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800 shrink-0">
@@ -1136,7 +1163,7 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
 
               {/* Multi-step Safety Confirmation Modal */}
               {showDeleteConfirm && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-60 flex items-center justify-center p-4">
+                <AeOverlay onClose={() => { setShowDeleteConfirm(false); setDeleteConfirmName(''); }} label="Delete group" className="fixed inset-0 bg-black/60 backdrop-blur-xs z-60 flex items-center justify-center p-4">
                   <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
                     <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
                       <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950/50 flex items-center justify-center shrink-0">
@@ -1174,8 +1201,18 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
                           if (deleteConfirmName.trim() !== targetName) return;
                           setIsDeletingGroup(true);
                           try {
-                            await remove(ref(rtdb, `conversations/${convo.id}`));
+                            // The group's threads go with it. Only a thread's members may remove
+                            // it, so this is best effort for threads the deleter isn't in.
+                            await Promise.all(Object.keys(convo.threads ?? {}).map(async threadId => {
+                              try {
+                                await remove(ref(rtdb, `messages/${threadId}`));
+                                await remove(ref(rtdb, `conversations/${threadId}`));
+                              } catch { /* not a member of this thread */ }
+                            }));
+                            // Messages first: the rules only let current members remove them,
+                            // and removing the conversation ends everyone's membership.
                             await remove(ref(rtdb, `messages/${convo.id}`));
+                            await remove(ref(rtdb, `conversations/${convo.id}`));
                             toast.success(`${convo.type === "community" ? "Community" : "Group"} deleted.`);
                             setShowDeleteConfirm(false);
                             onClose();
@@ -1191,7 +1228,7 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
                       </button>
                     </div>
                   </div>
-                </div>
+                </AeOverlay>
               )}
             </div>
           )}
@@ -1292,7 +1329,7 @@ function GroupSettingsModal({ isOpen, onClose, convo, myUid, myName, myDept }: {
           )}
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -1384,7 +1421,7 @@ function NewChatModal({ isOpen, onClose, myUid, myName, myDept, onCreated }: {
 
   if (!isOpen) return null;
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="new-chat-modal-title" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <AeOverlay onClose={onClose} label="New conversation" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
           <div>
@@ -1503,7 +1540,7 @@ function NewChatModal({ isOpen, onClose, myUid, myName, myDept, onCreated }: {
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -1522,6 +1559,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
   onEditInvitees?: (act: Activity) => void;
   approvedLeaves?: ApprovedLeaveRecord[];
 }) {
+  const confirm = useConfirm();
   const today = dateToStr(new Date());
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -1873,7 +1911,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
       toast.error("Activities can only be cancelled at least 1 day in advance.");
       return;
     }
-    if (!confirm(`Are you sure you want to cancel '${act.title}'?`)) return;
+    if (!(await confirm({ title: `Cancel ${act.title}?`, message: 'Everyone invited loses it from their calendar.', confirmLabel: 'Cancel activity', cancelLabel: 'Keep it', tone: 'danger' }))) return;
     setDeletingId(act.id);
     try {
       await deleteDoc(doc(db, "activities", act.id));
@@ -2907,7 +2945,7 @@ function ShareActivityModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+    <AeOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white dark:bg-zinc-900 rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-100 dark:border-zinc-800 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -3004,7 +3042,7 @@ function ShareActivityModal({
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -3116,7 +3154,7 @@ function EditInviteesModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+    <AeOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-xl md:max-w-2xl w-full p-6 shadow-2xl border border-gray-100 dark:border-zinc-800 flex flex-col max-h-[90vh] space-y-4">
         <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -3186,7 +3224,7 @@ function EditInviteesModal({
           </button>
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }
 
@@ -3199,8 +3237,19 @@ const TABS = [
   { id: "activity", label: "Activity", icon: Zap },
 ];
 
+const BUBBLE_TEXT: Record<MessagePreferences["textSize"], string> = {
+  small: "text-[13px]",
+  normal: "text-sm",
+  large: "text-base",
+};
+
 export default function MessagingClient() {
   const { user } = useAuth();
+  const confirm = useConfirm();
+  const msgPrefs = useMessagePreferences(user?.uid);
+  const msgPrefsRef = useRef(msgPrefs);
+  useEffect(() => { msgPrefsRef.current = msgPrefs; }, [msgPrefs]);
+  const [isMessageSettingsOpen, setIsMessageSettingsOpen] = useState(false);
   const [profile, setProfile] = useState<{
     displayName?: string;
     photoURL?: string;
@@ -3373,22 +3422,25 @@ export default function MessagingClient() {
   });
 
   // Sync draft text to localStorage whenever drafts change
+  // (Settings → Messages → Keep drafts off: nothing is stored, and old drafts are removed.)
   useEffect(() => {
     try {
-      localStorage.setItem("aehub_chat_drafts", JSON.stringify(drafts));
+      if (msgPrefs.saveDrafts) localStorage.setItem(DRAFT_STORAGE_KEYS[0], JSON.stringify(drafts));
+      else localStorage.removeItem(DRAFT_STORAGE_KEYS[0]);
     } catch (e) {
       console.error("Failed to save drafts to localStorage", e);
     }
-  }, [drafts]);
+  }, [drafts, msgPrefs.saveDrafts]);
 
   // Sync draft reply contexts to localStorage whenever they change
   useEffect(() => {
     try {
-      localStorage.setItem("aehub_chat_draft_replies", JSON.stringify(draftReplies));
+      if (msgPrefs.saveDrafts) localStorage.setItem(DRAFT_STORAGE_KEYS[1], JSON.stringify(draftReplies));
+      else localStorage.removeItem(DRAFT_STORAGE_KEYS[1]);
     } catch (e) {
       console.error("Failed to save draft replies to localStorage", e);
     }
-  }, [draftReplies]);
+  }, [draftReplies, msgPrefs.saveDrafts]);
 
   // Load draft text AND pending reply context when switching active conversation
   useEffect(() => {
@@ -3571,14 +3623,51 @@ export default function MessagingClient() {
     return () => off(presenceRef, "value", handler);
   }, []);
 
+  // Sound and desktop alerts for messages that arrive in conversations not on screen
+  // (Settings → Messages). A conversation's unread count only goes up when someone
+  // else sends to it, so a rise is a new incoming message.
+  const conversationsRef = useRef<Conversation[]>([]);
+  const activeConvIdRef = useRef<string | null>(null);
+  useEffect(() => { activeConvIdRef.current = activeConvId; }, [activeConvId]);
+
   // Conversations RTDB listener
   useEffect(() => {
     if (!myUid) return;
+    const alertNewMessages = (previous: Conversation[], next: Conversation[]) => {
+      const prefs = msgPrefsRef.current;
+      if (!prefs.sound && !prefs.desktopAlerts) return;
+      const before = new Map(previous.map(c => [c.id, c.unreadCount?.[myUid] || 0]));
+      const arrived = next.filter(c => {
+        if (prefs.mutedConversations[c.id] || c.lastMessageSenderId === myUid) return false;
+        if (c.id === activeConvIdRef.current && document.visibilityState === "visible") return false;
+        return (c.unreadCount?.[myUid] || 0) > (before.get(c.id) ?? 0);
+      });
+      if (arrived.length === 0) return;
+      if (prefs.sound) playMessageChime();
+      if (prefs.desktopAlerts && document.visibilityState !== "visible") {
+        for (const c of arrived.slice(0, 3)) {
+          const title = c.type === "direct"
+            ? (c.lastMessageSenderName || "New message")
+            : `${c.lastMessageSenderName ? `${c.lastMessageSenderName} in ` : ""}${c.name || "a group"}`;
+          const body = prefs.showPreviews && c.lastMessage ? c.lastMessage.slice(0, 140) : "New message";
+          showDesktopAlert(title, body, `message-${c.id}`, () => {
+            setActiveTab(c.type === "community" ? "communities" : "chat");
+            setActiveConvId(c.id);
+            setShowMobileChat(true);
+          });
+        }
+      }
+    };
     const q = rtdbQuery(ref(rtdb, "conversations"), orderByChild(`memberIds/${myUid}`), equalTo(true));
+    let firstSnapshot = true;
     const handler = onValue(q, snap => {
       const val = snap.val() || {};
-      setConversations(Object.entries(val).map(([id, d]: [string, any]) => ({ id, ...d }))
-        .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0)));
+      const next: Conversation[] = Object.entries(val).map(([id, d]: [string, any]) => ({ id, ...d }))
+        .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+      if (!firstSnapshot) alertNewMessages(conversationsRef.current, next);
+      firstSnapshot = false;
+      conversationsRef.current = next;
+      setConversations(next);
       setLoadingConvos(false);
     }, (err) => {
       console.error("Failed to load conversations:", err);
@@ -3827,15 +3916,20 @@ export default function MessagingClient() {
       setMessages(rawMsgs);
       setLoadingMessages(false);
 
-      // Mark unread messages as read (only if there are actual unread messages from others)
+      // Mark unread messages as read (only if there are actual unread messages from others).
+      // With read receipts off, only this person's unread count is cleared; no receipt is written.
       const updates: Record<string, boolean> = {};
       rawMsgs.forEach((d) => {
         if (d.senderId !== myUid && !d.readBy?.[myUid]) {
           updates[`messages/${activeConvId}/${d.id}/readBy/${myUid}`] = true;
         }
       });
-      if (Object.keys(updates).length > 0) {
-        update(ref(rtdb), updates).catch(() => {});
+      if (msgPrefsRef.current.readReceipts) {
+        if (Object.keys(updates).length > 0) {
+          update(ref(rtdb), updates).catch(() => {});
+          update(ref(rtdb, `conversations/${activeConvId}/unreadCount`), { [myUid]: 0 }).catch(() => {});
+        }
+      } else if ((conversationsRef.current.find(c => c.id === activeConvId)?.unreadCount?.[myUid] || 0) > 0) {
         update(ref(rtdb, `conversations/${activeConvId}/unreadCount`), { [myUid]: 0 }).catch(() => {});
       }
     });
@@ -3996,14 +4090,82 @@ export default function MessagingClient() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    const sends = msgPrefs.enterToSend ? !e.shiftKey : (e.ctrlKey || e.metaKey);
+    if (sends) { e.preventDefault(); handleSend(); }
   };
 
   const activeConvo = conversations.find(c => c.id === activeConvId);
   const userDept = (profile?.department || "").toLowerCase();
   const isDeptAdmin = ["ceo", "hr", "operation", "operations", "opm"].includes(userDept);
   const isAdmin = isDeptAdmin || !!(activeConvo?.adminIds?.[myUid]);
-  const totalUnread = conversations.reduce((s, c) => s + (c.unreadCount?.[myUid] || 0), 0);
+  const totalUnread = conversations.reduce((s, c) => s + (msgPrefs.mutedConversations[c.id] ? 0 : (c.unreadCount?.[myUid] || 0)), 0);
+  const activeMuted = !!(activeConvId && msgPrefs.mutedConversations[activeConvId]);
+  const toggleActiveMute = async () => {
+    if (!activeConvId || !myUid) return;
+    try {
+      await setConversationMuted(myUid, activeConvId, !activeMuted);
+      toast.success(activeMuted ? "Conversation unmuted." : "Conversation muted. No sound or alerts from it.");
+    } catch (err) {
+      console.error("Failed to change mute setting:", err);
+      toast.error("Could not change the mute setting. Please try again.");
+    }
+  };
+
+  // ── Threads (see ../threads) ──────────────────────────────────────────────
+  const [threadsPanelFor, setThreadsPanelFor] = useState<string | null>(null);
+  const [createThreadCtx, setCreateThreadCtx] = useState<{
+    parentId: string;
+    source?: { id: string; senderId: string; senderName: string; text: string };
+  } | null>(null);
+  const [threadDialog, setThreadDialog] = useState<null | "people" | "tasks">(null);
+  const threadSender: ThreadSender = { uid: myUid, name: myName, initials: myInitials, color: myColor, photoURL: myPhotoURL };
+  const findConvo = (id?: string | null) => (id ? conversations.find(c => c.id === id) : undefined);
+  const myThreads = conversations.filter(c => c.type === "thread");
+  const myThreadIds = new Set(myThreads.map(c => c.id));
+  const unreadByThread = Object.fromEntries(myThreads.map(c => [c.id, c.unreadCount?.[myUid] || 0]));
+  const myThreadsByParent: Record<string, Conversation[]> = {};
+  for (const t of myThreads) {
+    const show = t.status !== "resolved" || (t.unreadCount?.[myUid] || 0) > 0 || t.id === activeConvId;
+    if (t.parentId && show) (myThreadsByParent[t.parentId] ??= []).push(t);
+  }
+  const activeThread = myThreads.find(c => c.id === activeConvId) ?? null;
+  const activeThreadParent = activeThread ? findConvo(activeThread.parentId) ?? null : null;
+  const canModerateThread = (t: Conversation) =>
+    t.createdById === myUid || !!t.adminIds?.[myUid] || isDeptAdmin || !!findConvo(t.parentId)?.adminIds?.[myUid];
+
+  const openThread = (threadId: string, parentType?: string) => {
+    setActiveTab(parentType === "community" ? "communities" : "chat");
+    setActiveConvId(threadId);
+    setShowMobileChat(true);
+    setThreadsPanelFor(null);
+  };
+  const threadAction = async (action: () => Promise<void>, success?: string) => {
+    try {
+      await action();
+      if (success) toast.success(success);
+    } catch (err) {
+      console.error("Thread action failed:", err);
+      toast.error(err instanceof Error && err.message ? err.message : "That didn't work. Please try again.");
+    }
+  };
+  const handleJoinThread = (threadId: string, summary: ThreadSummary, parent: Conversation) =>
+    threadAction(async () => {
+      await joinThread(threadId, summary, parent.id, threadSender);
+      openThread(threadId, parent.type);
+    }, "You joined the thread.");
+  const handleCreateThread = async (input: { title: string; memberIds: string[]; tasks: { id: string; title: string }[] }) => {
+    const parent = findConvo(createThreadCtx?.parentId);
+    if (!parent) throw new Error("This chat is no longer available.");
+    const source = createThreadCtx?.source;
+    const threadId = await createThread({
+      parent, ...input, sender: threadSender,
+      source: source ? { id: source.id, senderName: source.senderName, text: source.text } : null,
+    });
+    setCreateThreadCtx(null);
+    toast.success("Thread started.");
+    openThread(threadId, parent.type);
+  };
 
   // Filter by tab
   const tabConvos = conversations.filter(c => {
@@ -4084,7 +4246,7 @@ export default function MessagingClient() {
 
   if (loadError) {
     return (
-      <div className="w-full flex flex-col items-center justify-center" style={{ height: "calc(100vh - 88px)" }}>
+      <div className="w-full flex flex-col items-center justify-center h-[calc(100dvh-88px)] md:h-[calc(100dvh-104px)]">
         <div className="flex flex-col items-center gap-4 max-w-sm text-center">
           <div className="w-16 h-16 rounded-full bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center">
             <AlertTriangle className="w-8 h-8 text-rose-500" />
@@ -4105,7 +4267,7 @@ export default function MessagingClient() {
   }
 
   return (
-    <div className="w-full flex flex-col" style={{ height: "calc(100vh - 88px)" }}>
+    <div className="w-full flex flex-col h-[calc(100dvh-88px)] md:h-[calc(100dvh-104px)]">
       {/* Page header */}
       <div className="mb-5">
         <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">Messages</h1>
@@ -4129,6 +4291,11 @@ export default function MessagingClient() {
               )}
             </button>
           ))}
+          <button type="button" onClick={() => setIsMessageSettingsOpen(true)}
+            title="Message settings" aria-label="Message settings"
+            className="ml-auto flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all">
+            <SlidersHorizontal className="w-4 h-4" /> <span className="hidden sm:inline">Settings</span>
+          </button>
         </div>
 
         <div className="flex-1 flex min-h-0">
@@ -4215,6 +4382,7 @@ export default function MessagingClient() {
                 <div className="py-1">
                   {tabConvos.map(convo => {
                     const unread = convo.unreadCount?.[myUid] || 0;
+                    const isMuted = !!msgPrefs.mutedConversations[convo.id];
                     const isActive = activeConvId === convo.id;
                     const isDirect = convo.type === "direct";
                     const otherUid = isDirect
@@ -4233,7 +4401,8 @@ export default function MessagingClient() {
                       : Object.keys(convo.memberIds || {}).some(uid => onlinePresence[uid]);
 
                     return (
-                      <button key={convo.id} aria-current={isActive ? "true" : undefined} onClick={() => { setActiveConvId(convo.id); setShowMobileChat(false); }}
+                      <React.Fragment key={convo.id}>
+                      <button aria-current={isActive ? "true" : undefined} onClick={() => { setActiveConvId(convo.id); setShowMobileChat(false); }}
                         className={`w-full flex items-center gap-3 px-4 py-3 transition-all text-left relative ${isActive ? "bg-amber-50 dark:bg-amber-950/20" : "hover:bg-gray-50 dark:hover:bg-zinc-800/60"}`}>
                         {isActive && <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-amber-500 rounded-r-full" />}
                         {/* Avatar + type badge */}
@@ -4244,7 +4413,10 @@ export default function MessagingClient() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
                             <p className={`text-sm truncate ${unread > 0 ? "font-bold text-gray-900 dark:text-white" : "font-semibold text-gray-700 dark:text-gray-200"}`}>{name}</p>
-                            <span className="text-[10px] text-gray-400 shrink-0 ml-2">{formatDate(convo.lastMessageAt)}</span>
+                            <span className="flex items-center gap-1 text-[10px] text-gray-400 shrink-0 ml-2">
+                              {isMuted && <BellOff className="w-3 h-3" aria-label="Muted" />}
+                              {formatDate(convo.lastMessageAt, msgPrefs.timeFormat)}
+                            </span>
                           </div>
                           <div className="flex items-center justify-between">
                             {drafts[convo.id] ? (
@@ -4253,17 +4425,40 @@ export default function MessagingClient() {
                               </p>
                             ) : (
                               <p className={`text-xs truncate ${unread > 0 ? "text-gray-600 dark:text-gray-300 font-medium" : "text-gray-400"}`}>
-                                {senderPrefix}{convo.lastMessage || "No messages yet"}
+                                {!convo.lastMessage
+                                  ? "No messages yet"
+                                  : msgPrefs.showPreviews
+                                    ? `${senderPrefix}${convo.lastMessage}`
+                                    : unread > 0 ? `${unread} new message${unread === 1 ? "" : "s"}` : "Open to view messages"}
                               </p>
                             )}
                             {unread > 0 && (
-                              <span className="ml-2 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
+                              <span className={`ml-2 min-w-[18px] h-[18px] px-1 ${isMuted ? "bg-gray-300 dark:bg-zinc-600" : "bg-rose-500"} text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0`}>
                                 {unread > 9 ? "9+" : unread}
                               </span>
                             )}
                           </div>
                         </div>
                       </button>
+                      {/* This group's threads that the person is in */}
+                      {myThreadsByParent[convo.id]?.map(t => {
+                        const threadUnread = t.unreadCount?.[myUid] || 0;
+                        const threadActive = activeConvId === t.id;
+                        return (
+                          <button key={t.id} onClick={() => openThread(t.id, convo.type)} aria-current={threadActive ? "true" : undefined}
+                            className={`w-full flex items-center gap-2 pl-14 pr-4 py-1.5 text-left transition-all relative ${threadActive ? "bg-amber-50 dark:bg-amber-950/20" : "hover:bg-gray-50 dark:hover:bg-zinc-800/60"}`}>
+                            {threadActive && <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-amber-500 rounded-r-full" />}
+                            <MessagesSquare className={`w-3.5 h-3.5 shrink-0 ${t.status === "resolved" ? "text-emerald-500" : "text-amber-500"}`} />
+                            <span className={`flex-1 text-xs truncate ${threadUnread > 0 ? "font-bold text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-300"}`}>{t.name || "Thread"}</span>
+                            {threadUnread > 0 && (
+                              <span className={`min-w-[16px] h-4 px-1 ${msgPrefs.mutedConversations[t.id] ? "bg-gray-300 dark:bg-zinc-600" : "bg-rose-500"} text-white text-[9px] font-bold rounded-full flex items-center justify-center`}>
+                                {threadUnread > 9 ? "9+" : threadUnread}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -4319,6 +4514,7 @@ export default function MessagingClient() {
                               <p className="text-sm font-bold text-gray-900 dark:text-white">{displayName}</p>
                               {activeConvo.type === "community" && <span className="text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-full">Community</span>}
                               {activeConvo.type === "group" && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full">Group</span>}
+                              {activeConvo.type === "thread" && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full">Thread</span>}
                               {isAdmin && activeConvo.type !== "direct" && <Crown className="w-3 h-3 text-amber-500" />}
                             </div>
                             <div className="flex items-center gap-1">
@@ -4335,12 +4531,31 @@ export default function MessagingClient() {
                     })()}
                   </div>
                   <div className="flex items-center gap-1">
-                    {activeConvo.type === "community" && (
+                    {(activeConvo.type === "community" || activeConvo.type === "thread") && (
                       <button onClick={() => setIsAssignTaskOpen(true)} title="Assign task" aria-label="Assign task"
                         className="p-2 text-gray-400 hover:text-emerald-600 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-all">
                         <ClipboardList className="w-4 h-4" />
                       </button>
                     )}
+                    {(activeConvo.type === "group" || activeConvo.type === "community") && (() => {
+                      const openThreads = Object.values(activeConvo.threads ?? {}).filter(t => t.status !== "resolved").length;
+                      return (
+                        <button onClick={() => setThreadsPanelFor(activeConvo.id)} title="Threads" aria-label={`Threads (${openThreads} open)`}
+                          className="relative p-2 text-gray-400 hover:text-amber-600 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all">
+                          <MessagesSquare className="w-4 h-4" />
+                          {openThreads > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">{openThreads}</span>
+                          )}
+                        </button>
+                      );
+                    })()}
+                    <button onClick={() => void toggleActiveMute()}
+                      title={activeMuted ? "Unmute conversation" : "Mute conversation"}
+                      aria-label={activeMuted ? "Unmute conversation" : "Mute conversation"}
+                      aria-pressed={activeMuted}
+                      className={`p-2 rounded-xl transition-all ${activeMuted ? "text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800"}`}>
+                      {activeMuted ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                    </button>
                     {[Phone, Video].map((Icon, i) => (
                       <button key={i} disabled title="Coming soon" aria-label={i === 0 ? "Voice call (coming soon)" : "Video call (coming soon)"}
                         className="p-2 text-gray-300 dark:text-zinc-600 cursor-not-allowed rounded-xl transition-all">
@@ -4350,7 +4565,7 @@ export default function MessagingClient() {
                     {activeConvo.type === "direct" && (
                       <button
                         onClick={async () => {
-                          if (!confirm("Are you sure you want to delete this direct chat history?")) return;
+                          if (!(await confirm({ title: "Delete this chat?", message: "The whole conversation is deleted for both of you. This can't be undone.", confirmLabel: "Delete chat", tone: "danger" }))) return;
                           try {
                             await remove(ref(rtdb, `messages/${activeConvo.id}`));
                             await remove(ref(rtdb, `conversations/${activeConvo.id}`));
@@ -4376,6 +4591,29 @@ export default function MessagingClient() {
                     )}
                   </div>
                 </div>
+
+                {activeThread && (
+                  <ThreadBar
+                    thread={activeThread}
+                    canModerate={canModerateThread(activeThread)}
+                    onBack={() => setActiveConvId(activeThread.parentId ?? null)}
+                    onAddPeople={() => setThreadDialog("people")}
+                    onLinkTasks={() => setThreadDialog("tasks")}
+                    onUnlinkTask={task => void threadAction(() => setTaskLinked(activeThread, task, false, threadSender))}
+                    onResolve={() => void threadAction(() => setThreadStatus(activeThread, activeThreadParent, "resolved", threadSender), "Thread resolved.")}
+                    onReopen={() => void threadAction(() => setThreadStatus(activeThread, activeThreadParent, "open", threadSender), "Thread reopened.")}
+                    onLeave={async () => {
+                      if (!(await confirm({ title: "Leave this thread?", message: "While it's open you can join again from the group.", confirmLabel: "Leave thread" }))) return;
+                      const parentId = activeThread.parentId ?? null;
+                      void threadAction(async () => { await leaveThread(activeThread, threadSender); setActiveConvId(parentId); }, "You left the thread.");
+                    }}
+                    onDelete={async () => {
+                      if (!(await confirm({ title: `Delete "${activeThread.name || "Thread"}"?`, message: "The thread and all its messages are deleted for everyone. This can't be undone.", confirmLabel: "Delete thread", tone: "danger" }))) return;
+                      const parentId = activeThread.parentId ?? null;
+                      void threadAction(async () => { await deleteThread(activeThread, activeThreadParent, threadSender); setActiveConvId(parentId); }, "Thread deleted.");
+                    }}
+                  />
+                )}
 
                 {/* 30-minute Live Meeting Banner */}
                 {upcomingMeetingBanner && (
@@ -4440,11 +4678,23 @@ export default function MessagingClient() {
                     <div key={date} className="space-y-1">
                       {date > 0 && <DateSeparator ms={date} />}
                       {msgs.map((msg, idx) => {
+                        if (msg.threadRef && !msg.deleted) {
+                          const threadRef = msg.threadRef;
+                          const summary = activeConvo.threads?.[threadRef.id];
+                          return (
+                            <ThreadNotice key={msg.id} threadRef={threadRef} text={msg.text}
+                              time={formatTimestamp(msg.sentAt, msgPrefs.timeFormat)}
+                              summary={summary} isMember={myThreadIds.has(threadRef.id)}
+                              onOpen={() => openThread(threadRef.id, activeConvo.type)}
+                              onJoin={() => { if (summary) void handleJoinThread(threadRef.id, summary, activeConvo); }} />
+                          );
+                        }
                         const isMe = msg.senderId === myUid;
                         const prevMsg = idx > 0 ? msgs[idx - 1] : null;
                         const showAvatar = !isMe && msg.senderId !== prevMsg?.senderId;
                         const showName = showAvatar && (activeConvo.type === "group" || activeConvo.type === "community");
-                        const isRead = Object.keys(msg.readBy || {}).some(uid => uid !== myUid);
+                        // Read receipts are mutual: with them off, other people's aren't shown either.
+                        const isRead = msgPrefs.readReceipts && Object.keys(msg.readBy || {}).some(uid => uid !== myUid);
                         const canDelete = msg.senderId === myUid || isAdmin;
                         const isHovered = hoveredMsgId === msg.id;
                         const isSenderOnline = !!onlinePresence[msg.senderId];
@@ -4497,6 +4747,22 @@ export default function MessagingClient() {
                                     >
                                       <Reply className="w-3.5 h-3.5" />
                                     </button>
+                                    {(activeConvo.type === "group" || activeConvo.type === "community") && !msg.deleted && (
+                                      <button
+                                        onClick={() => setCreateThreadCtx({
+                                          parentId: activeConvo.id,
+                                          source: {
+                                            id: msg.id, senderId: msg.senderId, senderName: msg.senderName,
+                                            text: msg.text || (msg.type === "image" ? "Photo" : msg.type === "sticker" ? "Sticker" : msg.fileName || "Attachment"),
+                                          },
+                                        })}
+                                        title="Start a thread from this message"
+                                        aria-label="Start a thread from this message"
+                                        className="p-1 rounded-lg text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all"
+                                      >
+                                        <MessagesSquare className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                     {canDelete && (
                                       <button
                                         onClick={() => handleDeleteMessage(msg.id, msg.senderId)}
@@ -4518,8 +4784,8 @@ export default function MessagingClient() {
                                       : msg.type === "sticker"
                                         ? "p-1 bg-transparent"
                                         : isMe
-                                          ? "px-4 py-2.5 bg-amber-500 text-white rounded-br-md text-sm"
-                                          : "px-4 py-2.5 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white rounded-bl-md text-sm shadow-sm border border-gray-100 dark:border-zinc-700"
+                                          ? `px-4 py-2.5 bg-amber-500 text-white rounded-br-md ${BUBBLE_TEXT[msgPrefs.textSize]}`
+                                          : `px-4 py-2.5 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white rounded-bl-md ${BUBBLE_TEXT[msgPrefs.textSize]} shadow-sm border border-gray-100 dark:border-zinc-700`
                                   }`}
                                 >
                                   {/* Quoted Reply Banner */}
@@ -4713,7 +4979,7 @@ export default function MessagingClient() {
                                 </div>
                               </div>
                               <div className={`flex items-center gap-1 mt-0.5 px-1 ${isMe ? "flex-row-reverse" : ""}`}>
-                                <span className="text-[10px] text-gray-400">{formatTimestamp(msg.sentAt)}</span>
+                                <span className="text-[10px] text-gray-400">{formatTimestamp(msg.sentAt, msgPrefs.timeFormat)}</span>
                                 {isMe && !msg.deleted && (isRead ? <CheckCheck className="w-3 h-3 text-blue-400" /> : <Check className="w-3 h-3 text-gray-400" />)}
                               </div>
                             </div>
@@ -5037,7 +5303,7 @@ export default function MessagingClient() {
                         setShowMentionList(false);
                       }}
                       onKeyDown={handleKeyDown}
-                      placeholder={activeConvo?.type === "direct" ? "Type a message..." : "Type a message... (Use @ to mention)"}
+                      placeholder={`${activeConvo?.type === "direct" ? "Type a message..." : "Type a message... (Use @ to mention)"}${msgPrefs.enterToSend ? "" : " · Ctrl+Enter to send"}`}
                       className="flex-1 bg-transparent resize-none focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 max-h-32 py-1" style={{ minHeight: "24px" }} />
                     
                     {/* Emoji & Custom Sticker Modal Toggle Button */}
@@ -5078,11 +5344,89 @@ export default function MessagingClient() {
       <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)}
         myUid={myUid} myName={myName} myDept={profile?.department} onCreated={id => { setActiveConvId(id); setShowMobileChat(true); }} />
 
+      {isMessageSettingsOpen && myUid && (
+        <AeOverlay onClose={() => setIsMessageSettingsOpen(false)} label="Message settings" className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
+          <div className="ae-pop-in flex h-full w-full max-w-md flex-col bg-gray-50 shadow-2xl dark:bg-zinc-950"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div>
+                <h2 id="message-settings-title" className="text-sm font-bold text-gray-900 dark:text-white">Message settings</h2>
+                <p className="text-xs text-gray-400">Saved to your account · also in Settings → Messages</p>
+              </div>
+              <button onClick={() => setIsMessageSettingsOpen(false)} aria-label="Close message settings" autoFocus
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <MessageSettings
+                uid={myUid}
+                prefs={msgPrefs}
+                onDraftsCleared={() => { setDrafts({}); setDraftReplies({}); }}
+              />
+            </div>
+          </div>
+        </AeOverlay>
+      )}
+
       <GroupSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}
         convo={activeConvo || null} myUid={myUid} myName={myName} myDept={profile?.department} />
 
       <AssignTaskModal isOpen={isAssignTaskOpen} onClose={() => setIsAssignTaskOpen(false)}
-        convo={activeConvo || null} myUid={myUid} myName={myName} approvedLeaves={approvedLeaves} />
+        convo={activeConvo || null} myUid={myUid} myName={myName} approvedLeaves={approvedLeaves}
+        onCreated={task => { if (activeThread) void threadAction(() => setTaskLinked(activeThread, task, true, threadSender)); }} />
+
+      {threadsPanelFor && (() => {
+        const parent = findConvo(threadsPanelFor);
+        return parent ? (
+          <ThreadsPanel
+            parent={parent}
+            myThreadIds={myThreadIds}
+            unreadByThread={unreadByThread}
+            onOpen={id => openThread(id, parent.type)}
+            onJoin={(id, summary) => handleJoinThread(id, summary, parent)}
+            onNew={() => { setThreadsPanelFor(null); setCreateThreadCtx({ parentId: parent.id }); }}
+            onClose={() => setThreadsPanelFor(null)}
+          />
+        ) : null;
+      })()}
+
+      {createThreadCtx && (() => {
+        const parent = findConvo(createThreadCtx.parentId);
+        return parent ? (
+          <CreateThreadModal
+            parent={parent}
+            people={memberProfiles}
+            myUid={myUid}
+            source={createThreadCtx.source}
+            onClose={() => setCreateThreadCtx(null)}
+            onCreate={handleCreateThread}
+          />
+        ) : null;
+      })()}
+
+      {activeThread && threadDialog === "people" && (
+        <AddThreadPeopleModal
+          thread={activeThread}
+          parent={activeThreadParent}
+          people={memberProfiles}
+          onClose={() => setThreadDialog(null)}
+          onAdd={async uids => {
+            const names = uids.map(uid => memberProfiles[uid]?.displayName || memberProfiles[uid]?.email || "Team member");
+            await threadAction(() => addThreadMembers(activeThread, uids, names, threadSender), "People added.");
+            setThreadDialog(null);
+          }}
+        />
+      )}
+
+      {activeThread && threadDialog === "tasks" && (
+        <LinkTasksModal
+          thread={activeThread}
+          onClose={() => setThreadDialog(null)}
+          onToggle={(task, on) => threadAction(() => setTaskLinked(activeThread, task, on, threadSender))}
+          onCreateTask={() => { setThreadDialog(null); setIsAssignTaskOpen(true); }}
+        />
+      )}
 
       <ShareActivityModal
         isOpen={!!shareActivityPrompt}

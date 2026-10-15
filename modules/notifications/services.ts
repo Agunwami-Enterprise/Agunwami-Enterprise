@@ -7,15 +7,22 @@ import {
 } from 'agunwami-backend';
 import { authDb } from '@/lib/workstation/firebase';
 
-export type { NotifItem };
+export type { NotifItem } from 'agunwami-backend';
 export { routeForNotif } from 'agunwami-backend';
 
-// Notifications live in the workstation (AE Hub) Firebase project, where the
-// CEO is signed in and AE Hub's functions write them, not in the enterprise
-// data project the shared package reads by default.
+/*
+ * Notifications are written by AE Hub (staff tasks, leave, documents) into the
+ * workstation Firebase project, where the CEO is signed in. The enterprise
+ * data project the shared package reads by default has no signed-in user, so
+ * its rules refuse the query and the page never stopped loading.
+ */
 
-export function subscribeNotifications(uid: string, cb: (items: NotifItem[]) => void): () => void {
-  return subscribeNotificationsIn(uid, cb, authDb);
+export function subscribeNotifications(
+  uid: string,
+  cb: (items: NotifItem[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  return subscribeNotificationsIn(uid, cb, authDb, onError);
 }
 
 export function markNotifRead(id: string): Promise<void> {

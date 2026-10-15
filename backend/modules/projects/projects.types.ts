@@ -43,6 +43,106 @@ export interface ProjectNotificationItem extends ProjectNotification {
   projectColor: string;
 }
 
+/* ── Optional page feeds: timeTracking, documents, payments, training ─────── */
+
+export type ProjectAttendanceStatus = 'Clocked in' | 'Clocked out' | 'On leave' | 'Not clocked in';
+
+export interface ProjectAttendanceEntry {
+  id: string;
+  name: string;
+  department?: string;
+  status: ProjectAttendanceStatus;
+  /** ISO times; clockOut is null while clocked in. */
+  clockIn: string | null;
+  clockOut: string | null;
+  hoursToday: number;
+}
+
+/** Optional `timeTracking`: today's attendance in the project. */
+export interface ProjectTimeTracking {
+  /** The project's local date, YYYY-MM-DD. */
+  date: string;
+  activeStaff: number;
+  clockedIn: number;
+  clockedOut: number;
+  onLeave: number;
+  notClockedIn: number;
+  hoursToday: number;
+  staff: ProjectAttendanceEntry[];
+  hoursByDay: Array<{ date: string; hours: number }>;
+}
+
+/** Optional `documents`: the project's documents, newest first. */
+export interface ProjectDocument {
+  id: string;
+  name: string;
+  type: string;
+  category: string;
+  department?: string;
+  uploadedBy?: string;
+  size?: string;
+  /** http(s) download link, if the project shares one. */
+  url?: string;
+  createdAt: string | null;
+}
+
+/** Optional `payments`: money in and out of the project, newest first. */
+export interface ProjectPayment {
+  id: string;
+  reference?: string;
+  description: string;
+  party?: string;
+  amount: number;
+  currency: string;
+  direction: 'incoming' | 'outgoing';
+  category: string;
+  status: string;
+  createdAt: string | null;
+}
+
+/** Optional `training`: the project's courses or training programs. */
+export interface ProjectTrainingCourse {
+  id: string;
+  title: string;
+  category: string;
+  level?: string;
+  instructor?: string;
+  duration?: string;
+  hours: number;
+  status: string;
+  learners: number;
+  completionRate: number;
+  modules: number;
+}
+
+export type ProjectFeedKey = 'timeTracking' | 'documents' | 'payments' | 'training';
+
+/** Who an item in a merged list belongs to: the enterprise itself or a project. */
+export interface FeedSource {
+  id: string;
+  name: string;
+  color: string;
+  kind: 'enterprise' | 'project';
+}
+
+/** How each project fared when building a merged list. */
+export interface ProjectFeedStatus extends FeedSource {
+  /** The project's endpoint failed and nothing could be shown. */
+  error?: string;
+  /** The endpoint answered but doesn't send this section yet. */
+  missing?: boolean;
+  /** The endpoint failed; the last successful sync is shown. */
+  stale?: boolean;
+  lastSyncedAt?: string;
+}
+
+export const ENTERPRISE_SOURCE: FeedSource = {
+  id: 'enterprise',
+  name: 'Agunwami Enterprise',
+  color: '#C89B3C',
+  kind: 'enterprise',
+};
+
 export type ProjectRecordTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 /** A small table a project chooses, e.g. "Recent Orders". */
@@ -240,6 +340,10 @@ export interface ProjectCardData {
   topItems?: ProjectTopItems;
   recentRecords?: ProjectRecordsTable;
   notifications?: ProjectNotification[];
+  timeTracking?: ProjectTimeTracking;
+  documents?: ProjectDocument[];
+  payments?: ProjectPayment[];
+  training?: ProjectTrainingCourse[];
   lastSyncedAt?: string;
 }
 

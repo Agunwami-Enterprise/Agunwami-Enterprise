@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Building2,
@@ -24,7 +24,8 @@ import {
   TrendingUp,
   User,
   Users,
-} from "lucide-react";
+} from 'lucide-react';
+import { BsLinkedin } from 'react-icons/bs';
 import {
   Button,
   Card,
@@ -33,26 +34,19 @@ import {
   cpanelFetch,
   cx,
   useMutation,
-} from "./ui";
+} from './ui';
 import {
   APPLICATION_STATUSES,
   type ApplicationStatus,
   type PartnershipApplication,
-} from "@/backend/modules/site-content/site-content.types";
+} from '@/backend/modules/site-content/site-content.types';
 import {
   STATUS_STYLES,
   applicantName,
   statusLabel,
-} from "./application-format";
-import { BsLinkedin } from "react-icons/bs";
+} from './application-format';
 
-function CopyAction({
-  text,
-  label = "Copy",
-}: {
-  text: string;
-  label?: string;
-}) {
+function CopyAction({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -85,6 +79,25 @@ function CopyAction({
         </>
       )}
     </button>
+  );
+}
+
+function SpamBadge() {
+  return (
+    <span
+      className="rounded-md bg-[#FEF3C7] px-2 py-0.5 text-[12px] font-semibold text-[#92400E]"
+      title="The form's hidden spam-trap field was filled"
+    >
+      Possible spam
+    </span>
+  );
+}
+
+function SpamNote() {
+  return (
+    <div className="rounded-xl border border-[#FDE68A] bg-[#FEF3C7] p-4 text-[13px] leading-relaxed text-[#92400E]">
+      <strong className="font-semibold">Possible spam notice:</strong> The form&apos;s hidden spam-trap field was filled. Browsers and password managers sometimes fill it for real people, so verify the details before deleting.
+    </div>
   );
 }
 
@@ -122,9 +135,7 @@ function DetailRow({
   if (!value) return null;
   return (
     <div className="flex items-start justify-between gap-3 py-2 text-[14px]">
-      <span className="shrink-0 text-[13px] font-medium text-[#8A8A8A]">
-        {label}
-      </span>
+      <span className="shrink-0 text-[13px] font-medium text-[#8A8A8A]">{label}</span>
       <div className="flex items-center gap-2 text-right">
         <span className="text-[#1A1A1A]">{value}</span>
         {action}
@@ -143,10 +154,10 @@ function PillTag({
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors",
+        'inline-flex items-center rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors',
         highlight
-          ? "border border-[#C89B3C]/30 bg-[#C89B3C]/10 text-[#8B6B22]"
-          : "border border-[#ECEAE3] bg-[#FBFAF6] text-[#3A3A3A]",
+          ? 'border border-[#C89B3C]/30 bg-[#C89B3C]/10 text-[#8B6B22]'
+          : 'border border-[#ECEAE3] bg-[#FBFAF6] text-[#3A3A3A]'
       )}
     >
       {children}
@@ -160,63 +171,52 @@ export function ApplicationDetailView({
   initialApplication: PartnershipApplication;
 }) {
   const router = useRouter();
-  const [application, setApplication] =
-    useState<PartnershipApplication>(initialApplication);
+  const [application, setApplication] = useState<PartnershipApplication>(initialApplication);
   const { busy, error, run } = useMutation();
   const del = useMutation();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const fullName = applicantName(application);
   const initials =
-    `${application.firstName?.[0] || ""}${application.lastName?.[0] || ""}`
-      .trim()
-      .toUpperCase() ||
+    `${application.firstName?.[0] || ''}${application.lastName?.[0] || ''}`.trim().toUpperCase() ||
     application.email[0]?.toUpperCase() ||
-    "A";
+    'A';
 
   const setStatus = async (status: ApplicationStatus) => {
     if (status === application.status || busy) return;
     const ok = await run(() =>
       cpanelFetch(`/api/cpanel/applications/${application.id}`, {
-        method: "PATCH",
+        method: 'PATCH',
         json: { status },
-      }),
+      })
     );
     if (ok) {
-      setApplication((prev) => ({ ...prev, status }));
+      setApplication(prev => ({ ...prev, status }));
     }
   };
 
   const handleDelete = async () => {
     const ok = await del.run(() =>
-      cpanelFetch(`/api/cpanel/applications/${application.id}`, {
-        method: "DELETE",
-      }),
+      cpanelFetch(`/api/cpanel/applications/${application.id}`, { method: 'DELETE' })
     );
     if (ok) {
-      router.push("/cpanel/applications");
+      router.push('/cpanel/applications');
     }
   };
 
-  const formattedDate = new Date(application.submittedAt).toLocaleDateString(
-    "en-US",
-    {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    },
-  );
+  const formattedDate = new Date(application.submittedAt).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
-  const formattedTime = new Date(application.submittedAt).toLocaleTimeString(
-    "en-US",
-    {
-      hour: "numeric",
-      minute: "2-digit",
-    },
-  );
+  const formattedTime = new Date(application.submittedAt).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 
   return (
-    <div className="mx-auto max-w-[1120px] pb-16 font-secondary">
+    <div className="w-full pb-16 font-secondary">
       {/* Top breadcrumb & global action bar */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -251,6 +251,13 @@ export function ApplicationDetailView({
         </div>
       </div>
 
+      {/* Spam alert if flagged */}
+      {application.flaggedAsSpam && (
+        <div className="mb-6">
+          <SpamNote />
+        </div>
+      )}
+
       {/* Main hero header card */}
       <Card className="mb-6 overflow-hidden p-6 md:p-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
@@ -265,12 +272,13 @@ export function ApplicationDetailView({
                 </h1>
                 <span
                   className={cx(
-                    "rounded-md px-2.5 py-0.5 text-[12px] font-semibold",
-                    STATUS_STYLES[application.status],
+                    'rounded-md px-2.5 py-0.5 text-[12px] font-semibold',
+                    STATUS_STYLES[application.status]
                   )}
                 >
                   {statusLabel(application.status)}
                 </span>
+                {application.flaggedAsSpam && <SpamBadge />}
               </div>
               <p className="mt-1 text-[14px] text-[#6B6B6B]">
                 {[
@@ -280,11 +288,10 @@ export function ApplicationDetailView({
                   application.location,
                 ]
                   .filter(Boolean)
-                  .join(" · ")}
+                  .join(' · ')}
               </p>
               <p className="mt-1 flex items-center gap-1.5 text-[12px] text-[#8A8A8A]">
-                <Clock className="h-3.5 w-3.5" /> Submitted on {formattedDate}{" "}
-                at {formattedTime}
+                <Clock className="h-3.5 w-3.5" /> Submitted on {formattedDate} at {formattedTime}
               </p>
             </div>
           </div>
@@ -295,7 +302,7 @@ export function ApplicationDetailView({
               Application Status
             </span>
             <div className="flex flex-wrap gap-1.5">
-              {APPLICATION_STATUSES.map((st) => {
+              {APPLICATION_STATUSES.map(st => {
                 const isActive = application.status === st;
                 return (
                   <button
@@ -304,10 +311,10 @@ export function ApplicationDetailView({
                     disabled={busy}
                     onClick={() => setStatus(st)}
                     className={cx(
-                      "inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[12px] font-semibold transition-all",
+                      'inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[12px] font-semibold transition-all',
                       isActive
-                        ? cx(STATUS_STYLES[st], "ring-2 ring-current shadow-sm")
-                        : "bg-white text-[#6B6B6B] border border-[#E5E2D9] hover:bg-[#F3F1EA] hover:text-[#1A1A1A]",
+                        ? cx(STATUS_STYLES[st], 'ring-2 ring-current shadow-sm')
+                        : 'bg-white text-[#6B6B6B] border border-[#E5E2D9] hover:bg-[#F3F1EA] hover:text-[#1A1A1A]'
                     )}
                   >
                     {isActive && <Check className="h-3 w-3" />}
@@ -341,24 +348,16 @@ export function ApplicationDetailView({
               {application.helpNeeded && application.helpNeeded.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {application.helpNeeded.map((item, idx) => (
-                    <PillTag key={idx} highlight>
-                      {item}
-                    </PillTag>
+                    <PillTag key={idx} highlight>{item}</PillTag>
                   ))}
                   {application.otherHelpNeeded && (
-                    <PillTag highlight>
-                      Other: {application.otherHelpNeeded}
-                    </PillTag>
+                    <PillTag highlight>Other: {application.otherHelpNeeded}</PillTag>
                   )}
                 </div>
               ) : application.otherHelpNeeded ? (
-                <PillTag highlight>
-                  Other: {application.otherHelpNeeded}
-                </PillTag>
+                <PillTag highlight>Other: {application.otherHelpNeeded}</PillTag>
               ) : (
-                <p className="text-[14px] italic text-[#A3A3A3]">
-                  No specific categories selected
-                </p>
+                <p className="text-[14px] italic text-[#A3A3A3]">No specific categories selected</p>
               )}
             </div>
 
@@ -375,8 +374,7 @@ export function ApplicationDetailView({
             )}
 
             {/* Challenges */}
-            {(Boolean(application.challenges?.length) ||
-              application.otherChallenge) && (
+            {(Boolean(application.challenges?.length) || application.otherChallenge) && (
               <div className="mt-6 space-y-3">
                 <h3 className="text-[12px] font-semibold uppercase tracking-wider text-[#8A8A8A]">
                   Key Challenges
@@ -396,8 +394,7 @@ export function ApplicationDetailView({
             {application.desiredOutcome && (
               <div className="mt-6 space-y-2">
                 <h3 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-[#8A8A8A]">
-                  <TrendingUp className="h-3.5 w-3.5 text-[#C89B3C]" /> Desired
-                  Outcome
+                  <TrendingUp className="h-3.5 w-3.5 text-[#C89B3C]" /> Desired Outcome
                 </h3>
                 <p className="rounded-lg bg-[#FAF8F2] p-3 text-[14px] leading-relaxed text-[#2A2A2A]">
                   {application.desiredOutcome}
@@ -434,22 +431,16 @@ export function ApplicationDetailView({
               {application.services && application.services.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {application.services.map((item, idx) => (
-                    <PillTag key={idx} highlight>
-                      {item}
-                    </PillTag>
+                    <PillTag key={idx} highlight>{item}</PillTag>
                   ))}
                   {application.otherService && (
-                    <PillTag highlight>
-                      Other: {application.otherService}
-                    </PillTag>
+                    <PillTag highlight>Other: {application.otherService}</PillTag>
                   )}
                 </div>
               ) : application.otherService ? (
                 <PillTag highlight>Other: {application.otherService}</PillTag>
               ) : (
-                <p className="text-[14px] italic text-[#A3A3A3]">
-                  No specific services selected
-                </p>
+                <p className="text-[14px] italic text-[#A3A3A3]">No specific services selected</p>
               )}
             </div>
 
@@ -463,7 +454,7 @@ export function ApplicationDetailView({
                   </span>
                 </div>
                 <p className="mt-1 text-[16px] font-semibold text-[#1A1A1A]">
-                  {application.budgetRange || "Not specified"}
+                  {application.budgetRange || 'Not specified'}
                 </p>
               </div>
 
@@ -475,7 +466,7 @@ export function ApplicationDetailView({
                   </span>
                 </div>
                 <p className="mt-1 text-[16px] font-semibold text-[#1A1A1A]">
-                  {application.startTime || "Not specified"}
+                  {application.startTime || 'Not specified'}
                 </p>
               </div>
 
@@ -487,7 +478,7 @@ export function ApplicationDetailView({
                   </span>
                 </div>
                 <p className="mt-1 text-[16px] font-semibold text-[#1A1A1A]">
-                  {application.deadline || "Not specified"}
+                  {application.deadline || 'Not specified'}
                 </p>
               </div>
 
@@ -499,7 +490,7 @@ export function ApplicationDetailView({
                   </span>
                 </div>
                 <p className="mt-1 text-[15px] font-semibold text-[#1A1A1A]">
-                  {application.decisionMakers || "Not specified"}
+                  {application.decisionMakers || 'Not specified'}
                 </p>
                 {application.otherStakeholders && (
                   <p className="mt-0.5 text-[12px] text-[#8A8A8A]">
@@ -513,8 +504,7 @@ export function ApplicationDetailView({
             {application.additionalNotes && (
               <div className="mt-6 space-y-2">
                 <h3 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-[#8A8A8A]">
-                  <FileText className="h-3.5 w-3.5 text-[#C89B3C]" /> Additional
-                  Notes
+                  <FileText className="h-3.5 w-3.5 text-[#C89B3C]" /> Additional Notes
                 </h3>
                 <div className="rounded-lg bg-[#FAF8F2] p-4 text-[14px] leading-relaxed text-[#2A2A2A] whitespace-pre-wrap">
                   {application.additionalNotes}
@@ -537,9 +527,7 @@ export function ApplicationDetailView({
               />
               <DetailRow
                 label="Role"
-                value={
-                  application.role || application.otherRole || "Not provided"
-                }
+                value={application.role || application.otherRole || 'Not provided'}
               />
               <DetailRow
                 label="Email"
@@ -551,9 +539,7 @@ export function ApplicationDetailView({
                     {application.email}
                   </a>
                 }
-                action={
-                  <CopyAction text={application.email} label="Copy email" />
-                }
+                action={<CopyAction text={application.email} label="Copy email" />}
               />
               {application.phone && (
                 <DetailRow
@@ -566,9 +552,7 @@ export function ApplicationDetailView({
                       {application.phone}
                     </a>
                   }
-                  action={
-                    <CopyAction text={application.phone} label="Copy phone" />
-                  }
+                  action={<CopyAction text={application.phone} label="Copy phone" />}
                 />
               )}
               {application.linkedin && (
@@ -577,7 +561,7 @@ export function ApplicationDetailView({
                   value={
                     <a
                       href={
-                        application.linkedin.startsWith("http")
+                        application.linkedin.startsWith('http')
                           ? application.linkedin
                           : `https://${application.linkedin}`
                       }
@@ -585,7 +569,7 @@ export function ApplicationDetailView({
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 font-medium text-[#0A66C2] hover:underline"
                     >
-                      <BsLinkedin className="h-3.5 w-3.5" /> Profile{" "}
+                      <BsLinkedin className="h-3.5 w-3.5" /> Profile{' '}
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   }
@@ -597,7 +581,7 @@ export function ApplicationDetailView({
               <div className="mt-4 pt-2">
                 <a
                   href={`mailto:${application.email}?subject=${encodeURIComponent(
-                    `Regarding your partnership application with Agunwami Enterprise`,
+                    `Regarding your partnership application with Agunwami Enterprise`
                   )}`}
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#1F1F1F] py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-black"
                 >
@@ -616,7 +600,7 @@ export function ApplicationDetailView({
                 label="Organization"
                 value={
                   <span className="font-semibold text-[#1A1A1A]">
-                    {application.orgName || "Not provided"}
+                    {application.orgName || 'Not provided'}
                   </span>
                 }
               />
@@ -644,7 +628,7 @@ export function ApplicationDetailView({
                   value={
                     <a
                       href={
-                        application.website.startsWith("http")
+                        application.website.startsWith('http')
                           ? application.website
                           : `https://${application.website}`
                       }
@@ -652,7 +636,7 @@ export function ApplicationDetailView({
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 font-medium text-[#C89B3C] hover:underline"
                     >
-                      <Globe className="h-3.5 w-3.5" /> Visit site{" "}
+                      <Globe className="h-3.5 w-3.5" /> Visit site{' '}
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   }
@@ -683,13 +667,20 @@ export function ApplicationDetailView({
                 <span className="text-[#8A8A8A]">Current Status</span>
                 <span
                   className={cx(
-                    "rounded-md px-2 py-0.5 text-[11px] font-semibold",
-                    STATUS_STYLES[application.status],
+                    'rounded-md px-2 py-0.5 text-[11px] font-semibold',
+                    STATUS_STYLES[application.status]
                   )}
                 >
                   {statusLabel(application.status)}
                 </span>
               </div>
+
+              {application.flaggedAsSpam && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[#8A8A8A]">Spam Flag</span>
+                  <SpamBadge />
+                </div>
+              )}
             </div>
           </Card>
         </div>

@@ -1,30 +1,26 @@
 /**
  * /api/ceo/training
  *
- * GET: Lists courses or training summary stats from real AEHub Firestore.
+ * GET: The Training page list: the enterprise's courses plus each project's
+ *      reported training, labelled by source. `?mode=summary` returns stats.
  */
 
 import { NextResponse } from 'next/server';
 import { requireCeoSession } from '@/lib/workstation/api-auth';
 import { TrainingService } from '@/backend/modules/training';
+import { getTrainingFeed } from '@/backend/modules/training/training.feed';
 
 export async function GET(request: Request) {
   const auth = await requireCeoSession();
   if (auth.error) return auth.error;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const mode = searchParams.get('mode');
-
-    if (mode === 'summary') {
-      const summary = await TrainingService.getTrainingSummary();
-      return NextResponse.json(summary);
+    if (new URL(request.url).searchParams.get('mode') === 'summary') {
+      return NextResponse.json(await TrainingService.getTrainingSummary());
     }
-
-    const courses = await TrainingService.getCourses();
-    return NextResponse.json(courses);
-  } catch (err: any) {
+    return NextResponse.json(await getTrainingFeed());
+  } catch (err) {
     console.error('[/api/ceo/training] error:', err);
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error && err.message) || 'Internal error' }, { status: 500 });
   }
 }

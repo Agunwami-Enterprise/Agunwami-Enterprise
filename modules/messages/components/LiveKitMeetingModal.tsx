@@ -1,12 +1,14 @@
 "use client";
 
+import { AeOverlay, useConfirm } from '@/app/components/common/AeModal';
 import React, { useState, useEffect } from "react";
 import { LiveKitRoom, VideoConference } from "@livekit/components-react";
 import "@livekit/components-styles";
 import { X, Video, AlertCircle, UserPlus, Check, Search, Clock, UserX } from "lucide-react";
 import { ref, get, push, update } from "firebase/database";
 import { doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from "firebase/firestore";
-import { db, rtdb } from "@/lib/workstation/firebase";
+// Meetings (activities) live in the workstation project; see MessagingClient.
+import { authDb as db, rtdb } from "@/lib/workstation/firebase";
 import { toast } from "react-toastify";
 
 interface StaffMember {
@@ -158,6 +160,7 @@ export default function LiveKitMeetingModal({
   myUid,
   myName,
 }: LiveKitMeetingModalProps) {
+  const confirm = useConfirm();
   const [showInviteDrawer, setShowInviteDrawer] = useState(false);
   const [invitedUids, setInvitedUids] = useState<string[]>([]);
   const [searchStaff, setSearchStaff] = useState("");
@@ -237,7 +240,7 @@ export default function LiveKitMeetingModal({
 
   const handleKickStaff = async (u: StaffMember) => {
     const name = u.displayName || u.email || "Staff Member";
-    if (!confirm(`Are you sure you want to remove ${name} from this live meeting?`)) return;
+    if (!(await confirm({ title: `Remove ${name} from the meeting?`, message: "They're disconnected and uninvited from this meeting.", confirmLabel: 'Remove', tone: 'danger' }))) return;
 
     if (activityId) {
       try {
@@ -267,7 +270,7 @@ export default function LiveKitMeetingModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
+    <AeOverlay onClose={() => undefined} dismissible={false} label="Live meeting" className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div className="bg-zinc-900 rounded-3xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden border border-zinc-800 shadow-2xl relative">
 
         {/* Top Room Header */}
@@ -432,6 +435,6 @@ export default function LiveKitMeetingModal({
           )}
         </div>
       </div>
-    </div>
+    </AeOverlay>
   );
 }

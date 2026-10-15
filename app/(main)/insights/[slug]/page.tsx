@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { sanitizeArticleHtml } from "@/backend/modules/site-content";
+import { articleFontsUrl, fontsUsedIn, sanitizeArticleHtml } from "@/backend/modules/site-content";
 import { formatArticleDate, getPublishedArticles, outlineArticle } from "@/lib/site/content";
 import ShareButtons from "@/app/components/insights/ShareButtons";
 import NewsletterCard from "@/app/components/common/NewsletterCard";
@@ -29,26 +29,33 @@ export async function generateMetadata({
   if (!article) return {};
   const canonicalUrl = `/insights/${slug}`;
   const fullUrl = `https://agunwamienterprise.com${canonicalUrl}`;
+  // SEO settings from the C-panel, falling back to the article's own title, excerpt and feature image.
+  const title = article.seoTitle || article.title;
+  const description = article.seoDescription || article.excerpt;
+  const image = article.seoImage || article.image;
   return {
-    title: `${article.title} | Expert Insights — Agunwami Enterprise`,
-    description: article.excerpt,
+    // A custom meta title is used as written; otherwise the site name is added.
+    title: article.seoTitle ? { absolute: article.seoTitle } : `${article.title} | Expert Insights — Agunwami Enterprise`,
+    description,
+    keywords: article.tags?.length ? article.tags : undefined,
     alternates: {
       canonical: canonicalUrl,
     },
+    robots: article.noIndex ? { index: false, follow: true } : undefined,
     openGraph: {
-      title: article.title,
-      description: article.excerpt,
+      title,
+      description,
       url: fullUrl,
       type: "article",
       publishedTime: article.date,
       authors: [article.author],
-      images: article.image ? [{ url: article.image }] : undefined,
+      images: image ? [{ url: image }] : undefined,
     },
     twitter: {
       card: "summary_large_image",
-      title: article.title,
-      description: article.excerpt,
-      images: article.image ? [article.image] : undefined,
+      title,
+      description,
+      images: image ? [image] : undefined,
     },
   };
 }
@@ -85,6 +92,8 @@ export default async function BlogDetailPage({
   const heroImage = article.heroImage || article.image;
   // Sanitized again here in case stored content was edited outside the C-panel.
   const { html: bodyHtml, headings } = outlineArticle(sanitizeArticleHtml(article.body));
+  // Web fonts the writer chose in the editor, and only those.
+  const fontsUrl = articleFontsUrl(fontsUsedIn(bodyHtml));
 
   const articleSchema = {
     "@context": "https://schema.org",
@@ -143,6 +152,7 @@ export default async function BlogDetailPage({
 
   return (
     <main className="flex flex-col w-full bg-[#FAFAFA] dark:bg-[#0a0a0a]">
+      {fontsUrl && <link rel="stylesheet" href={fontsUrl} precedence="default" />}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
@@ -246,6 +256,20 @@ export default async function BlogDetailPage({
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
 
+            {/* Tags */}
+            {article.tags && article.tags.length > 0 && (
+              <ul className="mt-10 flex flex-wrap gap-2" aria-label="Tags">
+                {article.tags.map((tag) => (
+                  <li key={tag}>
+                    <Link href={`/insights?q=${encodeURIComponent(tag)}`}
+                      className="inline-block rounded-full border border-gray-200 dark:border-white/10 px-3 py-1 text-[13px] text-gray-600 dark:text-gray-300 hover:border-primary hover:text-primary transition-colors">
+                      #{tag}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             {/* Pull Quote */}
             {article.pullQuote && (
               <blockquote className="my-12 pl-6 border-l-4 border-primary py-2">
@@ -326,7 +350,7 @@ export default async function BlogDetailPage({
               </div>
 
               {/* Table of Contents */}
-              {headings.length > 0 && (
+              {article.showToc !== false && headings.length > 0 && (
                 <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#141414] overflow-hidden shadow-sm">
                   <div className="p-6 space-y-3">
                     <h3 className="text-xs font-semibold tracking-widest uppercase text-gray-400">

@@ -97,8 +97,118 @@ export interface SiteTeamMember {
   linkedin: string;
 }
 
-export const ARTICLE_CATEGORIES = ['Infrastructure', 'Design', 'Technology', 'Partnerships', 'Insights'] as const;
-export type SiteArticleCategory = (typeof ARTICLE_CATEGORIES)[number];
+/** The categories a site starts with; writers add, rename and remove them in the C-panel (settings.articleCategories). */
+export const ARTICLE_CATEGORIES: readonly string[] = ['Infrastructure', 'Design', 'Technology', 'Partnerships', 'Insights'];
+export type SiteArticleCategory = string;
+export const MAX_CATEGORY_LENGTH = 40;
+
+export const SEO_TITLE_MAX = 70;
+export const SEO_DESCRIPTION_MAX = 160;
+
+/** A category with the number of articles in it (C-panel). */
+export interface ArticleCategoryInfo { name: string; articles: number }
+
+/**
+ * Fonts the article editor offers; the site's HTML cleaner allows exactly
+ * these. `google` is the Google Fonts family spec for web fonts (loaded on
+ * the article page only when the article uses them); the rest are installed
+ * on most computers.
+ */
+export type ArticleFontGroup = 'Sans serif' | 'Serif' | 'Display' | 'Monospace' | 'Handwriting';
+export interface ArticleFont { label: string; css: string; group: ArticleFontGroup; google?: string }
+
+const web = (label: string, fallback: string, group: ArticleFontGroup, weights = 'wght@400;700'): ArticleFont => ({
+  label,
+  css: `${/[\s\d]/.test(label) ? `"${label}"` : label}, ${fallback}`,
+  group,
+  google: `${label.replace(/ /g, '+')}${weights ? `:${weights}` : ''}`,
+});
+
+export const ARTICLE_FONTS: ArticleFont[] = [
+  // Sans serif
+  web('Lexend', 'sans-serif', 'Sans serif', 'wght@300;400;500;600;700'),
+  web('Inter', 'sans-serif', 'Sans serif'),
+  web('Roboto', 'sans-serif', 'Sans serif'),
+  web('Open Sans', 'sans-serif', 'Sans serif'),
+  web('Lato', 'sans-serif', 'Sans serif'),
+  web('Montserrat', 'sans-serif', 'Sans serif'),
+  web('Poppins', 'sans-serif', 'Sans serif'),
+  web('Nunito', 'sans-serif', 'Sans serif'),
+  web('Raleway', 'sans-serif', 'Sans serif'),
+  web('Work Sans', 'sans-serif', 'Sans serif'),
+  web('DM Sans', 'sans-serif', 'Sans serif'),
+  web('Manrope', 'sans-serif', 'Sans serif'),
+  web('Plus Jakarta Sans', 'sans-serif', 'Sans serif'),
+  web('Outfit', 'sans-serif', 'Sans serif'),
+  web('Source Sans 3', 'sans-serif', 'Sans serif'),
+  web('Noto Sans', 'sans-serif', 'Sans serif'),
+  { label: 'Arial', css: 'Arial, Helvetica, sans-serif', group: 'Sans serif' },
+  { label: 'Verdana', css: 'Verdana, Geneva, sans-serif', group: 'Sans serif' },
+  { label: 'Tahoma', css: 'Tahoma, Geneva, sans-serif', group: 'Sans serif' },
+  { label: 'Trebuchet MS', css: '"Trebuchet MS", sans-serif', group: 'Sans serif' },
+  // Serif
+  { label: 'Georgia', css: 'Georgia, serif', group: 'Serif' },
+  { label: 'Times New Roman', css: '"Times New Roman", Times, serif', group: 'Serif' },
+  web('Merriweather', 'serif', 'Serif'),
+  web('Lora', 'serif', 'Serif'),
+  web('Playfair Display', 'serif', 'Serif'),
+  web('Libre Baskerville', 'serif', 'Serif'),
+  web('Source Serif 4', 'serif', 'Serif'),
+  web('EB Garamond', 'serif', 'Serif'),
+  web('Crimson Text', 'serif', 'Serif'),
+  web('PT Serif', 'serif', 'Serif'),
+  web('Noto Serif', 'serif', 'Serif'),
+  web('DM Serif Display', 'serif', 'Serif', ''),
+  // Display
+  web('Oswald', 'sans-serif', 'Display'),
+  web('Bebas Neue', 'sans-serif', 'Display', ''),
+  web('Abril Fatface', 'serif', 'Display', ''),
+  // Monospace
+  { label: 'Courier New', css: '"Courier New", Courier, monospace', group: 'Monospace' },
+  web('Roboto Mono', 'monospace', 'Monospace'),
+  web('Fira Code', 'monospace', 'Monospace'),
+  web('JetBrains Mono', 'monospace', 'Monospace'),
+  web('Source Code Pro', 'monospace', 'Monospace'),
+  web('IBM Plex Mono', 'monospace', 'Monospace'),
+  // Handwriting
+  web('Caveat', 'cursive', 'Handwriting'),
+  web('Dancing Script', 'cursive', 'Handwriting'),
+  web('Pacifico', 'cursive', 'Handwriting', ''),
+];
+
+export const ARTICLE_FONT_GROUPS: ArticleFontGroup[] = ['Sans serif', 'Serif', 'Display', 'Monospace', 'Handwriting'];
+
+/** The Google Fonts stylesheet for these fonts (web fonts only), or '' if none. */
+export function articleFontsUrl(fonts: ArticleFont[] = ARTICLE_FONTS): string {
+  const families = fonts.filter(f => f.google).map(f => `family=${f.google}`);
+  return families.length ? `https://fonts.googleapis.com/css2?${families.join('&')}&display=swap` : '';
+}
+
+/** The web fonts an article's HTML uses, so its page loads only those. */
+export function fontsUsedIn(html: string): ArticleFont[] {
+  // Style attributes that set a font (an extra match only loads an unused font).
+  const styles = [...html.matchAll(/style="([^"]*font-family[^"]*)"/gi)].map(m => m[1]).join(' ');
+  return styles ? ARTICLE_FONTS.filter(f => f.google && styles.includes(f.label)) : [];
+}
+
+/**
+ * Who may do what with an article (C-panel). The owner can do everything,
+ * including handing the article to someone else; managers edit, publish and
+ * share; editors edit and save; viewers read. The CEO can delete any article
+ * but only opens one they've been given access to.
+ */
+export const ARTICLE_ROLES = ['viewer', 'editor', 'manager'] as const;
+export type ArticleRole = (typeof ARTICLE_ROLES)[number];
+export const ARTICLE_ROLE_LABELS: Record<ArticleRole, string> = { viewer: 'Can view', editor: 'Can edit', manager: 'Can manage' };
+
+export interface ArticlePerson { uid: string; name: string; email: string }
+export interface ArticleCollaborator extends ArticlePerson { role: ArticleRole }
+
+/** Someone has the article open for editing; others get it read-only until it lapses. */
+export interface ArticleLock extends ArticlePerson { at: string }
+
+export const MAX_TAGS = 15;
+export const MAX_TAG_LENGTH = 30;
 
 /** An Expert Insights article (/insights and /insights/[slug]). */
 export interface SiteArticle {
@@ -113,13 +223,32 @@ export interface SiteArticle {
   author: string;
   authorRole: string;
   authorImage: string;
-  /** Card image on the list page. */
+  /** Feature image: the article's card on the list page and in shares. */
   image: string;
-  /** Hero image on the article page; falls back to `image`. */
+  /** Hero image at the top of the article; the same as `image` unless a different one is chosen. */
   heroImage: string;
   /** Article content as HTML from the C-panel editor, sanitized on save. */
   body: string;
   pullQuote: string;
+  /** Show the table of contents (the article's section headings) beside it; on unless turned off. */
+  showToc?: boolean;
+  /** SEO: the title in search results and the browser tab; the article title when blank. */
+  seoTitle?: string;
+  /** SEO: the description in search results; the excerpt when blank. */
+  seoDescription?: string;
+  /** SEO: the image shown when the article is shared; the feature image when blank. */
+  seoImage?: string;
+  /** SEO: ask search engines not to list the article. */
+  noIndex?: boolean;
+  /** Topics, shown on the article and searchable on the Insights page. */
+  tags?: string[];
+  /** Who created it (or was handed it); articles from before sharing have none. */
+  owner?: ArticlePerson | null;
+  collaborators?: ArticleCollaborator[];
+  lock?: ArticleLock | null;
+  /** ISO time of the last save, to catch saves over someone else's newer changes. */
+  updatedAt?: string;
+  updatedBy?: string;
   /** Drafts are only visible in the C-panel. */
   published: boolean;
 }
@@ -142,6 +271,8 @@ export interface PartnershipApplication {
   id: string;
   status: ApplicationStatus;
   submittedAt: string;
+  /** The form's hidden spam-trap field was filled; kept for a person to judge. */
+  flaggedAsSpam?: boolean;
   firstName: string;
   lastName: string;
   email: string;
@@ -190,6 +321,8 @@ export interface SiteSocialLink {
 
 /** Company details and footer content (single record). */
 export interface SiteSettings {
+  /** Article categories, in the order the Insights page shows them. */
+  articleCategories: string[];
   companyName: string;
   tagline: string;
   location: string;

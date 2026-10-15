@@ -1,34 +1,18 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+/**
+ * Light/dark switch for the AE Workstation and C-panel.
+ *
+ * The app-wide ThemeProvider (app/components/common/ThemeProvider, mounted in
+ * the root layout) owns the theme. This used to be a separate provider that
+ * was never mounted, so its toggle did nothing; it now reads and sets the
+ * app-wide theme, which the anti-flash script in the root layout restores.
+ */
 
-type ThemeCtx = { dark: boolean; toggle: () => void };
-const ThemeContext = createContext<ThemeCtx>({ dark: false, toggle: () => {} });
+import { useTheme as useAppTheme } from '@/app/components/common/ThemeProvider';
 
-export function useTheme() {
-  return useContext(ThemeContext);
-}
-
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [dark, setDark] = useState(false);
-
-  // Sync from the class already set by the anti-flash script
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains('dark'));
-  }, []);
-
-  const toggle = useCallback(() => {
-    setDark(prev => {
-      const next = !prev;
-      document.documentElement.classList.toggle('dark', next);
-      try { localStorage.setItem('ae-theme', next ? 'dark' : 'light'); } catch {}
-      return next;
-    });
-  }, []);
-
-  return (
-    <ThemeContext.Provider value={{ dark, toggle }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+export function useTheme(): { dark: boolean; toggle: () => void } {
+  const { resolvedTheme, setTheme } = useAppTheme();
+  const dark = resolvedTheme === 'dark';
+  return { dark, toggle: () => setTheme(dark ? 'light' : 'dark') };
 }

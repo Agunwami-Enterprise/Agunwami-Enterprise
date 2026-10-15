@@ -52,9 +52,7 @@ function typeToIcon(type) {
         return { bg: '#dcfce7', color: '#16a34a' };
     return { bg: '#fef9c3', color: '#d97706' };
 }
-// Each function takes an optional `db` for when notifications live in a
-// different Firebase project than the business data.
-/** Mark a single notification as read. */
+/** Mark a single notification as read. Pass `db` when notifications live in another project. */
 async function markNotifRead(id, db = (0, firebase_instance_1.getDb)()) {
     await (0, firestore_1.updateDoc)((0, firestore_1.doc)(db, 'notifications', id), { read: true });
 }
@@ -66,19 +64,25 @@ async function markAllNotifsRead(ids, db = (0, firebase_instance_1.getDb)()) {
     ids.forEach(id => batch.update((0, firestore_1.doc)(db, 'notifications', id), { read: true }));
     await batch.commit();
 }
+const createdAtMillis = (data) => typeof data.createdAt?.toMillis === 'function' ? data.createdAt.toMillis() : 0;
 /**
- * Subscribe to all notifications for a given user (newest first). If the
- * listener fails, `cb` gets an empty list so callers stop waiting.
+ * Subscribe to all notifications for a given user (newest first). Pass `db`
+ * when notifications live in a different Firebase project than the business
+ * data. If the query fails, `cb` receives an empty list (so callers stop
+ * loading) and `onError` receives the error.
  */
-function subscribeNotifications(uid, cb, db = (0, firebase_instance_1.getDb)()) {
+function subscribeNotifications(uid, cb, db = (0, firebase_instance_1.getDb)(), onError) {
     if (!uid) {
         cb([]);
         return () => { };
     }
     try {
-        const q = (0, firestore_1.query)((0, firestore_1.collection)(db, 'notifications'), (0, firestore_1.where)('recipientId', '==', uid), (0, firestore_1.orderBy)('createdAt', 'desc'));
+        // Sorted here rather than with orderBy, which would need a composite
+        // (recipientId, createdAt) index in every project this reads from.
+        const q = (0, firestore_1.query)((0, firestore_1.collection)(db, 'notifications'), (0, firestore_1.where)('recipientId', '==', uid));
         return (0, firestore_1.onSnapshot)(q, (snap) => {
-            cb(snap.docs.map((d) => {
+            const docs = [...snap.docs].sort((a, b) => createdAtMillis(b.data()) - createdAtMillis(a.data()));
+            cb(docs.map((d) => {
                 const data = d.data();
                 const type = (data.type || 'notification');
                 const icon = typeToIcon(type);
@@ -87,7 +91,8 @@ function subscribeNotifications(uid, cb, db = (0, firebase_instance_1.getDb)()) 
                     id: d.id,
                     title: data.title || typeToTitle(type),
                     body: (data.message || data.body || ''),
-                    time: (0, time_1.relativeTime)(data.createdAt),
+                    // A just-written server timestamp is null until the write is confirmed.
+                    time: data.createdAt?.toDate ? (0, time_1.relativeTime)(data.createdAt) : 'just now',
                     tag: read ? '' : 'NEW',
                     tagColor: read ? '' : '#ef4444',
                     read,
@@ -98,15 +103,15 @@ function subscribeNotifications(uid, cb, db = (0, firebase_instance_1.getDb)()) 
                 };
             }));
         }, (err) => {
-            if (err.code !== 'permission-denied') {
-                console.warn('[agunwami-backend] Notifications snapshot error:', err);
-            }
+            console.warn('[agunwami-backend] Notifications snapshot error:', err);
             cb([]);
+            onError?.(err);
         });
     }
     catch (err) {
         console.warn('[agunwami-backend] subscribeNotifications error:', err);
         cb([]);
+        onError?.(err);
         return () => { };
     }
 }

@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import { AeOverlay } from '@/app/components/common/AeModal';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Activity, AlertTriangle, CheckCircle2, ClipboardList, Clock3, LayoutGrid, List, ListTodo, Plus, Search, X } from 'lucide-react';
@@ -320,7 +321,7 @@ export default function TasksPage() {
       )}
 
       {selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4" onClick={event => { if (event.target === event.currentTarget) setSelectedTask(null); }}>
+        <AeOverlay onClose={() => setSelectedTask(null)} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
           <section role="dialog" aria-modal="true" aria-labelledby="task-detail-title" className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#1e1e1e]">
             <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-white/8">
               <div>
@@ -340,7 +341,7 @@ export default function TasksPage() {
               {selectedTask.description && <div className="col-span-2"><Detail label="Description" value={selectedTask.description} /></div>}
             </dl>
           </section>
-        </div>
+        </AeOverlay>
       )}
 
     </div>
