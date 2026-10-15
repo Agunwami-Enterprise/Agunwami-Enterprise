@@ -3,10 +3,22 @@
  * unless the writer hides it. Saved as
  * <figure><img alt …><figcaption>…</figcaption></figure> when the description
  * shows, or a plain <img> (keeping a hidden one in data-description), which
- * the site's HTML cleaner keeps.
+ * the site's HTML cleaner keeps. An image brought in from a file (e.g. a
+ * PDF's logo) can keep its size, as a width (style="width: 30%") and an
+ * alignment (data-align); others fill the column.
  */
 
 import Image from '@tiptap/extension-image';
+
+/** A width that can be kept: a percentage or pixels, from the style or the width attribute. */
+function widthOf(element: HTMLElement): string | null {
+  const style = element.style.width.trim();
+  if (/^\d+(\.\d+)?(%|px)$/.test(style)) return style;
+  const attr = element.getAttribute('width')?.trim() ?? '';
+  return /^\d+$/.test(attr) ? `${attr}px` : null;
+}
+
+const ALIGNS = ['left', 'center', 'right'];
 
 export const FigureImage = Image.extend({
   addAttributes() {
@@ -21,6 +33,20 @@ export const FigureImage = Image.extend({
           return element.getAttribute('data-description')?.trim() ?? '';
         },
         renderHTML: () => ({}),
+      },
+      width: {
+        default: null,
+        parseHTML: element => widthOf(element.tagName === 'IMG' ? element : element.querySelector('img') ?? element),
+        renderHTML: attrs => (attrs.width ? { style: `width: ${attrs.width}` } : {}),
+      },
+      align: {
+        default: null,
+        parseHTML: element => {
+          const img = element.tagName === 'IMG' ? element : element.querySelector('img');
+          const align = img?.getAttribute('data-align') ?? '';
+          return ALIGNS.includes(align) ? align : null;
+        },
+        renderHTML: attrs => (attrs.align ? { 'data-align': attrs.align } : {}),
       },
       /** Show the description under the image (as its caption). */
       showCaption: {
@@ -43,6 +69,8 @@ export const FigureImage = Image.extend({
             alt: img.getAttribute('alt') ?? '',
             title: img.getAttribute('title'),
             caption: (element as HTMLElement).querySelector('figcaption')?.textContent?.trim() ?? '',
+            width: widthOf(img),
+            align: ALIGNS.includes(img.getAttribute('data-align') ?? '') ? img.getAttribute('data-align') : null,
           };
         },
       },

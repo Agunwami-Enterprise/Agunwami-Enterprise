@@ -485,6 +485,27 @@ export async function convertFile(url: string, name: string): Promise<string> {
   return body.html;
 }
 
+/**
+ * Converted HTML for showing read-only: its inline (data:) images become blob
+ * addresses, which the editor shows (it only takes data: images once they're
+ * stored, see storeInlineImages).
+ */
+export function previewHtml(html: string): string {
+  if (!html.includes('src="data:') || typeof DOMParser === 'undefined') return html;
+  const page = new DOMParser().parseFromString(html, 'text/html');
+  for (const img of page.querySelectorAll<HTMLImageElement>('img[src^="data:"]')) {
+    const match = /^data:([^;,]+);base64,([^]*)$/.exec(img.getAttribute('src') ?? '');
+    if (!match) { img.remove(); continue; }
+    try {
+      const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+      img.src = URL.createObjectURL(new Blob([bytes], { type: match[1] }));
+    } catch {
+      img.remove();
+    }
+  }
+  return page.body.innerHTML;
+}
+
 /** Excel (.xlsx) and CSV files: shown and edited in the built-in spreadsheet. */
 export const isSheetFile = (name: string, url = '') => ['xlsx', 'csv'].includes(fileExtOf(name, url));
 

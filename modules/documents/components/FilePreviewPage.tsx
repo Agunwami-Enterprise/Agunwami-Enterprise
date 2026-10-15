@@ -18,7 +18,7 @@ import { subscribeUserProfile } from '@/modules/settings/services';
 import { articleExtensions } from '@/app/components/cpanel/article/extensions';
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
 import { parseSheets, prepareSheets, type StoredSheet } from '@/lib/documents/sheets';
-import { addFileRecord, convertFile, convertSheetFile, docPath, fileDownloadHref, fileExtOf, isEditableFile, isSheetFile, pdfViewHref } from '../doc-store';
+import { addFileRecord, convertFile, convertSheetFile, docPath, fileDownloadHref, fileExtOf, isEditableFile, isSheetFile, pdfViewHref, previewHtml } from '../doc-store';
 
 const Workbook = dynamic(() => import('@fortune-sheet/react').then(m => m.Workbook), { ssr: false });
 
@@ -54,7 +54,7 @@ export default function FilePreviewPage({ url, name, basePath, isCeo, aeDepartme
     let cancelled = false;
     const done = (e: unknown) => { if (!cancelled) setError(e instanceof Error && e.message ? e.message : 'The file could not be shown here.'); };
     if (sheet) convertSheetFile(url, name).then(json => { if (!cancelled) setSheets(parseSheets(json)); }, done);
-    else convertFile(url, name).then(result => { if (!cancelled) setHtml(result); }, done);
+    else convertFile(url, name).then(previewHtml).then(result => { if (!cancelled) setHtml(result); }, done);
     return () => { cancelled = true; };
   }, [shown, sheet, url, name]);
 

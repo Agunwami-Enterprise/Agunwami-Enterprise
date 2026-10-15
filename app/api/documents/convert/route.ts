@@ -5,7 +5,7 @@
  * HTML for the document editor: an uploaded document being shown or edited
  * (fetched from AE Hub's storage, which the browser can't read directly; only
  * AE Hub's own storage is fetched), or a file sent with the request (a
- * template being added). Images in Word files come back inline (data:
+ * template being added). Images in Word and PDF files come back inline (data:
  * addresses); the editor stores them.
  */
 

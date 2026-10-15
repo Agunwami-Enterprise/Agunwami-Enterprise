@@ -36,7 +36,7 @@ import ProjectPicker from './ProjectPicker';
 import {
   DOC_CATEGORIES, DocConflictError, type DocOrientation, type SharedDepartment, DOC_FORMATS, defaultDocFormat, downloadDocument, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
-  convertFile, editNote, type DocProject, fileDownloadHref, fileExtOf, pdfViewHref, isEditableFile, isPreviewableFile, makeEditable,
+  convertFile, previewHtml, editNote, type DocProject, fileDownloadHref, fileExtOf, pdfViewHref, isEditableFile, isPreviewableFile, makeEditable,
 } from '../doc-store';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -218,7 +218,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   useEffect(() => {
     if (!previewable || !fileUrl) return;
     let cancelled = false;
-    convertFile(fileUrl, fileName).then(html => {
+    convertFile(fileUrl, fileName).then(previewHtml).then(html => {
       if (cancelled) return;
       previewRef.current = html;
       setPreview({ html });

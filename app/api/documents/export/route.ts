@@ -21,10 +21,17 @@ export async function POST(request: Request) {
   if (!html || Buffer.byteLength(html) > MAX_BYTES) return NextResponse.json({ error: 'This document can’t be exported.' }, { status: 400 });
   const title = (typeof body.title === 'string' ? body.title : '').replace(/[\r\n"\\/]+/g, ' ').trim().slice(0, 120) || 'document';
 
-  // Images only from AE Hub's storage or inline; others are left out.
+  // Images only from AE Hub's storage or inline; others are left out. One that kept its size from a
+  // file (style="width: 30%", data-align) gets that share of the text column in pixels (Word reads a
+  // percentage as one of the picture's own size) and a paragraph aligned like it.
+  const column = body.orientation === 'landscape' ? 864 : 624; // 9in / 6.5in at 96 px per inch
   const safe = html.replace(/<img\b[^>]*>/gi, tag => {
     const src = /\ssrc="([^"]*)"/i.exec(tag)?.[1]?.replace(/&amp;/g, '&') ?? '';
-    return src.startsWith('data:image/') || hubFileUrl(src) ? tag : '';
+    if (!src.startsWith('data:image/') && !hubFileUrl(src)) return '';
+    const percent = /\sstyle="[^"]*\bwidth:\s*(\d+(?:\.\d+)?)%/i.exec(tag)?.[1];
+    const sized = percent ? tag.replace(/\sstyle="[^"]*"/i, ` style="width: ${Math.round((Number(percent) / 100) * column)}px"`) : tag;
+    const align = /\sdata-align="(center|right)"/i.exec(tag)?.[1];
+    return align ? `<p style="text-align: ${align}">${sized}</p>` : sized;
   });
 
   try {

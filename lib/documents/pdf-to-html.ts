@@ -5,17 +5,183 @@
  * so they're rebuilt: pieces on the same line are joined, lines close
  * together become paragraphs, larger text becomes headings, "•" and "1."
  * lines become lists, and headers, footers and page numbers repeated on
- * every page are left out. Images, tables and the exact layout aren't kept
- * (the original PDF stays downloadable). Scanned PDFs, which are pictures
- * of text, have no text to edit.
+ * every page are left out. Pictures (logos, photos, a letterhead) are kept
+ * where they sit between the text, at their size on the page and aligned
+ * left, centred or right, as inline images (data: addresses) that the editor
+ * stores; a logo repeated on every page is kept once. The exact layout isn't
+ * kept (the original PDF stays downloadable). Scanned pages come through as
+ * pictures of the pages.
  */
 
-import { extractTextItems, getDocumentProxy, type StructuredTextItem } from 'unpdf';
+import { createHash } from 'node:crypto';
+import sharp from 'sharp';
+import { extractTextItems, getDocumentProxy, getResolvedPDFJS, type StructuredTextItem } from 'unpdf';
 
 export class ScannedPdfError extends Error {
   constructor() {
-    super('This PDF has no text in it (it’s probably scanned pages, which are pictures), so it can’t become an editable document.');
+    super('This PDF has no text or pictures in it that can be read, so it can’t become an editable document.');
   }
+}
+
+type Pdf = Awaited<ReturnType<typeof getDocumentProxy>>;
+type Page = Awaited<ReturnType<Pdf['getPage']>>;
+type Matrix = [number, number, number, number, number, number];
+
+/** A decoded picture as pdf.js hands it over: raw pixels, by kind (1 bit grey, RGB or RGBA). */
+interface RawImage { width?: number; height?: number; data?: Uint8Array | Uint8ClampedArray; kind?: number }
+
+interface Picture {
+  src: string;
+  /** Distances from the top of the document (pages stacked), in PDF units, like lines. */
+  top: number;
+  bottom: number;
+  page: number;
+  /** Width as a share of the text column, and where it sits across the page. */
+  percent: number;
+  align: 'left' | 'center' | 'right';
+}
+
+/** Pictures smaller than this on the page (rules, bullets, specks) are left out. */
+const MIN_PICTURE = 12;
+/** At most this many pictures (what the editor stores), and this much picture data, per file. */
+const MAX_PICTURES = 40;
+const MAX_PICTURE_BYTES = 12 * 1024 * 1024;
+/** Wider pictures are scaled down to this many pixels. */
+const MAX_PICTURE_WIDTH = 1600;
+
+/** pdf.js's matrix product: `m` applied after `n` (how a transform is added to the current one). */
+const multiply = (m: Matrix, n: Matrix): Matrix => [
+  m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1],
+  m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
+  m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5],
+];
+
+/** A picture's pixels as a PNG (or a JPEG for large photos), or null if they can't be read. */
+async function encodePicture(image: RawImage): Promise<{ src: string; hash: string } | null> {
+  const { width = 0, height = 0, data, kind } = image;
+  if (!data || !width || !height) return null;
+  let pixels: Buffer;
+  let channels: 1 | 3 | 4;
+  if (kind === 1) {
+    // One bit per pixel, rows padded to whole bytes; a set bit is white.
+    const rowBytes = (width + 7) >> 3;
+    if (data.length < rowBytes * height) return null;
+    pixels = Buffer.alloc(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) pixels[y * width + x] = data[y * rowBytes + (x >> 3)] & (128 >> (x & 7)) ? 255 : 0;
+    }
+    channels = 1;
+  } else {
+    const n = kind === 3 ? 4 : kind === 2 ? 3 : data.length / (width * height);
+    if (n !== 1 && n !== 3 && n !== 4) return null;
+    if (data.length < width * height * n) return null;
+    channels = n;
+    pixels = Buffer.from(data.buffer, data.byteOffset, width * height * n);
+  }
+  let opaque = channels !== 4;
+  if (channels === 4) {
+    opaque = true;
+    for (let i = 3; i < pixels.length; i += 4) if (pixels[i] !== 255) { opaque = false; break; }
+  }
+  const hash = createHash('sha1').update(`${width}x${height}:`).update(pixels).digest('hex');
+  try {
+    let picture = sharp(pixels, { raw: { width, height, channels } }).resize({ width: Math.min(width, MAX_PICTURE_WIDTH), withoutEnlargement: true });
+    if (channels === 4 && opaque) picture = picture.removeAlpha();
+    // Photos are smaller as JPEGs; logos, drawings and anything see-through stay sharp as PNGs.
+    const photo = opaque && channels !== 1 && width * height > 250_000;
+    const out = photo ? await picture.jpeg({ quality: 82, mozjpeg: true }).toBuffer() : await picture.png({ compressionLevel: 9 }).toBuffer();
+    return { src: `data:image/${photo ? 'jpeg' : 'png'};base64,${out.toString('base64')}`, hash };
+  } catch {
+    return null;
+  }
+}
+
+/** A picture object of a page, given up on after a few seconds. */
+function pictureObject(page: Page, key: string): Promise<RawImage | null> {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(null), 5000);
+    try {
+      (key.startsWith('g_') ? page.commonObjs : page.objs).get(key, (image: RawImage) => { clearTimeout(timer); resolve(image ?? null); });
+    } catch {
+      clearTimeout(timer);
+      resolve(null);
+    }
+  });
+}
+
+interface Placed { image: RawImage | string; box: { left: number; right: number; top: number; bottom: number } }
+
+/** The pictures drawn on a page and where (PDF units, from the page's top), following the drawing's transforms. */
+async function placedPictures(page: Page, pageHeight: number): Promise<Placed[]> {
+  const { OPS } = await getResolvedPDFJS();
+  const ops = await page.getOperatorList();
+  const placed: Placed[] = [];
+  let ctm: Matrix = [1, 0, 0, 1, 0, 0];
+  const stack: Matrix[] = [];
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i];
+    const args = ops.argsArray[i] as unknown[];
+    if (fn === OPS.save) stack.push(ctm);
+    else if (fn === OPS.restore) ctm = stack.pop() ?? ctm;
+    else if (fn === OPS.transform) ctm = multiply(ctm, args as Matrix);
+    else if (fn === OPS.paintFormXObjectBegin) {
+      stack.push(ctm);
+      if (Array.isArray(args[0]) && args[0].length === 6) ctm = multiply(ctm, args[0] as Matrix);
+    } else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() ?? ctm;
+    else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject) {
+      // A picture fills the unit square, mapped onto the page by the current transform.
+      const xs = [ctm[4], ctm[0] + ctm[4], ctm[2] + ctm[4], ctm[0] + ctm[2] + ctm[4]];
+      const ys = [ctm[5], ctm[1] + ctm[5], ctm[3] + ctm[5], ctm[1] + ctm[3] + ctm[5]];
+      const box = { left: Math.min(...xs), right: Math.max(...xs), top: pageHeight - Math.max(...ys), bottom: pageHeight - Math.min(...ys) };
+      if (box.right - box.left < MIN_PICTURE || box.bottom - box.top < MIN_PICTURE) continue;
+      const image = fn === OPS.paintImageXObject ? String(args[0]) : args[0] as RawImage;
+      placed.push({ image, box });
+    }
+  }
+  return placed;
+}
+
+/** The pictures in a PDF, in reading order, ready to place among the text. */
+async function pdfPictures(pdf: Pdf, pages: Array<{ top: number; width: number; height: number; hasText: boolean }>, textLeft: number): Promise<Picture[]> {
+  const pictures: Picture[] = [];
+  const seenAtEdge = new Set<string>();
+  let bytes = 0;
+  for (let index = 0; index < pages.length && pictures.length < MAX_PICTURES; index++) {
+    const { top: pageTop, width, height, hasText } = pages[index];
+    const page = await pdf.getPage(index + 1);
+    let placed: Placed[];
+    try { placed = await placedPictures(page, height); } catch { continue; }
+    placed.sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left);
+    // The text column: between the text's left margin and the same margin on the right.
+    const margin = Number.isFinite(textLeft) && textLeft < width / 3 ? textLeft : width * 0.1;
+    const column = Math.max(width - margin * 2, width * 0.5);
+    for (const { image, box } of placed) {
+      if (pictures.length >= MAX_PICTURES || bytes > MAX_PICTURE_BYTES) break;
+      const w = box.right - box.left;
+      const h = box.bottom - box.top;
+      // A picture behind a whole page of text is its background; it can't sit behind text here.
+      if (hasText && w > width * 0.9 && h > height * 0.9) continue;
+      const raw = typeof image === 'string' ? await pictureObject(page, image) : image;
+      const encoded = raw ? await encodePicture(raw) : null;
+      if (!encoded) continue;
+      // A logo in the header or footer of every page is kept once.
+      const edge = box.top < height * 0.15 || box.bottom > height * 0.85;
+      if (edge && seenAtEdge.has(encoded.hash)) continue;
+      if (edge) seenAtEdge.add(encoded.hash);
+      const centre = (box.left + box.right) / 2;
+      const percent = Math.max(5, Math.min(100, Math.round((w / column) * 100)));
+      pictures.push({
+        src: encoded.src,
+        top: pageTop + box.top,
+        bottom: pageTop + box.bottom,
+        page: index,
+        percent,
+        align: percent >= 100 || Math.abs(centre - width / 2) < width * 0.06 ? 'center' : box.left > width / 2 ? 'right' : 'left',
+      });
+      bytes += encoded.src.length;
+    }
+  }
+  return pictures;
 }
 
 interface Line {
@@ -97,14 +263,17 @@ export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages
   // Pages stacked top to bottom, so spacing between lines carries across pages.
   let offset = 0;
   const lines: Line[] = [];
+  const pages: Array<{ top: number; width: number; height: number; hasText: boolean }> = [];
   for (let page = 0; page < totalPages; page++) {
     const viewport = (await pdf.getPage(page + 1)).getViewport({ scale: 1 });
-    lines.push(...pageLines(items[page] ?? [], page, offset, viewport.height));
+    const pageText = pageLines(items[page] ?? [], page, offset, viewport.height);
+    lines.push(...pageText);
+    pages.push({ top: offset, width: viewport.width, height: viewport.height, hasText: pageText.length > 0 });
     offset += viewport.height;
   }
+  const pictures = await pdfPictures(pdf, pages, Math.min(...lines.map(l => l.left)));
   const characters = lines.reduce((n, l) => n + l.text.length, 0);
-  // Only a PDF with no text at all is pictures of pages; any text (even a line) is shown.
-  if (characters === 0) throw new ScannedPdfError();
+  if (characters === 0 && pictures.length === 0) throw new ScannedPdfError();
 
   // Headers and footers: the same line at the top or bottom of most pages, and bare page numbers.
   const repeated = new Map<string, Set<number>>();
@@ -126,9 +295,18 @@ export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages
 
   const headingLevel = (line: Line) => (line.text.length > 140 ? 0 : line.size >= body * 1.6 ? 2 : line.size >= body * 1.25 ? 3 : 0);
 
-  type Block = { kind: 'p' | 'h2' | 'h3' | 'ul' | 'ol' | 'table'; lines: string[]; rows?: string[][]; last: Line };
+  type Block = { kind: 'p' | 'h2' | 'h3' | 'ul' | 'ol' | 'table' | 'img'; lines: string[]; rows?: string[][]; picture?: Picture; last: Line };
   const blocks: Block[] = [];
+  // Pictures go in before the first line below their middle; the text after one starts afresh.
+  let nextPicture = 0;
+  const placePictures = (before: number) => {
+    while (nextPicture < pictures.length && (pictures[nextPicture].top + pictures[nextPicture].bottom) / 2 < before) {
+      const picture = pictures[nextPicture++];
+      blocks.push({ kind: 'img', lines: [], picture, last: { text: '', top: picture.bottom, left: 0, size: body, page: picture.page, cells: [], edge: null } });
+    }
+  };
   for (const line of content) {
+    placePictures(line.top);
     const prev = blocks.at(-1);
     const gap = prev ? line.top - prev.last.top : Infinity;
     // Rows of text in columns, one under another, make a table (the header row often has larger gaps).
@@ -179,7 +357,13 @@ export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages
     blocks.push({ kind: 'p', lines: [line.text], last: line });
   }
 
+  placePictures(Infinity);
+
   const html = blocks.map(block => {
+    if (block.kind === 'img') {
+      const { src, percent, align } = block.picture!;
+      return `<img src="${src}" alt="" style="width: ${percent}%" data-align="${align}">`;
+    }
     if (block.kind === 'table') {
       const width = Math.max(...block.rows!.map(r => r.length));
       const rows = block.rows!.map(r => [...r, ...Array(width - r.length).fill('')]);
