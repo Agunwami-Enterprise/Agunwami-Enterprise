@@ -11,9 +11,9 @@
 import { NextResponse } from 'next/server';
 import mammoth from 'mammoth';
 import { requireSession } from '@/lib/workstation/api-auth';
+import { hubFileUrl } from '@/lib/documents/hub-storage';
 
 const MAX_BYTES = 25 * 1024 * 1024;
-const BUCKET = process.env.NEXT_PUBLIC_WORKSTATION_FIREBASE_STORAGE_BUCKET || 'aehub-eafa6.firebasestorage.app';
 
 // Keep in step with EDITABLE_FILE_TYPES in modules/documents/doc-store.ts.
 const EDITABLE_EXTENSIONS = ['docx', 'txt', 'md', 'html', 'htm'];
@@ -44,15 +44,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Only Word (.docx), text (.txt, .md) and web page (.html) files can be edited. Download other files instead.' }, { status: 400 });
   }
   // Only AE Hub's own storage, never an arbitrary address.
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return NextResponse.json({ error: 'That file’s address isn’t valid.' }, { status: 400 });
-  }
-  if (parsed.protocol !== 'https:' || parsed.hostname !== 'firebasestorage.googleapis.com' || !parsed.pathname.startsWith(`/v0/b/${BUCKET}/o/`)) {
-    return NextResponse.json({ error: 'Only files uploaded to Documents can be edited.' }, { status: 400 });
-  }
+  const parsed = hubFileUrl(url);
+  if (!parsed) return NextResponse.json({ error: 'Only files uploaded to Documents can be edited.' }, { status: 400 });
 
   try {
     const res = await fetch(parsed, { cache: 'no-store' });

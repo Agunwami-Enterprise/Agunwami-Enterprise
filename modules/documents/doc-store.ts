@@ -18,7 +18,7 @@
  */
 
 import {
-  collection, deleteDoc, doc, getDoc, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, type Unsubscribe,
+  collection, deleteDoc, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc, type Unsubscribe,
 } from 'firebase/firestore';
 import { cleanPastedHtml } from '@/app/components/cpanel/article/extensions';
 import { getDownloadURL, ref, uploadBytes, uploadBytesResumable } from 'firebase/storage';
@@ -59,6 +59,10 @@ export interface WorkDoc {
   orientation: DocOrientation;
   /** An uploaded file opened for editing: the original, still downloadable. */
   originalFile: { name: string; url: string } | null;
+  /** Written in the workstation (opens in the editor), rather than an uploaded file. */
+  written: boolean;
+  /** An uploaded file's address. */
+  fileUrl: string;
   owner: DocPerson;
   createdAt: string;
   updatedAt: string;
@@ -95,6 +99,8 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     othersCanEdit: d.othersCanEdit === true,
     orientation: d.orientation === 'landscape' ? 'landscape' : 'portrait',
     originalFile: str(d.originalFileUrl) ? { name: str(d.originalFileName) || 'Original file', url: str(d.originalFileUrl) } : null,
+    written: d.format === DOC_FORMAT,
+    fileUrl: d.format === DOC_FORMAT ? '' : str(d.url),
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
     createdAt: str(d.createdAt),
     updatedAt: str(d.updatedAt),
@@ -112,8 +118,14 @@ export function shareOf(d: Pick<WorkDoc, 'department'>): DocShare {
   return d.department === 'all' ? 'all' : d.department === 'private' ? 'private' : d.department === 'departments' ? 'departments' : 'department';
 }
 
+/**
+ * Who can do what. A document with no owner (files from before owners were
+ * recorded) is like an unowned article: whoever can see it may edit it, and
+ * the first to open it in the editor becomes its owner.
+ */
 export function permissionsOf(d: WorkDoc, viewer: Viewer): DocPermissions {
-  const owner = d.owner.uid === viewer.uid;
+  const owner = !!d.owner.uid && d.owner.uid === viewer.uid;
+  const unowned = !d.owner.uid;
   const share = shareOf(d);
   const inTeam = (!!d.aeDepartmentId && d.aeDepartmentId === viewer.aeDepartmentId)
     || (share === 'departments' && !!viewer.aeDepartmentId && d.sharedDepartments.some(x => x.id === viewer.aeDepartmentId));
@@ -121,7 +133,7 @@ export function permissionsOf(d: WorkDoc, viewer: Viewer): DocPermissions {
   return {
     // The CEO reads everything; editing still needs the owner to allow it.
     canView: owner || sharedWith || viewer.isCeo,
-    canEdit: owner || (sharedWith && d.othersCanEdit),
+    canEdit: owner || (sharedWith && d.othersCanEdit) || (unowned && (sharedWith || viewer.isCeo)),
     canDelete: owner || viewer.isCeo,
     canShare: owner,
   };
@@ -157,10 +169,15 @@ export async function downloadDocCopy(id: string): Promise<void> {
   downloadWord(d.title, d.content, d.orientation);
 }
 
-/** Every written document, live (the CEO's Documents page uses it for who can edit what). */
-export function subscribeWrittenDocs(onDocs: (docs: Map<string, WorkDoc>) => void, onError: () => void): Unsubscribe {
-  return onSnapshot(query(collection(authDb, 'documents'), where('format', '==', DOC_FORMAT)),
+/** Every document in Documents, written and uploaded, live (the CEO's page uses it for who can do what). */
+export function subscribeDocs(onDocs: (docs: Map<string, WorkDoc>) => void, onError: () => void): Unsubscribe {
+  return onSnapshot(collection(authDb, 'documents'),
     snap => onDocs(new Map(snap.docs.map(d => [d.id, toWorkDoc(d.id, d.data())]))), onError);
+}
+
+/** Downloads an uploaded file under its own name (its address alone may open it in the browser instead). */
+export function fileDownloadHref(url: string, name: string): string {
+  return `/api/documents/download?${new URLSearchParams({ url, name: fileNameOf(name, url) })}`;
 }
 
 export function subscribeDoc(id: string, onDoc: (d: WorkDoc | null) => void, onError: () => void): Unsubscribe {
@@ -345,7 +362,26 @@ export async function uploadFileDoc(file: File, opts: {
 
 /** Uploaded files that can be opened in the editor (keep in step with /api/documents/convert). */
 export const EDITABLE_FILE_TYPES = ['docx', 'txt', 'md', 'html', 'htm'];
-export const isEditableFile = (name: string) => EDITABLE_FILE_TYPES.includes(name.split('.').pop()?.toLowerCase() ?? '');
+/** A file's type (extension), from its name or, for files named without one, its address. */
+export function fileExtOf(name: string, url = ''): string {
+  const fromName = /\.([a-z0-9]{1,5})$/i.exec(name.trim())?.[1];
+  if (fromName) return fromName.toLowerCase();
+  try {
+    const path = decodeURIComponent(new URL(url).pathname);
+    return /\.([a-z0-9]{1,5})$/i.exec(path)?.[1]?.toLowerCase() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** The name to save a file under: its own, with its type added when the name lacks one. */
+export function fileNameOf(name: string, url = ''): string {
+  const ext = fileExtOf(name, url);
+  const base = name.trim() || 'document';
+  return ext && !base.toLowerCase().endsWith(`.${ext}`) ? `${base}.${ext}` : base;
+}
+
+export const isEditableFile = (name: string, url = '') => EDITABLE_FILE_TYPES.includes(fileExtOf(name, url));
 
 /** Images that came inline (data: addresses, e.g. from a Word file) go to storage instead. */
 async function storeInlineImages(html: string, me: Pick<Viewer, 'uid'>): Promise<string> {
@@ -376,9 +412,10 @@ export async function makeEditable(id: string, me: Viewer): Promise<void> {
   if (!snap.exists()) throw new Error('This document was deleted.');
   const data = snap.data();
   if (data.format === DOC_FORMAT) return;
-  if (!permissionsOf(toWorkDoc(id, data), me).canEdit) throw new Error('Only the person who uploaded it can open it for editing.');
-  const name = str(data.name);
+  const current = toWorkDoc(id, data);
+  if (!permissionsOf(current, me).canEdit) throw new Error('You can’t edit this file. Ask its owner to let others edit it.');
   const fileUrl = str(data.url);
+  const name = fileNameOf(str(data.name), fileUrl);
   if (!isEditableFile(name)) throw new Error('Only Word (.docx), text and web page files can be edited.');
   const res = await fetch('/api/documents/convert', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: fileUrl, name }),
@@ -405,6 +442,8 @@ export async function makeEditable(id: string, me: Viewer): Promise<void> {
     dateModified: dayLabel(now),
     lock: null,
     serverUpdatedAt: serverTimestamp(),
+    // A file with no owner becomes the editor's (as the first person to edit it).
+    ...(current.owner.uid ? {} : { uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email }),
   });
 }
 
