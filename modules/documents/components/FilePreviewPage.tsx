@@ -18,7 +18,7 @@ import { subscribeUserProfile } from '@/modules/settings/services';
 import { articleExtensions } from '@/app/components/cpanel/article/extensions';
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
 import { parseSheets, prepareSheets, type StoredSheet } from '@/lib/documents/sheets';
-import { addFileRecord, convertFile, convertSheetFile, docPath, fileDownloadHref, isEditableFile, isSheetFile } from '../doc-store';
+import { addFileRecord, convertFile, convertSheetFile, docPath, fileDownloadHref, fileExtOf, isEditableFile, isSheetFile, pdfViewHref } from '../doc-store';
 
 const Workbook = dynamic(() => import('@fortune-sheet/react').then(m => m.Workbook), { ssr: false });
 
@@ -34,6 +34,8 @@ export default function FilePreviewPage({ url, name, basePath, isCeo, aeDepartme
   const [sheets, setSheets] = useState<StoredSheet[] | null>(null);
   const [error, setError] = useState(shown ? '' : 'This kind of file opens in your browser.');
   const [saving, setSaving] = useState(false);
+  // A PDF with no text to convert (scanned pages) is shown as it is.
+  const pdfAsIs = !!error && shown && fileExtOf(name, url) === 'pdf';
 
   useEffect(() => (user?.uid
     ? subscribeUserProfile(user.uid, p => setDepartment(String(p?.department ?? '').toLowerCase()), () => setDepartment(''))
@@ -97,7 +99,10 @@ export default function FilePreviewPage({ url, name, basePath, isCeo, aeDepartme
         </div>
       </div>
 
-      {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error} You can open it in your browser or download it.</p>}
+      {error && (pdfAsIs
+        ? <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">{error} It’s shown below as it is.</p>
+        : <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error} You can open it in your browser or download it.</p>)}
+      {pdfAsIs && <iframe src={pdfViewHref(url, name)} title={name} className="block h-[calc(100vh-220px)] min-h-[420px] w-full rounded-xl border border-[#e5e5e5] dark:border-white/10" />}
 
       {shown && !error && (sheet ? (
         <div className="h-[calc(100vh-200px)] min-h-[420px] overflow-hidden rounded-xl border border-[#e5e5e5] bg-white dark:border-white/10">

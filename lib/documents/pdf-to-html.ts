@@ -14,7 +14,7 @@ import { extractTextItems, getDocumentProxy, type StructuredTextItem } from 'unp
 
 export class ScannedPdfError extends Error {
   constructor() {
-    super('This PDF is scanned images of pages, so it has no text to edit. Download it instead.');
+    super('This PDF has no text in it (it’s probably scanned pages, which are pictures), so it can’t become an editable document.');
   }
 }
 
@@ -103,7 +103,8 @@ export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages
     offset += viewport.height;
   }
   const characters = lines.reduce((n, l) => n + l.text.length, 0);
-  if (characters < Math.max(20, totalPages * 15)) throw new ScannedPdfError();
+  // Only a PDF with no text at all is pictures of pages; any text (even a line) is shown.
+  if (characters === 0) throw new ScannedPdfError();
 
   // Headers and footers: the same line at the top or bottom of most pages, and bare page numbers.
   const repeated = new Map<string, Set<number>>();

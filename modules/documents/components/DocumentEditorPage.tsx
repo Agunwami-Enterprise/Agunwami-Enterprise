@@ -35,7 +35,7 @@ import ProjectPicker from './ProjectPicker';
 import {
   DOC_CATEGORIES, DocConflictError, type DocOrientation, type SharedDepartment, DOC_FORMATS, defaultDocFormat, downloadDocument, heldByOther, lockDoc, permissionsOf, printDoc, releaseDoc,
   removeDoc, saveDoc, shareOf, subscribeDoc, uploadDocImage, type DocLock, type DocShare, type Viewer, type WorkDoc,
-  convertFile, editNote, type DocProject, fileDownloadHref, isEditableFile, isPreviewableFile, makeEditable,
+  convertFile, editNote, type DocProject, fileDownloadHref, fileExtOf, pdfViewHref, isEditableFile, isPreviewableFile, makeEditable,
 } from '../doc-store';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -210,6 +210,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const previewable = !!docData && isFile && isPreviewableFile(docData.fileName);
   const fileUrl = docData && isFile ? docData.fileUrl : '';
   const fileName = docData?.fileName ?? '';
+  // A PDF with no text to convert (scanned pages) is shown as it is, in the browser's PDF viewer.
+  const pdfAsIs = isFile && !!preview && 'error' in preview && fileExtOf(fileName) === 'pdf';
   useEffect(() => {
     if (!previewable || !fileUrl) return;
     let cancelled = false;
@@ -569,7 +571,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* An uploaded file: Edit turns it into a document you can change */}
-          {isFile && canEdit && (
+          {isFile && canEdit && !pdfAsIs && (
             <button type="button" onClick={() => void editUpload()} disabled={converting} title="Turn it into a document you can edit"
               className="inline-flex items-center gap-1.5 rounded-lg bg-[#f5bd02] px-3 py-2 text-[13px] font-semibold text-[#1a1a1a] hover:opacity-90 disabled:opacity-50">
               {converting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Pencil className="h-4 w-4" aria-hidden="true" />} Edit
@@ -647,13 +649,17 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
       </div>
 
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
-      {isFile && preview && 'error' in preview && (
+      {pdfAsIs && preview && 'error' in preview ? (
+        <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          {preview.error} It’s shown below as it is.
+        </p>
+      ) : isFile && preview && 'error' in preview && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
           {preview.error}{' '}
           {docData?.fileUrl && <a href={docData.fileUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Open the file</a>} or download it.
         </p>
       )}
-      {isFile && can?.canEdit && (
+      {isFile && can?.canEdit && !pdfAsIs && (
         <p role="status" className="flex items-center gap-2 rounded-lg border border-[#e5e5e5] bg-white px-4 py-2.5 text-[13px] text-[#525252] dark:border-white/10 dark:bg-[#1e1e1e] dark:text-gray-300">
           <Eye className="h-4 w-4 shrink-0" aria-hidden="true" /> This is the uploaded file, shown read-only. Choose Edit to turn it into a document you can change.
         </p>
@@ -708,7 +714,9 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
             <div data-orientation={form.orientation}
               className={`mx-auto w-full rounded-sm bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06)] transition-[max-width] duration-200 ${form.orientation === 'landscape' ? 'max-w-[1120px]' : 'max-w-[860px]'}`}>
               {mode.kind === 'loading' && <p className="flex items-center gap-2 px-5 py-10 text-[14px] text-[#8a8a8a] sm:px-10 md:px-16"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…</p>}
-              <EditorContent editor={editor} />
+              {pdfAsIs && docData
+                ? <iframe src={pdfViewHref(docData.fileUrl, docData.fileName)} title={docData.title} className="block h-[80vh] w-full rounded-sm" />
+                : <EditorContent editor={editor} />}
             </div>
           </div>
           <div className="flex flex-wrap justify-between gap-2 border-t border-[#e5e5e5] px-5 py-2.5 text-[12px] text-[#8a8a8a] dark:border-white/10">

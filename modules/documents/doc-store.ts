@@ -200,6 +200,11 @@ export function fileDownloadHref(url: string, name: string): string {
   return `/api/documents/download?${new URLSearchParams({ url, name: fileNameOf(name, url) })}`;
 }
 
+/** A PDF shown in the page as it is (the browser's PDF viewer), e.g. a scanned one with no text to convert. */
+export function pdfViewHref(url: string, name: string): string {
+  return `/api/documents/download?${new URLSearchParams({ url, name: fileNameOf(name, url), inline: '1' })}`;
+}
+
 export function subscribeDoc(id: string, onDoc: (d: WorkDoc | null) => void, onError: () => void): Unsubscribe {
   return onSnapshot(doc(authDb, 'documents', id), snap => onDoc(snap.exists() ? toWorkDoc(snap.id, snap.data()) : null), onError);
 }
