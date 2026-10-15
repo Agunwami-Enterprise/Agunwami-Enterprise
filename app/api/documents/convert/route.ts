@@ -1,8 +1,8 @@
 /**
  * POST /api/documents/convert { url, name }
  *
- * Turns an uploaded Word (.docx), text (.txt, .md) or web page (.html) file
- * into HTML for the document editor, so an uploaded document can be edited.
+ * Turns an uploaded Word (.docx), PDF, text (.txt, .md) or web page (.html)
+ * file into HTML for the document editor, so an uploaded document can be edited.
  * Runs here because AE Hub's storage doesn't let the browser read files
  * directly. Only files in AE Hub's own storage are fetched. Images in Word
  * files come back inline (data: addresses); the editor stores them.
@@ -12,11 +12,12 @@ import { NextResponse } from 'next/server';
 import mammoth from 'mammoth';
 import { requireSession } from '@/lib/workstation/api-auth';
 import { hubFileUrl } from '@/lib/documents/hub-storage';
+import { ScannedPdfError, pdfToHtml } from '@/lib/documents/pdf-to-html';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
 // Keep in step with EDITABLE_FILE_TYPES in modules/documents/doc-store.ts.
-const EDITABLE_EXTENSIONS = ['docx', 'txt', 'md', 'html', 'htm'];
+const EDITABLE_EXTENSIONS = ['docx', 'pdf', 'txt', 'md', 'html', 'htm'];
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   const name = typeof body.name === 'string' ? body.name : '';
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   if (!EDITABLE_EXTENSIONS.includes(ext)) {
-    return NextResponse.json({ error: 'Only Word (.docx), text (.txt, .md) and web page (.html) files can be edited. Download other files instead.' }, { status: 400 });
+    return NextResponse.json({ error: 'Only Word (.docx), PDF, text (.txt, .md) and web page (.html) files can be edited. Download other files instead.' }, { status: 400 });
   }
   // Only AE Hub's own storage, never an arbitrary address.
   const parsed = hubFileUrl(url);
@@ -59,9 +60,14 @@ export async function POST(request: Request) {
       const result = await mammoth.convertToHtml({ buffer });
       return NextResponse.json({ html: result.value || '<p></p>', warnings: result.messages.filter(m => m.type === 'warning').length });
     }
+    if (ext === 'pdf') {
+      const { html } = await pdfToHtml(new Uint8Array(buffer));
+      return NextResponse.json({ html, warnings: 0 });
+    }
     const text = buffer.toString('utf-8');
     return NextResponse.json({ html: ext === 'html' || ext === 'htm' ? text : textToHtml(text), warnings: 0 });
   } catch (err) {
+    if (err instanceof ScannedPdfError) return NextResponse.json({ error: err.message }, { status: 422 });
     console.error('[POST /api/documents/convert]', err);
     return NextResponse.json({ error: 'The file could not be opened for editing. It may be damaged or password-protected.' }, { status: 422 });
   }

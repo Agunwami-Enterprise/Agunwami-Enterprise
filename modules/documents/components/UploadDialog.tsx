@@ -11,7 +11,7 @@ import { useRef, useState } from 'react';
 import { Loader2, Upload } from 'lucide-react';
 import AeModal from '@/app/components/common/AeModal';
 import {
-  MAX_FILE_BYTES, isEditableFile, makeEditable, sizeLabel, uploadFileDoc, type SharedDepartment, type Viewer,
+  MAX_FILE_BYTES, editNote, fileExtOf, isEditableFile, makeEditable, sizeLabel, uploadFileDoc, type SharedDepartment, type Viewer,
 } from '../doc-store';
 import DepartmentPicker from './DepartmentPicker';
 
@@ -47,13 +47,15 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
   const [share, setShare] = useState<Share>(team || department ? 'department' : 'all');
   const [departments, setDepartments] = useState<SharedDepartment[]>(team ? [team] : []);
   const [description, setDescription] = useState('');
-  // Word, text and web page files can be edited here; they open in the editor unless unticked.
-  const [editHere, setEditHere] = useState(true);
+  // Word, PDF, text and web page files can be edited here. Most open in the editor unless unticked;
+  // PDFs stay as they are unless ticked, since they're usually kept as they are.
+  const [editChoice, setEditChoice] = useState<boolean | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [converting, setConverting] = useState(false);
   const [error, setError] = useState('');
 
   const editable = !!file && isEditableFile(file.name);
+  const editHere = editChoice ?? (!!file && fileExtOf(file.name) !== 'pdf');
 
   async function upload() {
     if (!file) return;
@@ -106,13 +108,13 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
       <div className="space-y-4">
         <button type="button" onClick={() => input.current?.click()} disabled={busy}
           onDragOver={e => e.preventDefault()}
-          onDrop={e => { e.preventDefault(); const dropped = e.dataTransfer.files[0]; if (dropped && !busy) { setFile(dropped); setError(''); } }}
+          onDrop={e => { e.preventDefault(); const dropped = e.dataTransfer.files[0]; if (dropped && !busy) { setFile(dropped); setEditChoice(null); setError(''); } }}
           className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-[#d4d4d4] px-4 py-6 text-center hover:border-[#f5bd02] dark:border-white/15">
           <Upload className="h-6 w-6 text-[#a3a3a3]" aria-hidden="true" />
           <span className="text-[14px] font-medium text-[#292929] dark:text-gray-100">{file ? file.name : 'Choose a file, or drop it here'}</span>
           <span className="text-[12px] text-[#8a8a8a]">{file ? sizeLabel(file.size) : 'PDF, Word, Excel, PowerPoint, text, images or zip, up to 25 MB'}</span>
         </button>
-        <input ref={input} type="file" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setError(''); }} />
+        <input ref={input} type="file" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setEditChoice(null); setError(''); }} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className={label}>Category</span>
@@ -135,8 +137,8 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
         </label>
         {editable && (
           <label className="flex items-start gap-2 text-[13px] text-[#525252] dark:text-gray-300">
-            <input type="checkbox" checked={editHere} disabled={busy} onChange={e => setEditHere(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
-            <span>Open it in the editor so it can be edited<span className="block text-[12px] text-[#8a8a8a]">It becomes a document you can change here. The original file stays available to download.</span></span>
+            <input type="checkbox" checked={editHere} disabled={busy} onChange={e => setEditChoice(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
+            <span>Open it in the editor so it can be edited<span className="block text-[12px] text-[#8a8a8a]">It becomes a document you can change here. The original file stays available to download. {editNote(file.name)}</span></span>
           </label>
         )}
         {busy && <div className="h-2 overflow-hidden rounded-full bg-[#e5e5e5] dark:bg-white/10"><div className="h-full bg-[#f5bd02] transition-all" style={{ width: `${progress ?? 100}%` }} /></div>}
