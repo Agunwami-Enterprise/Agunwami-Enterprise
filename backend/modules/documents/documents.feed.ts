@@ -26,6 +26,10 @@ export interface DocumentFeedItem {
   url?: string;
   uploadedBy?: string;
   size?: string;
+  /** Written in the AE Workstation: opens in its document editor rather than as a file. */
+  written?: boolean;
+  /** A sample entry whose link points at no real file. */
+  sample?: boolean;
 }
 
 export interface DocumentsFeed {
@@ -52,7 +56,28 @@ function fileTypeOf(name: string, url: string, declared: string): string {
   return /^[A-Z0-9]{2,5}$/.test(fromName) ? fromName : 'FILE';
 }
 
-const httpLink = (value: string) => (/^https?:\/\//i.test(value) ? value : undefined);
+/**
+ * A document written in the AE Workstation, from its link (…/ws/documents/<id>): AE Hub lists
+ * these as files, but they open in the editor rather than downloading.
+ */
+function writtenIdOf(url: string | undefined): string | null {
+  try {
+    return url ? /^\/(?:ws|ceo)\/documents\/([\w-]+)\/?$/.exec(new URL(url).pathname)?.[1] ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Links to sample files that don't exist (the seed script's placeholder.docs, example.com, …). */
+const isPlaceholderLink = (value: string) => {
+  try {
+    return /(^|\.)(placeholder\.docs|example\.(com|org|net)|invalid|test|localhost)$/i.test(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
+
+const httpLink = (value: string) => (/^https?:\/\//i.test(value) && !isPlaceholderLink(value) ? value : undefined);
 
 function enterpriseItem(raw: RawRecord): DocumentFeedItem {
   const id = text(raw._id) || text(raw.id);
@@ -67,10 +92,12 @@ function enterpriseItem(raw: RawRecord): DocumentFeedItem {
     type: fileTypeOf(name, url, text(raw.fileType) || text(raw.type)),
     category: text(raw.category) || CATEGORY_BY_DOC_TYPE[docType] || 'General',
     date: isoOf(raw.uploadedAt) ?? isoOf(raw.createdAt) ?? isoOf(raw._createTime),
-    tab: tabFor(text(raw.department)),
+    tab: text(raw.department) === 'departments' || text(raw.aeDepartmentId) ? 'team' : tabFor(text(raw.department)),
     ...(httpLink(url) ? { url } : {}),
     ...(text(raw.uploadedByName) || text(raw.uploadedBy) ? { uploadedBy: text(raw.uploadedByName) || text(raw.uploadedBy) } : {}),
     ...(text(raw.fileSize) || text(raw.size) ? { size: text(raw.fileSize) || text(raw.size) } : {}),
+    ...(text(raw.format) === 'ae-doc' ? { written: true } : {}),
+    ...(url && isPlaceholderLink(url) ? { sample: true } : {}),
   };
 }
 
@@ -82,20 +109,26 @@ export async function getDocumentsFeed(): Promise<DocumentsFeed> {
   const enterpriseDocs = token ? await listDocs('documents', 300).catch(() => []) : [];
 
   const items: DocumentFeedItem[] = [
+    // The CEO's list: every document, private ones included (the CEO reads them all).
     ...enterpriseDocs.map(doc => enterpriseItem(doc as RawRecord)),
-    ...projectFeed.entries.flatMap(({ source, data }) => data.map(document => ({
-      key: `${source.id}:${document.id}`,
-      id: document.id,
-      source,
-      name: document.name,
-      type: fileTypeOf(document.name, document.url ?? '', document.type),
-      category: document.category,
-      date: document.createdAt,
-      tab: tabFor(document.department ?? ''),
-      ...(document.url ? { url: document.url } : {}),
-      ...(document.uploadedBy ? { uploadedBy: document.uploadedBy } : {}),
-      ...(document.size ? { size: document.size } : {}),
-    } satisfies DocumentFeedItem))),
+    ...projectFeed.entries.flatMap(({ source, data }) => data.map(document => {
+      const writtenId = writtenIdOf(document.url);
+      return {
+        key: `${source.id}:${document.id}`,
+        id: writtenId ?? document.id,
+        source,
+        name: document.name,
+        type: fileTypeOf(document.name, document.url ?? '', document.type),
+        category: document.category,
+        date: document.createdAt,
+        tab: tabFor(document.department ?? ''),
+        ...(document.url && !isPlaceholderLink(document.url) ? { url: document.url } : {}),
+        ...(document.url && isPlaceholderLink(document.url) ? { sample: true } : {}),
+        ...(document.uploadedBy ? { uploadedBy: document.uploadedBy } : {}),
+        ...(document.size ? { size: document.size } : {}),
+        ...(writtenId ? { written: true } : {}),
+      } satisfies DocumentFeedItem;
+    })),
   ].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
   return { items, projects: projectFeed.projects, ...(token ? {} : { enterpriseError: ENTERPRISE_READ_ERROR }) };

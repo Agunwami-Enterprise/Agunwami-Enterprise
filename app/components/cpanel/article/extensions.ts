@@ -18,6 +18,7 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
+import { CELL_MIN_WIDTH, TableSizing } from './table-sizing';
 import { Color, FontFamily, FontSize, TextStyle } from '@tiptap/extension-text-style';
 import { FigureImage } from './FigureImage';
 
@@ -105,6 +106,45 @@ const ParagraphFormat = Extension.create({
       'Mod-]': () => this.editor.commands.indent(),
       'Mod-[': () => this.editor.commands.outdent(),
     };
+  },
+});
+
+// ── Pasting from Google Docs, Word, Sheets and web pages ───────────────────
+
+/**
+ * Tidies pasted HTML so it fits the page: drops fixed table and column widths
+ * (which made pasted tables overflow), Google Docs' wrapper and Word's
+ * leftovers, and the defaults those apps stamp on every run of text (black,
+ * Arial 11pt, normal weight), keeping real formatting.
+ */
+export function cleanPastedHtml(html: string): string {
+  if (typeof DOMParser === 'undefined' || !/<[a-z]/i.test(html)) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  // Google Docs wraps the whole paste in <b id="docs-internal-guid-…" style="font-weight:normal">.
+  doc.querySelectorAll('b[id^="docs-internal-guid"]').forEach(b => b.replaceWith(...Array.from(b.childNodes)));
+  doc.querySelectorAll('colgroup, col, meta, style, script, title, o\\:p').forEach(el => el.remove());
+  doc.querySelectorAll<HTMLElement>('table, thead, tbody, tr, td, th').forEach(el => {
+    el.removeAttribute('width');
+    el.removeAttribute('height');
+    el.removeAttribute('data-colwidth');
+    for (const prop of ['width', 'min-width', 'max-width', 'height', 'table-layout', 'margin-left', 'margin-right']) el.style.removeProperty(prop);
+  });
+  doc.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+    const st = el.style;
+    if (/^(rgb\(0, 0, 0\)|#000000|#000|black|windowtext)$/i.test(st.color)) st.removeProperty('color');
+    if (/^(transparent|rgba\(0, 0, 0, 0\)|initial)$/i.test(st.backgroundColor)) st.removeProperty('background-color');
+    if (/^"?(arial|calibri|aptos|times new roman)"?/i.test(st.fontFamily) && /^(11pt|12pt|14\.6667px|16px)?$/.test(st.fontSize)) st.removeProperty('font-family');
+    if (/^(11pt|12pt)$/.test(st.fontSize)) st.removeProperty('font-size');
+    if (/^(400|normal)$/.test(st.fontWeight)) st.removeProperty('font-weight');
+    if (!el.getAttribute('style')?.trim()) el.removeAttribute('style');
+  });
+  return doc.body.innerHTML;
+}
+
+const PasteCleanup = Extension.create({
+  name: 'pasteCleanup',
+  addProseMirrorPlugins() {
+    return [new Plugin({ key: new PluginKey('pasteCleanup'), props: { transformPastedHTML: cleanPastedHtml } })];
   },
 });
 
@@ -266,9 +306,12 @@ export function articleExtensions(placeholder: string): AnyExtension[] {
     ParagraphFormat,
     TaskList,
     TaskItem.configure({ nested: true }),
-    TableKit.configure({ table: { resizable: false } }),
+    // Column resizing comes from TableSizing (installed even while a document is being read).
+    TableKit.configure({ table: { resizable: false, cellMinWidth: CELL_MIN_WIDTH } }),
+    TableSizing,
     FigureImage,
     SearchHighlight,
+    PasteCleanup,
     Placeholder.configure({ placeholder }),
   ];
 }

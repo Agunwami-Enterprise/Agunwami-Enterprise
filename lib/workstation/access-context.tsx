@@ -9,6 +9,8 @@ import { createContext, useContext } from 'react';
 
 export interface ClientAccess {
   kind: 'ceo' | 'department';
+  /** The AE department ('' for the CEO). */
+  departmentId: string;
   departmentName: string;
   title: string;
   pages: string[];
@@ -18,6 +20,11 @@ export interface ClientAccess {
 const AccessContext = createContext<ClientAccess | null>(null);
 
 export const AccessProvider = AccessContext.Provider;
+
+/** The department workstation's access, or null outside it (e.g. in the CEO Workstation). */
+export function useOptionalWorkstationAccess(): ClientAccess | null {
+  return useContext(AccessContext);
+}
 
 export function useWorkstationAccess(): ClientAccess {
   const access = useContext(AccessContext);

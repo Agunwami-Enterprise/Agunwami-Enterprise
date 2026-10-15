@@ -7,9 +7,8 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import { CellSelection } from '@tiptap/pm/tables';
 import {
-  ArrowLeft, Eye, Lock, Share2, BetweenHorizontalEnd, BetweenHorizontalStart, BetweenVerticalEnd, BetweenVerticalStart, Bold, ChevronDown, ExternalLink,
-  Highlighter, Italic, Link2, Loader2, PaintBucket, PanelRightClose, PanelRightOpen, Pencil, RemoveFormatting, Replace, Rows3, Settings2,
-  TableCellsMerge, TableCellsSplit, Trash2, Underline, Unlink,
+  ArrowLeft, Bold, ChevronDown, ExternalLink, Eye, Highlighter, Italic, Link2, Loader2, Lock, PanelRightClose, PanelRightOpen,
+  Pencil, RemoveFormatting, Replace, Settings2, Share2, Trash2, Underline, Unlink,
 } from 'lucide-react';
 import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import {
@@ -21,6 +20,7 @@ import ShareDialog from './article/ShareDialog';
 import { articleExtensions } from './article/extensions';
 import Toolbar, { Divider, ToolButton, applyFontSize, clearFormatting, currentFontSize } from './article/Toolbar';
 import FindReplace from './article/FindReplace';
+import TableMenu, { tableElement } from './article/TableMenu';
 import { SpecialCharsDialog, WordCountDialog } from './article/ToolDialogs';
 import SeoSettings, { type SeoValue } from './article/SeoSettings';
 import CategoryManager from './article/CategoryManager';
@@ -94,53 +94,82 @@ const SHORTCUTS: Array<[string, string]> = [
   ['Paste or drop an image', 'Uploads it where you are'],
 ];
 
-/** The table the cursor is in, for placing the table menu above it. */
-function tableElement(editor: Editor): HTMLElement | null {
-  const { $from } = editor.state.selection;
-  for (let depth = $from.depth; depth > 0; depth--) {
-    if ($from.node(depth).type.name === 'table') {
-      const dom = editor.view.nodeDOM($from.before(depth));
-      return dom instanceof HTMLElement ? dom : null;
-    }
-  }
-  return null;
+/** A label and its value in the read-only details. */
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-[12px] font-medium uppercase tracking-wide text-[#9A9A9A]">{label}</dt>
+      <dd className="mt-0.5 text-[14px] text-[#1A1A1A]">{children}</dd>
+    </div>
+  );
 }
 
-const CELL_COLORS = ['#FFF2CC', '#FCE5CD', '#F4CCCC', '#EAD1DC', '#D9D2E9', '#C9DAF8', '#D0E0E3', '#D9EAD3', '#FBEEC9', '#EFEFEF'];
-
-/** Rows, columns, merging, header row, cell colour and delete, for the table at the cursor. */
-function TableMenu({ editor }: { editor: Editor }) {
-  const [colors, setColors] = useState(false);
-  const run = (fn: (c: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => fn(editor.chain().focus()).run();
-  const i = 'h-4 w-4';
-  if (colors) {
-    return (
-      <div className="flex items-center gap-1 px-1">
-        {CELL_COLORS.map(color => (
-          <button key={color} type="button" title={color} aria-label={`Cell colour ${color}`} onMouseDown={e => e.preventDefault()}
-            onClick={() => { run(c => c.setCellAttribute('backgroundColor', color)); setColors(false); }}
-            className="h-5 w-5 rounded-full border border-white/30 hover:scale-110" style={{ backgroundColor: color }} />
-        ))}
-        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { run(c => c.setCellAttribute('backgroundColor', null)); setColors(false); }}
-          className="rounded-md px-2 py-1 text-[12px] font-medium text-white/90 hover:bg-white/10">None</button>
-      </div>
-    );
-  }
+/** The article's details as plain text, for people reading it (no editing controls). */
+function ArticleFacts({ meta, article, published }: { meta: Meta; article?: SiteArticle; published: boolean }) {
+  const hero = !meta.sameHero && meta.heroImage ? meta.heroImage : '';
+  const date = meta.date ? new Date(`${meta.date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '';
   return (
     <>
-      <ToolButton dark label="Insert row above" onClick={() => run(c => c.addRowBefore())}><BetweenHorizontalStart className={i} /></ToolButton>
-      <ToolButton dark label="Insert row below" onClick={() => run(c => c.addRowAfter())}><BetweenHorizontalEnd className={i} /></ToolButton>
-      <ToolButton dark label="Insert column left" onClick={() => run(c => c.addColumnBefore())}><BetweenVerticalStart className={i} /></ToolButton>
-      <ToolButton dark label="Insert column right" onClick={() => run(c => c.addColumnAfter())}><BetweenVerticalEnd className={i} /></ToolButton>
-      <Divider dark />
-      <ToolButton dark label="Merge cells (select cells first)" disabled={!editor.can().mergeCells()} onClick={() => run(c => c.mergeCells())}><TableCellsMerge className={i} /></ToolButton>
-      <ToolButton dark label="Unmerge cells" disabled={!editor.can().splitCell()} onClick={() => run(c => c.splitCell())}><TableCellsSplit className={i} /></ToolButton>
-      <ToolButton dark label="Header row on/off" onClick={() => run(c => c.toggleHeaderRow())}><Rows3 className={i} /></ToolButton>
-      <ToolButton dark label="Cell background colour" onClick={() => setColors(true)}><PaintBucket className={i} /></ToolButton>
-      <Divider dark />
-      <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => run(c => c.deleteRow())} className="rounded-md px-2 py-1.5 text-[12px] font-medium text-white/85 hover:bg-white/10">Delete row</button>
-      <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => run(c => c.deleteColumn())} className="rounded-md px-2 py-1.5 text-[12px] font-medium text-white/85 hover:bg-white/10">Delete column</button>
-      <ToolButton dark label="Delete table" onClick={() => run(c => c.deleteTable())}><Trash2 className={i} /></ToolButton>
+      <Card className="space-y-4 p-5">
+        <dl className="space-y-3">
+          <Fact label="Category">{meta.category}</Fact>
+          {date && <Fact label="Publish date">{date}</Fact>}
+          {meta.readTime && <Fact label="Read time">{meta.readTime}</Fact>}
+          {meta.tags.length > 0 && (
+            <Fact label="Tags">
+              <span className="mt-1 flex flex-wrap gap-1.5">{meta.tags.map(tag => <span key={tag} className="rounded bg-[#F3F1EA] px-2 py-0.5 text-[12px] text-[#4A4A4A]">#{tag}</span>)}</span>
+            </Fact>
+          )}
+          {article?.owner && <Fact label="Owner">{article.owner.name || article.owner.email}</Fact>}
+          {article?.updatedBy && <Fact label="Last saved by">{article.updatedBy}{article.updatedAt ? `, ${new Date(article.updatedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : ''}</Fact>}
+        </dl>
+      </Card>
+      {(meta.author || meta.authorRole) && (
+        <Card className="flex items-center gap-3 p-5">
+          {meta.authorImage
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={meta.authorImage} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+            : <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F3F1EA] text-[16px] font-semibold text-[#8A6A1F]">{(meta.author[0] || '?').toUpperCase()}</span>}
+          <div className="min-w-0">
+            <p className="text-[12px] font-medium uppercase tracking-wide text-[#9A9A9A]">Author</p>
+            <p className="truncate text-[15px] font-semibold text-[#1A1A1A]">{meta.author}</p>
+            {meta.authorRole && <p className="truncate text-[13px] text-[#6B6B6B]">{meta.authorRole}</p>}
+          </div>
+        </Card>
+      )}
+      {(meta.image || hero) && (
+        <Card className="space-y-3 p-5">
+          {meta.image && (
+            <figure>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={meta.image} alt="" className="aspect-video w-full rounded-lg object-cover" />
+              <figcaption className="mt-1 text-[12px] text-[#9A9A9A]">Feature image{hero ? '' : ' (also the hero image)'}</figcaption>
+            </figure>
+          )}
+          {hero && (
+            <figure>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={hero} alt="" className="aspect-video w-full rounded-lg object-cover" />
+              <figcaption className="mt-1 text-[12px] text-[#9A9A9A]">Hero image</figcaption>
+            </figure>
+          )}
+        </Card>
+      )}
+      {meta.pullQuote && (
+        <Card className="p-5">
+          <p className="text-[12px] font-medium uppercase tracking-wide text-[#9A9A9A]">Pull quote</p>
+          <blockquote className="mt-2 border-l-2 border-[#C89B3C] pl-3 font-primary text-[15px] italic text-[#3A3A3A]">“{meta.pullQuote}”</blockquote>
+        </Card>
+      )}
+      <Card className="p-5">
+        <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-[#9A9A9A]">Search engines</p>
+        <p className="truncate text-[12px] text-[#4D5156]">agunwamienterprise.com › insights › {meta.slug || article?.slug}</p>
+        <p className="line-clamp-1 text-[16px] text-[#1A0DAB]">{meta.seoTitle || meta.title}</p>
+        <p className="line-clamp-2 text-[13px] text-[#4D5156]">{meta.seoDescription || meta.excerpt}</p>
+        <p className="mt-2 text-[12px] text-[#6B6B6B]">
+          {meta.noIndex ? 'Hidden from search engines.' : published ? 'Listed by search engines.' : 'Not published yet.'}
+        </p>
+      </Card>
     </>
   );
 }
@@ -187,6 +216,8 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
   // Viewers read; editors wait for whoever has the article open (see the edit lock).
   const [edit, setEdit] = useState<EditState>(() => (!permissions.canEdit ? { mode: 'view' } : article ? { mode: 'checking' } : { mode: 'editing' }));
   const readOnly = edit.mode !== 'editing';
+  // Reading (a viewer, or while someone else edits): the article as it is, without editing tools.
+  const reading = edit.mode === 'view' || edit.mode === 'locked';
   const [sharing, setSharing] = useState(false);
   const [baseUpdatedAt, setBaseUpdatedAt] = useState(article?.updatedAt ?? '');
   const [meta, setMeta] = useState<Meta>(() => initialMeta(article));
@@ -263,7 +294,8 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
       },
     },
     onCreate: ({ editor: e }) => readOutline(e),
-    onUpdate: ({ editor: e }) => { setDirty(true); readOutline(e); },
+    // Only someone editing changes the article (not the editor tidying what it loaded).
+    onUpdate: ({ editor: e }) => { if (e.isEditable) setDirty(true); readOutline(e); },
   });
 
   // People to credit as author; a new article starts with whoever is signed in.
@@ -396,7 +428,7 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
   }, [articleId, edit.mode, acquire]);
 
   useEffect(() => {
-    if (editor && !editor.isDestroyed && editor.isEditable === readOnly) editor.setEditable(!readOnly);
+    if (editor && !editor.isDestroyed && editor.isEditable === readOnly) editor.setEditable(!readOnly, false); // not an edit
   }, [editor, readOnly]);
 
   async function takeOver() {
@@ -556,7 +588,8 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
 
   const status = dirty ? 'Unsaved changes' : savedAt ? `Saved ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : published ? 'Published' : article ? 'Draft' : 'New article';
   const sections = headings.filter(h => h.level === 2);
-  const bubble = 'flex items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
+  // Floating menus wrap on narrow screens instead of running off them.
+  const bubble = 'z-10 flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-0.5 rounded-lg bg-[#1F1F1F] p-1 shadow-xl';
   const categoryNames = categories?.map(c => c.name) ?? [meta.category];
 
   return (
@@ -583,7 +616,7 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
               <ExternalLink className="h-4 w-4" aria-hidden="true" /> View live
             </Button>
           )}
-          {article && (
+          {article && (permissions.canShare || permissions.canClaim) && (
             <Button variant="outline" onClick={() => setSharing(true)} title={article.owner ? `Owned by ${article.owner.name || article.owner.email}` : 'This article has no owner yet'}>
               <Share2 className="h-4 w-4" aria-hidden="true" /> Share
             </Button>
@@ -624,12 +657,21 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
       <div className={cx('mt-2 grid grid-cols-1 gap-6', !panelHidden && 'lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]')}>
         {/* Writing column */}
         <div className="min-w-0 space-y-4">
-          <textarea value={meta.title} onChange={e => set('title')(e.target.value)} rows={1} placeholder="Article title" readOnly={readOnly}
-            aria-label="Title" onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; }}
-            className="field-sizing-content w-full resize-none overflow-hidden bg-transparent font-primary text-[34px] leading-tight text-[#1A1A1A] outline-none placeholder:text-[#A8A293]" />
-          <textarea value={meta.excerpt} onChange={e => set('excerpt')(e.target.value)} rows={2} maxLength={400} readOnly={readOnly}
-            placeholder="A one or two sentence summary for cards and search results…" aria-label="Excerpt"
-            className="field-sizing-content w-full resize-none bg-transparent text-[16px] leading-relaxed text-[#6B6B6B] outline-none placeholder:text-[#A8A293]" />
+          {reading ? (
+            <header className="space-y-3">
+              <h1 className="font-primary text-[34px] leading-tight text-[#1A1A1A]">{meta.title || 'Untitled article'}</h1>
+              {meta.excerpt && <p className="text-[16px] leading-relaxed text-[#6B6B6B]">{meta.excerpt}</p>}
+            </header>
+          ) : (
+            <>
+              <textarea value={meta.title} onChange={e => set('title')(e.target.value)} rows={1} placeholder="Article title" readOnly={readOnly}
+                aria-label="Title" onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; }}
+                className="field-sizing-content w-full resize-none overflow-hidden bg-transparent font-primary text-[34px] leading-tight text-[#1A1A1A] outline-none placeholder:text-[#A8A293]" />
+              <textarea value={meta.excerpt} onChange={e => set('excerpt')(e.target.value)} rows={2} maxLength={400} readOnly={readOnly}
+                placeholder="A one or two sentence summary for cards and search results…" aria-label="Excerpt"
+                className="field-sizing-content w-full resize-none bg-transparent text-[16px] leading-relaxed text-[#6B6B6B] outline-none placeholder:text-[#A8A293]" />
+            </>
+          )}
           <Card className="overflow-visible">
             {editor && !readOnly && (
               <>
@@ -690,7 +732,7 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
             <EditorContent editor={editor} />
             <div className="flex justify-between border-t border-[#F0EEE8] px-5 py-2.5 text-[12px] text-[#9A9A9A]">
               <button type="button" onClick={() => setWordCount(true)} className="hover:text-[#1A1A1A] hover:underline">{words} words · about {Math.max(1, Math.round(words / 220))} min read</button>
-              <span>Ctrl+S to save · Ctrl+/ for shortcuts</span>
+              {!reading && <span>Ctrl+S to save · Ctrl+/ for shortcuts</span>}
             </div>
           </Card>
         </div>
@@ -700,7 +742,7 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
           <aside className="space-y-4 lg:sticky lg:top-0 lg:max-h-[calc(100vh-160px)] lg:self-start lg:overflow-y-auto lg:pb-4">
             <Section title="Contents" extra={<span className="rounded-full bg-[#F3F1EA] px-2 text-[12px] font-medium text-[#6B6B6B]">{sections.length}</span>}>
               {headings.length === 0 ? (
-                <p className="text-[13px] text-[#6B6B6B]">Add headings (Styles → Heading 1 or 2, or type ## and a space) to build the table of contents.</p>
+                <p className="text-[13px] text-[#6B6B6B]">{reading ? 'This article has no section headings.' : 'Add headings (Styles → Heading 1 or 2, or type ## and a space) to build the table of contents.'}</p>
               ) : (
                 <nav aria-label="Article outline">
                   <ol className="space-y-1">
@@ -717,11 +759,14 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
                   </ol>
                 </nav>
               )}
-              <label className="flex items-start gap-2 text-[13px] text-[#4A4A4A]">
-                <input type="checkbox" checked={meta.showToc} disabled={readOnly} onChange={e => set('showToc')(e.target.checked)} className="mt-0.5 accent-[#C89B3C]" />
-                <span>Show the table of contents on the article<span className="block text-[12px] text-[#9A9A9A]">Readers see the section headings beside it and can jump to each.</span></span>
-              </label>
+              {!reading && (
+                <label className="flex items-start gap-2 text-[13px] text-[#4A4A4A]">
+                  <input type="checkbox" checked={meta.showToc} disabled={readOnly} onChange={e => set('showToc')(e.target.checked)} className="mt-0.5 accent-[#C89B3C]" />
+                  <span>Show the table of contents on the article<span className="block text-[12px] text-[#9A9A9A]">Readers see the section headings beside it and can jump to each.</span></span>
+                </label>
+              )}
             </Section>
+            {reading ? <ArticleFacts meta={meta} article={article} published={published} /> : (<>
             <Section locked={readOnly} title="Details">
               <div>
                 <div className="mb-1 flex items-center justify-between">
@@ -779,6 +824,7 @@ export default function ArticleEditor({ article, permissions = CREATOR, me: acto
             <Section locked={readOnly} title="Pull quote" defaultOpen={false}>
               <TextArea label="Highlighted quote" hint="optional" value={meta.pullQuote} onChange={set('pullQuote')} rows={3} />
             </Section>
+            </>)}
           </aside>
         )}
       </div>

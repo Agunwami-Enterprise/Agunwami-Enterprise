@@ -53,7 +53,7 @@ function kindOf(href: string): Kind {
   return 'web';
 }
 
-export default function LinkDialog({ initial, selectedText, editing, siteLinks, onApply, onRemove, onClose }: {
+export default function LinkDialog({ initial, selectedText, editing, siteLinks, onApply, onRemove, onClose, allowSite = true }: {
   initial: { href: string; newTab: boolean };
   /** The selected text, if any; the link goes on it (or on new text if none is selected). */
   selectedText: string;
@@ -62,6 +62,8 @@ export default function LinkDialog({ initial, selectedText, editing, siteLinks, 
   onApply: (link: LinkTarget) => void;
   onRemove: () => void;
   onClose: () => void;
+  /** Offer pages and articles on the website (the article editor); off for workstation documents. */
+  allowSite?: boolean;
 }) {
   const startKind = initial.href ? kindOf(initial.href) : 'web';
   const [kind, setKind] = useState<Kind>(startKind);
@@ -122,7 +124,7 @@ export default function LinkDialog({ initial, selectedText, editing, siteLinks, 
       <form id="link-form" onSubmit={submit} className="space-y-4">
         <div role="tablist" aria-label="Link to" className="flex gap-1 rounded-lg bg-[#F3F1EA] p-1">
           {tab('web', 'Web address', Globe)}
-          {tab('site', 'This site', FileText)}
+          {allowSite && tab('site', 'This site', FileText)}
           {tab('email', 'Email', Mail)}
         </div>
 

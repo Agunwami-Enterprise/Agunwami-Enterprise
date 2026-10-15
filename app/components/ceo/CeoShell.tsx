@@ -6,6 +6,7 @@ import CeoSidebar from './CeoSidebar';
 import CeoNavbar, { type NavbarOptions } from './CeoNavbar';
 import SuspendedBanner from './SuspendedBanner';
 import { ToastContainer } from 'react-toastify';
+import AccessDeniedToast from '@/app/components/common/AccessDeniedToast';
 import { applyReduceMotion, useReduceMotion } from '@/lib/workstation/preferences';
 
 export interface SidebarProps {
@@ -59,6 +60,8 @@ export default function CeoShell({ children, Sidebar = CeoSidebar, navbar }: {
       </div>
       {/* Toasts from shared dialogs (e.g. Settings → Security → 2FA). */}
       <ToastContainer position="top-right" autoClose={4000} newestOnTop />
+      {/* "You don't have access to …" after being sent back here from somewhere else. */}
+      <AccessDeniedToast />
     </div>
   );
 }

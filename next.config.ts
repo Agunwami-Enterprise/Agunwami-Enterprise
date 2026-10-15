@@ -3,6 +3,8 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ['agunwami-backend'],
+  // Native canvas (drawing a PDF letterhead's page on the server): loaded from node_modules, not bundled.
+  serverExternalPackages: ['@napi-rs/canvas'],
   devIndicators: false,
   images: {
     unoptimized: true,

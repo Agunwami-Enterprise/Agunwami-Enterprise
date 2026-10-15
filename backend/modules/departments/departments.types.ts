@@ -20,6 +20,42 @@ export function positionTitle(departmentName: string, isAdmin: boolean): string 
   return `${name} ${isAdmin ? 'Admin' : 'Staff'}`;
 }
 
+/** What a department resource is: its guide, handbook, manual, policy or anything else. */
+export const RESOURCE_KINDS = ['guide', 'handbook', 'manual', 'policy', 'other'] as const;
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+export const RESOURCE_KIND_LABELS: Record<ResourceKind, string> = {
+  guide: 'Guide', handbook: 'Handbook', manual: 'Manual', policy: 'Policy', other: 'Other',
+};
+
+/**
+ * A department's guide, handbook, manual and the like: a link, or a document
+ * kept in Documents under the department's team (an uploaded file or one
+ * written in the workstation, by id in AE Hub's documents).
+ */
+export interface DepartmentResource {
+  id: string;
+  kind: ResourceKind;
+  title: string;
+  type: 'link' | 'document';
+  /** The link (type "link"). */
+  url: string;
+  /** The document's id in Documents (type "document"). */
+  documentId: string;
+  /** "written" opens in the document editor; "file" opens the uploaded file. */
+  documentFormat: 'written' | 'file' | '';
+  addedBy: string;
+  addedAt: string;
+}
+
+export interface SaveResourceDto {
+  kind: string;
+  title: string;
+  type: string;
+  url?: string;
+  documentId?: string;
+  documentFormat?: string;
+}
+
 export interface AeDepartment {
   id: string;
   name: string;
@@ -34,6 +70,8 @@ export interface AeDepartment {
    */
   projectLinks: Record<string, string>;
   memberCount: number;
+  /** Guides, handbooks, manuals and the like for the department's people. */
+  resources: DepartmentResource[];
   /** CEO Office: built in, can't be deleted or renamed. */
   builtIn: boolean;
   createdAt: string | null;

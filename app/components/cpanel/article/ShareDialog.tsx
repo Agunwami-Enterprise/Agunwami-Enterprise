@@ -207,7 +207,7 @@ export default function ShareDialog({ article, permissions, me, people, onChange
         </ul>
         <p className="text-[12px] text-[#6B6B6B]">
           Only one person can edit at a time; others see it read-only meanwhile. People also need C-panel access from their department.
-          The CEO can delete any article, but opens only those shared with them.
+          The CEO can read and delete every article, and edits only those shared with them for editing.
         </p>
         {!editable && owner && <p className="text-[12px] text-[#6B6B6B]">Only the owner and managers can change who has access.</p>}
         {error && <p role="alert" className="text-[13px] text-red-600">{error}</p>}

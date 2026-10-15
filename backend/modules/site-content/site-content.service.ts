@@ -151,7 +151,7 @@ const ARTICLE_HTML: sanitizeHtml.IOptions = {
     ul: ['data-type'], li: ['data-type', 'data-checked'],
     input: ['type', 'checked', 'disabled'],
     th: ['colspan', 'rowspan', 'style'], td: ['colspan', 'rowspan', 'style'],
-    table: ['style'], col: ['style'],
+    table: ['style'], col: ['style'], tr: ['style'],
   },
   allowedStyles: {
     '*': {
@@ -164,6 +164,8 @@ const ARTICLE_HTML: sanitizeHtml.IOptions = {
       'margin-left': [/^(2|4|6|8|10|12)em$/],
       'min-width': [/^\d{1,4}px$/],
       width: [/^\d{1,4}px$/],
+      height: [/^\d{1,4}px$/],
+      'vertical-align': [/^(top|middle|bottom)$/],
     },
   },
   allowedSchemes: ['http', 'https', 'mailto'],
@@ -629,7 +631,7 @@ export async function saveArticle(input: Input, actor: ArticleActor, id?: string
   return saved!;
 }
 
-/** Deleting is for the owner, and the CEO (even without access to the article). */
+/** Deleting is for the owner, and the CEO (even when only a viewer). */
 export async function deleteArticle(id: string, actor: ArticleActor): Promise<void> {
   await updateCollection('articles', defaultArticles, articles => {
     const article = findArticle(articles, id);
