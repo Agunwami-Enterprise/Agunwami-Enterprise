@@ -1,7 +1,7 @@
 "use client";
 
 import { AeOverlay, useConfirm } from '@/app/components/common/AeModal';
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import Image from "next/image";
 import {
   ref, query as rtdbQuery, orderByChild, equalTo,
@@ -792,7 +792,7 @@ function AssignTaskModal({ isOpen, onClose, convo, myUid, myName, approvedLeaves
   if (!isOpen) return null;
   return (
     <AeOverlay onClose={onClose} label="Assign task" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-amber-500" />
@@ -1422,7 +1422,7 @@ function NewChatModal({ isOpen, onClose, myUid, myName, myDept, onCreated }: {
   if (!isOpen) return null;
   return (
     <AeOverlay onClose={onClose} label="New conversation" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
           <div>
             <h2 id="new-chat-modal-title" className="text-base font-bold text-gray-900 dark:text-white">New Conversation</h2>
@@ -1559,6 +1559,8 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
   onEditInvitees?: (act: Activity) => void;
   approvedLeaves?: ApprovedLeaveRecord[];
 }) {
+  // The schedule sits beside the activity panel only where there's room; otherwise it opens over it.
+  const wideCalendar = useMinWidth(1024);
   const confirm = useConfirm();
   const today = dateToStr(new Date());
   const [viewDate, setViewDate] = useState(new Date());
@@ -2028,12 +2030,12 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
       <div className={`flex-1 flex flex-col overflow-hidden ${showPanel ? "hidden xl:flex" : "flex"}`}>
 
         {/* Month navigation */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-zinc-800 shrink-0">
-          <div className="flex items-center gap-1">
-            <button onClick={prevM} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 transition-colors">
+        <div className="flex items-center justify-between gap-2 px-2 sm:px-5 py-2.5 sm:py-3.5 border-b border-gray-100 dark:border-zinc-800 shrink-0">
+          <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
+            <button onClick={prevM} aria-label="Previous month" className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 transition-colors">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <h2 className="text-base font-extrabold text-gray-900 dark:text-white w-44 text-center">
+            <h2 className="truncate text-sm sm:text-base font-extrabold text-gray-900 dark:text-white w-28 sm:w-44 text-center">
               {MONTH_NAMES[month]} {year}
             </h2>
             <button onClick={nextM} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 transition-colors">
@@ -2041,7 +2043,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
             </button>
             <button
               onClick={() => { setViewDate(new Date()); openCreate(today); }}
-              className="ml-1 px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 rounded-lg transition-colors"
+              className="ml-0.5 sm:ml-1 px-2 sm:px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 rounded-lg transition-colors"
             >
               Today
             </button>
@@ -2051,10 +2053,11 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
               const targetDay = selectedDay && selectedDay >= today ? selectedDay : today;
               openCreate(targetDay);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+            aria-label="New activity"
+            className="flex shrink-0 items-center gap-1.5 px-2.5 sm:px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
           >
             <Plus className="w-3.5 h-3.5 stroke-[3]" />
-            New Activity
+            <span className="hidden sm:inline">New Activity</span>
           </button>
         </div>
 
@@ -2067,7 +2070,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
 
         {/* Calendar grid */}
         <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-7 border-b border-gray-100 dark:border-zinc-800" style={{ gridAutoRows: "minmax(88px, 1fr)" }}>
+          <div className="grid grid-cols-7 border-b border-gray-100 dark:border-zinc-800 [grid-auto-rows:minmax(64px,1fr)] sm:[grid-auto-rows:minmax(88px,1fr)]">
             {cells.map((cell, i) => {
               const dayActs = actsByDate[cell.date] || [];
               const isToday = cell.date === today;
@@ -2076,7 +2079,7 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
                 <div
                   key={i}
                   onClick={() => openCreate(cell.date)}
-                  className={`border-r border-b border-gray-100 dark:border-zinc-800 p-1.5 cursor-pointer transition-colors group ${
+                  className={`min-w-0 border-r border-b border-gray-100 dark:border-zinc-800 p-0.5 sm:p-1.5 cursor-pointer transition-colors group ${
                     isToday ? "bg-amber-50/50 dark:bg-amber-950/10" :
                     isSel   ? "bg-amber-50/80 dark:bg-amber-950/20" :
                     "hover:bg-gray-50/70 dark:hover:bg-zinc-800/30"
@@ -2096,9 +2099,9 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
                         <div
                           key={act.id}
                           onClick={e => { e.stopPropagation(); openView(act); }}
-                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold truncate cursor-pointer hover:opacity-80 transition-opacity ${cfg.bg} ${cfg.text}`}
+                          className={`px-1 sm:px-1.5 py-0.5 rounded-md text-[8px] sm:text-[9px] font-bold truncate cursor-pointer hover:opacity-80 transition-opacity ${cfg.bg} ${cfg.text}`}
                         >
-                          {!act.allDay && act.startTime && <span className="opacity-60 mr-0.5">{act.startTime}</span>}
+                          {!act.allDay && act.startTime && <span className="hidden sm:inline opacity-60 mr-0.5">{act.startTime}</span>}
                           {act.title}
                         </div>
                       );
@@ -2130,13 +2133,13 @@ function CalendarTab({ myUid, myName, memberProfiles, conversations, activities,
             setInvitedUserIds(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]);
           }}
           isInvited={invitedUserIds.includes(scheduleDrawerStaff.id)}
-          mode="docked"
+          mode={wideCalendar ? "docked" : "overlay"}
         />
       )}
 
       {/* ── Create / View Activity Panel ─────────────────── */}
       {showPanel && (
-        <div className="w-80 md:w-96 lg:w-[440px] xl:w-[480px] shrink-0 border-l border-gray-100 dark:border-zinc-800 flex flex-col overflow-hidden bg-white dark:bg-zinc-900 shadow-xl">
+        <div className="flex-1 min-w-0 xl:flex-none xl:w-[440px] 2xl:w-[480px] xl:shrink-0 border-l border-gray-100 dark:border-zinc-800 flex flex-col overflow-hidden bg-white dark:bg-zinc-900 shadow-xl">
 
           {/* Panel header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800 shrink-0">
@@ -2717,7 +2720,7 @@ function ActivityTab({
     <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-100 dark:border-zinc-800 shrink-0 space-y-3">
+      <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-gray-100 dark:border-zinc-800 shrink-0 space-y-3">
         <div>
           <h2 className="text-sm font-extrabold text-gray-900 dark:text-white">Activity Feed</h2>
           <p className="text-xs text-gray-400 mt-0.5">{activities.length} {activities.length === 1 ? "activity" : "activities"} total</p>
@@ -2778,7 +2781,7 @@ function ActivityTab({
                     const cfg = CATEGORY_CONFIG[act.category];
                     const d = new Date(act.date + "T00:00");
                     return (
-                      <div key={act.id} className="flex gap-3 px-5 py-3.5 hover:bg-gray-50/70 dark:hover:bg-zinc-800/40 transition-colors">
+                      <div key={act.id} className="flex gap-3 px-3 sm:px-5 py-3.5 hover:bg-gray-50/70 dark:hover:bg-zinc-800/40 transition-colors">
                         <div className="flex flex-col items-center gap-0.5 shrink-0 pt-0.5">
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${cfg.bg}`}>
                             <span className={`text-sm font-extrabold ${cfg.text}`}>{d.getDate()}</span>
@@ -3229,6 +3232,20 @@ function EditInviteesModal({
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
+
+/** Whether the window is at least `px` wide (false while rendering on the server). */
+function useMinWidth(px: number): boolean {
+  const query = `(min-width: ${px}px)`;
+  return useSyncExternalStore(
+    onChange => {
+      const mq = window.matchMedia(query);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
+}
 
 const TABS = [
   { id: "chat", label: "Chat", icon: MessageSquare },
@@ -4269,23 +4286,23 @@ export default function MessagingClient() {
   return (
     <div className="w-full flex flex-col h-[calc(100dvh-88px)] md:h-[calc(100dvh-104px)]">
       {/* Page header */}
-      <div className="mb-5">
-        <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">Messages</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Stay connected with your team across the AE Workstation</p>
+      <div className="mb-3 md:mb-5">
+        <h1 className="text-xl md:text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">Messages</h1>
+        <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mt-0.5">Stay connected with your team across the AE Workstation</p>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
 
         {/* Tabs */}
-        <div role="tablist" className="flex items-center gap-1 px-4 border-b border-gray-100 dark:border-zinc-800">
+        <div role="tablist" className="flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-4 border-b border-gray-100 dark:border-zinc-800 overflow-x-auto [scrollbar-width:none]">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} role="tab" aria-selected={activeTab === id} onClick={() => handleTabChange(id)}
-              className={`relative flex items-center gap-2 px-4 py-3.5 text-sm font-semibold transition-all ${
+              className={`relative flex shrink-0 items-center gap-2 whitespace-nowrap px-2.5 sm:px-4 py-3 sm:py-3.5 text-[13px] sm:text-sm font-semibold transition-all ${
                 activeTab === id
                   ? "text-amber-600 dark:text-amber-400 font-bold"
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               }`}>
-              <Icon className="w-4 h-4" /> {label}
+              <Icon className="hidden sm:block w-4 h-4" /> {label}
               {activeTab === id && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-500" />
               )}
@@ -4293,7 +4310,7 @@ export default function MessagingClient() {
           ))}
           <button type="button" onClick={() => setIsMessageSettingsOpen(true)}
             title="Message settings" aria-label="Message settings"
-            className="ml-auto flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all">
+            className="ml-auto flex shrink-0 items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all">
             <SlidersHorizontal className="w-4 h-4" /> <span className="hidden sm:inline">Settings</span>
           </button>
         </div>
@@ -4402,7 +4419,7 @@ export default function MessagingClient() {
 
                     return (
                       <React.Fragment key={convo.id}>
-                      <button aria-current={isActive ? "true" : undefined} onClick={() => { setActiveConvId(convo.id); setShowMobileChat(false); }}
+                      <button aria-current={isActive ? "true" : undefined} onClick={() => { setActiveConvId(convo.id); setShowMobileChat(true); }}
                         className={`w-full flex items-center gap-3 px-4 py-3 transition-all text-left relative ${isActive ? "bg-amber-50 dark:bg-amber-950/20" : "hover:bg-gray-50 dark:hover:bg-zinc-800/60"}`}>
                         {isActive && <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-amber-500 rounded-r-full" />}
                         {/* Avatar + type badge */}
@@ -4479,8 +4496,8 @@ export default function MessagingClient() {
             ) : (
               <>
                 {/* Chat header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-zinc-800 shrink-0 bg-white dark:bg-zinc-900">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-2 px-3 sm:px-5 py-3 border-b border-gray-100 dark:border-zinc-800 shrink-0 bg-white dark:bg-zinc-900">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                     <button onClick={() => setShowMobileChat(false)} aria-label="Back to conversations" className="md:hidden p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 mr-1 transition-colors">
                       <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -4509,9 +4526,9 @@ export default function MessagingClient() {
                             />
                             <ConvTypeBadge type={activeConvo.type} />
                           </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-bold text-gray-900 dark:text-white">{displayName}</p>
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{displayName}</p>
                               {activeConvo.type === "community" && <span className="text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-full">Community</span>}
                               {activeConvo.type === "group" && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full">Group</span>}
                               {activeConvo.type === "thread" && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full">Thread</span>}
@@ -4519,7 +4536,7 @@ export default function MessagingClient() {
                             </div>
                             <div className="flex items-center gap-1">
                               <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500" : "bg-gray-300"}`} />
-                              <p className="text-xs text-gray-400">
+                              <p className="truncate text-xs text-gray-400">
                                 {isDirect
                                   ? (isOnline ? "Online" : "Offline")
                                   : `${Object.keys(activeConvo.memberIds || {}).filter(uid => onlinePresence[uid]).length} online · ${Object.keys(activeConvo.memberIds || {}).length} members`}
@@ -4530,7 +4547,7 @@ export default function MessagingClient() {
                       );
                     })()}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
                     {(activeConvo.type === "community" || activeConvo.type === "thread") && (
                       <button onClick={() => setIsAssignTaskOpen(true)} title="Assign task" aria-label="Assign task"
                         className="p-2 text-gray-400 hover:text-emerald-600 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-all">
@@ -4558,7 +4575,7 @@ export default function MessagingClient() {
                     </button>
                     {[Phone, Video].map((Icon, i) => (
                       <button key={i} disabled title="Coming soon" aria-label={i === 0 ? "Voice call (coming soon)" : "Video call (coming soon)"}
-                        className="p-2 text-gray-300 dark:text-zinc-600 cursor-not-allowed rounded-xl transition-all">
+                        className="hidden sm:inline-flex p-2 text-gray-300 dark:text-zinc-600 cursor-not-allowed rounded-xl transition-all">
                         <Icon className="w-4 h-4" />
                       </button>
                     ))}
@@ -4648,7 +4665,7 @@ export default function MessagingClient() {
                   <div
                     ref={messagesContainerRef}
                     onScroll={handleMessagesScroll}
-                    className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-1 bg-gray-50/40 dark:bg-zinc-950/20"
+                    className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4 space-y-1 bg-gray-50/40 dark:bg-zinc-950/20"
                   >
                   {/* Skeleton message bubbles while messages are loading */}
                   {loadingMessages && messages.length === 0 && (
@@ -4713,7 +4730,7 @@ export default function MessagingClient() {
                                 )}
                               </div>
                             )}
-                            <div className={`max-w-[65%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                            <div className={`max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] min-w-0 flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                               {showName && <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 ml-1">{msg.senderName}</p>}
                               <div className="relative flex items-end gap-1.5">
                                 {/* Hover Action Buttons (Reply & Delete) */}
@@ -5007,10 +5024,10 @@ export default function MessagingClient() {
               </div>
 
                 {/* Input */}
-                <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 relative">
+                <div className="px-3 sm:px-4 py-3 border-t border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 relative">
                   {/* Tabbed Emoji / Sticker Picker Popover */}
                   {showEmojiPicker && (
-                    <div className="absolute bottom-16 right-12 z-50 shadow-2xl rounded-2xl overflow-hidden border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 w-80">
+                    <div className="absolute bottom-16 left-2 right-2 sm:left-auto sm:right-12 z-50 shadow-2xl rounded-2xl overflow-hidden border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 sm:w-80">
                       {/* Tabs */}
                       <div className="flex border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/50">
                         <button
