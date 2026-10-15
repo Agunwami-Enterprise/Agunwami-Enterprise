@@ -1,13 +1,17 @@
 ﻿'use client';
 
-import { AeOverlay } from '@/app/components/common/AeModal';
-import { useEffect, useRef, useState } from 'react';
+import { useConfirm } from '@/app/components/common/AeModal';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeUserProfile } from '@/modules/settings/services';
 import { toast } from 'react-toastify';
 import NewDocumentDialog from './NewDocumentDialog';
-import { downloadDocCopy, permissionsOf, subscribeWrittenDocs, type Viewer, type WorkDoc } from '../doc-store';
+import UploadDialog from './UploadDialog';
+import {
+  downloadDocCopy, fileDownloadHref, isEditableFile, makeEditable, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
+} from '../doc-store';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
 import {
   ALL_SOURCES, FeedError, FeedNotices, SourceBadge, SourceFilter, formatDate, sourcesOf, useFeed,
@@ -35,8 +39,6 @@ const CATEGORY_STYLE: Record<string, { bg: string; text: string }> = {
   'Meetings': { bg:'#ccfbf1', text:'#0f766e' },
 };
 
-const UPLOAD_CATEGORIES = ['Financial','Human Resources','Strategic','Assets','Governance'];
-
 const FOLDERS: { label: string; tab: Exclude<DocTab,'all'> }[] = [
   { label:'Personal Documents', tab:'personal' },
   { label:'Team Documents',     tab:'team'     },
@@ -51,22 +53,42 @@ export default function DocumentsPage() {
   const [tab,        setTab]        = useState<DocTab>('all');
   const [search,     setSearch]     = useState('');
   const [showUpload, setShowUpload] = useState(false);
-  const [uploadCat,  setUploadCat]  = useState('Financial');
-  const [dragOver,   setDragOver]   = useState(false);
-  const [pickedFile, setPickedFile] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [converting, setConverting] = useState('');
+  const router = useRouter();
+  const confirm = useConfirm();
   const [sourceF,    setSourceF]    = useState(ALL_SOURCES);
   const feed = useFeed<DocumentsFeed>('/api/ceo/documents');
   const { user } = useAuth();
   const [creating, setCreating] = useState(false);
   const [department, setDepartment] = useState('');
   useEffect(() => (user?.uid ? subscribeUserProfile(user.uid, p => setDepartment(String(p?.department ?? '').toLowerCase())) : undefined), [user?.uid]);
-  // Documents written in the workstation: they open here, read-only unless the CEO was given editing.
-  const [written, setWritten] = useState<Map<string, WorkDoc>>(new Map());
-  useEffect(() => (user?.uid ? subscribeWrittenDocs(setWritten, () => setWritten(new Map())) : undefined), [user?.uid]);
+  // The workstation's documents (AE Hub's): written ones open here, read-only unless the CEO was given
+  // editing; uploaded Word, text and web page files can be opened for editing by whoever can edit them.
+  const [hubDocs, setHubDocs] = useState<Map<string, WorkDoc>>(new Map());
+  useEffect(() => (user?.uid ? subscribeDocs(setHubDocs, () => setHubDocs(new Map())) : undefined), [user?.uid]);
   const me: Viewer | null = user ? { uid: user.uid, name: user.displayName || user.email || 'CEO', email: user.email || '', department, isCeo: true, aeDepartmentId: '' } : null;
-  const canEditWritten = (id: string) => { const d = written.get(id); return !!d && !!me && permissionsOf(d, me).canEdit; };
+  // AE Hub's feed may use its own ids: files are also matched by their address.
+  const hubByUrl = new Map([...hubDocs.values()].filter(d => d.fileUrl).map(d => [d.fileUrl, d]));
+  const canEdit = (d: WorkDoc | undefined) => !!d && !!me && permissionsOf(d, me).canEdit;
   const download = (f: DocFile) => downloadDocCopy(f.id).catch(() => toast.error(`${f.name} could not be downloaded.`));
+
+  async function editFile(d: WorkDoc) {
+    if (!me) return;
+    const ok = await confirm({
+      title: `Edit ${d.title} here?`,
+      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. Some Word formatting may look different.${d.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      confirmLabel: 'Open in editor',
+    });
+    if (!ok) return;
+    setConverting(d.id);
+    try {
+      await makeEditable(d.id, me);
+      router.push(`/ceo/documents/${d.id}`);
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : `${d.title} could not be opened for editing.`);
+      setConverting('');
+    }
+  }
   const files: DocFile[] = feed.data?.items ?? [];
   const sources = sourcesOf(files);
 
@@ -79,6 +101,36 @@ export default function DocumentsPage() {
   });
 
   const visibleFolders = tab === 'all' ? FOLDERS : FOLDERS.filter(f => f.tab === tab);
+
+  const link = 'text-[12px] font-semibold hover:underline disabled:opacity-50';
+  /** A row's actions: Edit or View, and Download (and Edit for uploaded files that can be edited). */
+  const rowActions = (f: DocFile, d: WorkDoc | undefined) => {
+    if (f.written || d?.written) {
+      return (
+        <span className="inline-flex items-center gap-3">
+          <Link href={`/ceo/documents/${f.id}`} title={canEdit(d) ? 'Open it to edit (you can switch to viewing)' : 'Open it to read'} className={link} style={{ color: '#f5bd02' }}>
+            {canEdit(d) ? 'Edit' : 'View'}
+          </Link>
+          <button type="button" onClick={() => void download(f)} title="Download as a Word document" className={`${link} text-gray-500 dark:text-gray-400`}>Download</button>
+        </span>
+      );
+    }
+    const url = d?.fileUrl || f.url;
+    if (!url) return <span className="text-[12px] text-gray-400" title="No download link was shared for this document">No file link</span>;
+    return (
+      <span className="inline-flex items-center gap-3">
+        {d && canEdit(d) && isEditableFile(d.title, url) && (
+          <button type="button" onClick={() => void editFile(d)} disabled={!!converting} title="Open it in the editor to edit it" className={link} style={{ color: '#f5bd02' }}>
+            {converting === d.id ? 'Opening…' : 'Edit'}
+          </button>
+        )}
+        <a href={url} target="_blank" rel="noopener noreferrer" title="Open the file in a new tab" className={link} style={{ color: d && canEdit(d) && isEditableFile(d.title, url) ? undefined : '#f5bd02' }}>View</a>
+        {d
+          ? <a href={fileDownloadHref(url, d.title)} download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>
+          : <a href={url} target="_blank" rel="noopener noreferrer" download title="Download the file" className={`${link} text-gray-500 dark:text-gray-400`}>Download</a>}
+      </span>
+    );
+  };
 
   if (feed.loading) return <SkeletonDocuments />;
   if (!feed.data) return <FeedError message={feed.error} onRetry={() => void feed.reload()} />;
@@ -220,38 +272,7 @@ export default function DocumentsPage() {
                           </td>
                           <td className="px-5 py-3.5 text-[12px] text-gray-500 dark:text-gray-400">{formatDate(f.date)}</td>
                           <td className="px-5 py-3.5 text-right">
-                            {f.written || written.has(f.id) ? (
-                              <span className="inline-flex items-center gap-3">
-                                <Link
-                                  href={`/ceo/documents/${f.id}`}
-                                  title={canEditWritten(f.id) ? 'Open it to edit (you can switch to viewing)' : 'Open it to read'}
-                                  className="text-[12px] font-semibold hover:underline"
-                                  style={{ color: '#f5bd02' }}
-                                >
-                                  {canEditWritten(f.id) ? 'Edit' : 'View'}
-                                </Link>
-                                <button
-                                  type="button"
-                                  onClick={() => void download(f)}
-                                  title="Download as a Word document"
-                                  className="text-[12px] font-semibold text-gray-500 hover:underline dark:text-gray-400"
-                                >
-                                  Download
-                                </button>
-                              </span>
-                            ) : f.url ? (
-                              <a
-                                href={f.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[12px] font-semibold hover:underline"
-                                style={{ color: '#f5bd02' }}
-                              >
-                                Download
-                              </a>
-                            ) : (
-                              <span className="text-[12px] text-gray-400" title="No download link was shared for this document">No file link</span>
-                            )}
+                            {rowActions(f, hubDocs.get(f.id) ?? (f.url ? hubByUrl.get(f.url) : undefined))}
                           </td>
                         </tr>
                       );
@@ -273,100 +294,9 @@ export default function DocumentsPage() {
           me={me} />
       )}
 
-      {showUpload && (
-        <Overlay onClose={() => { setShowUpload(false); setPickedFile(null); }}>
-          <div className="w-[460px] rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#1e1e1e]">
-            {/* Header */}
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-[15px] font-bold text-gray-800 dark:text-white">Upload Document</h2>
-              <button
-                onClick={() => { setShowUpload(false); setPickedFile(null); }}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              >
-                <XIcon />
-              </button>
-            </div>
-
-            {/* Drop zone */}
-            <div
-              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={e => {
-                e.preventDefault();
-                setDragOver(false);
-                const file = e.dataTransfer.files[0];
-                if (file) setPickedFile(file.name);
-              }}
-              className={`mb-4 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 transition-colors
-                ${dragOver
-                  ? 'border-[#f5bd02] bg-amber-50 dark:bg-amber-900/10'
-                  : 'border-gray-200 bg-gray-50 dark:border-white/8 dark:bg-[#2a2a2a]'}`}
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm dark:bg-[#1e1e1e]">
-                <UploadCloudIcon />
-              </div>
-              {pickedFile ? (
-                <p className="text-[13px] font-semibold text-gray-700 dark:text-gray-200">{pickedFile}</p>
-              ) : (
-                <>
-                  <p className="text-[13px] font-semibold text-gray-700 dark:text-gray-200">Drag and drop files here</p>
-                  <p className="text-[11px] text-gray-400">or click to browse files</p>
-                </>
-              )}
-
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg"
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) setPickedFile(file.name);
-                }}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-1 rounded-lg px-6 py-2 text-[12px] font-semibold text-white hover:opacity-90"
-                style={{ backgroundColor: '#6366f1' }}
-              >
-                Choose Files
-              </button>
-              <p className="mt-1 text-center text-[10px] leading-snug text-gray-400">
-                Maximum file size: 10MB. Supported formats: PDF, DOC,<br />
-                DOCX, PPT, PPTX, PNG, JPG
-              </p>
-            </div>
-
-            {/* Category */}
-            <div className="mb-5">
-              <label className="mb-1.5 block text-[12px] font-medium text-gray-600 dark:text-gray-400">Category</label>
-              <select
-                value={uploadCat}
-                onChange={e => setUploadCat(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[12px] text-gray-700 outline-none dark:border-white/8 dark:bg-[#2a2a2a] dark:text-gray-200"
-              >
-                {UPLOAD_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setShowUpload(false); setPickedFile(null); }}
-                className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50 dark:border-white/8 dark:text-gray-400 dark:hover:bg-white/4"
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 rounded-lg py-2.5 text-[12px] font-semibold text-[#1a1a1a] hover:opacity-90"
-                style={{ backgroundColor: '#f5bd02' }}
-              >
-                Upload
-              </button>
-            </div>
-          </div>
-        </Overlay>
+      {showUpload && me && (
+        <UploadDialog me={me} department={department} onClose={() => setShowUpload(false)}
+          onUploaded={() => void feed.reload()} onEditable={id => router.push(`/ceo/documents/${id}`)} />
       )}
     </>
   );
@@ -376,13 +306,6 @@ export default function DocumentsPage() {
    HELPERS
 ══════════════════════════════════════════════════════════════════════════ */
 
-function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <AeOverlay onClose={onClose} className="ae-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="ae-pop-in" onClick={e => e.stopPropagation()}>{children}</div>
-    </AeOverlay>
-  );
-}
 
 /* Cream-colored manila folder illustration */
 function FolderIllustration() {
@@ -425,10 +348,4 @@ function SearchIcon() {
 }
 function UploadIcon() {
   return <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="4,6 8,2 12,6"/><line x1="8" y1="2" x2="8" y2="11"/><rect x="2" y="12" width="12" height="2" rx="1"/></svg>;
-}
-function UploadCloudIcon() {
-  return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.6" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
-}
-function XIcon() {
-  return <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/></svg>;
 }

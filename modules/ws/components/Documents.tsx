@@ -8,26 +8,24 @@
  * "New document" writes one here instead (see modules/documents/doc-store).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, deleteDoc, doc, increment, onSnapshot, updateDoc } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
-import { Download, Eye, FilePen, FilePlus2, FileText, FolderOpen, HardDrive, Loader2, Pencil, Search, Trash2, Upload, Users } from 'lucide-react';
+import { Download, Eye, FilePlus2, FileText, FolderOpen, HardDrive, Loader2, Pencil, Search, Trash2, Upload, Users } from 'lucide-react';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { authDb, storage } from '@/lib/workstation/firebase';
 import { useConfirm } from '@/app/components/common/AeModal';
 import { subscribeUserProfile } from '@/modules/settings/services';
 import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btnPrimary, field } from './ui';
-import { Overlay } from './task-board';
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, MAX_FILE_BYTES, docPath, downloadDocCopy, isEditableFile, makeEditable, sharedDepartmentsOf, uploadFileDoc, type SharedDepartment, type Viewer,
+  DOC_FORMAT, docPath, downloadDocCopy, fileDownloadHref, isEditableFile, makeEditable, sharedDepartmentsOf, type SharedDepartment, type Viewer,
 } from '@/modules/documents/doc-store';
-import DepartmentPicker from '@/modules/documents/components/DepartmentPicker';
+import UploadDialog, { UPLOAD_CATEGORIES as CATEGORIES } from '@/modules/documents/components/UploadDialog';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
 
-const CATEGORIES = ['Policy & Handbook', 'Finance & Budget', 'Operations', 'Onboarding', 'Templates', 'Technical', 'Legal', 'General'];
 
 interface WsDocument {
   id: string; name: string; url: string; storagePath: string; size: number; formattedSize: string;
@@ -93,7 +91,8 @@ export default function Documents() {
       : d.aeDepartmentId ? d.aeDepartmentId === team?.id : !!department && d.department.toLowerCase() === department));
   const visible = (docs ?? []).filter(d => isCeo || d.uploadedByUid === uid || sharedWithMe(d));
   // Written documents: who can change them (the owner, or everyone it's shared with when allowed). The CEO reads.
-  const canEditDoc = (d: WsDocument) => d.uploadedByUid === uid || (d.othersCanEdit && sharedWithMe(d));
+  // Files from before owners were recorded have none: whoever can see them may edit them (as with articles).
+  const canEditDoc = (d: WsDocument) => d.uploadedByUid === uid || (d.othersCanEdit && sharedWithMe(d)) || (!d.uploadedByUid && (isCeo || sharedWithMe(d)));
   const me: Viewer = { uid, name: user?.displayName || user?.email || 'Team member', email: user?.email || '', department, isCeo, aeDepartmentId: team?.id ?? '' };
   const term = search.trim().toLowerCase();
   const shown = visible.filter(d => {
@@ -113,9 +112,8 @@ export default function Documents() {
     await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
   }
 
-  // A copy to keep: a written document as a Word file, an uploaded one as itself.
+  // A copy to keep: a written document as a Word file (an uploaded one downloads through its link).
   async function download(d: WsDocument) {
-    if (!d.written) { await open(d); return; }
     try {
       await downloadDocCopy(d.id);
       await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
@@ -128,7 +126,7 @@ export default function Documents() {
   async function editFile(d: WsDocument) {
     if (!(await confirm({
       title: `Edit ${d.name} here?`,
-      message: 'It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. Some Word formatting may look different.',
+      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. Some Word formatting may look different.${d.uploadedByUid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Open in editor',
     }))) return;
     setConverting(d.id);
@@ -194,9 +192,7 @@ export default function Documents() {
                 <div className="flex min-w-0 items-start gap-3">
                   <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#fef3c7] text-[10px] font-bold text-[#806013] dark:bg-[#f5bd02]/15 dark:text-[#f5bd02]">{d.type === 'OTHER' ? 'FILE' : d.type}</span>
                   <div className="min-w-0">
-                    {d.written
-                      ? <button type="button" onClick={() => void open(d)} className="block max-w-full truncate text-left text-[14px] font-semibold text-[#292929] hover:underline dark:text-white">{d.name}</button>
-                      : <p className="truncate text-[14px] font-semibold text-[#292929] dark:text-white">{d.name}</p>}
+                    <button type="button" onClick={() => void open(d)} disabled={!d.written && !d.url} className="block max-w-full truncate text-left text-[14px] font-semibold text-[#292929] hover:underline dark:text-white">{d.name}</button>
                     <p className="truncate text-[12px] text-[#656565] dark:text-gray-400">
                       {[d.uploadedBy, dateLabel(d.createdAt), d.formattedSize || sizeLabel(d.size), `${d.downloadCount} open${d.downloadCount === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
                     </p>
@@ -206,23 +202,34 @@ export default function Documents() {
                 <div className="flex shrink-0 flex-wrap items-center gap-2 pl-12 sm:pl-0">
                   <Pill label={d.category} tone="gray" />
                   <Pill label={{ company: 'Company', department: d.department === 'departments' ? (d.sharedDepartments.length === 1 ? `${d.sharedDepartments[0].name} team` : `${d.sharedDepartments.length} departments`) : d.aeDepartmentName ? `${d.aeDepartmentName} team` : 'Department', private: d.uploadedByUid === uid ? 'Only me' : 'Private' }[scopeOf(d)]} tone={{ company: 'amber', department: 'green', private: 'gray' }[scopeOf(d)] as 'amber' | 'green' | 'gray'} />
-                  {d.written && (
+                  {d.written ? (
                     <button className={action} onClick={() => void open(d)} aria-label={`${canEditDoc(d) ? 'Edit' : 'View'} ${d.name}`}
                       title={canEditDoc(d) ? 'Open it to edit (you can switch to viewing there)' : 'Open it to read'}>
                       {canEditDoc(d) ? <Pencil className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
                       {canEditDoc(d) ? 'Edit' : 'View'}
                     </button>
+                  ) : (
+                    <>
+                      {isEditableFile(d.name, d.url) && canEditDoc(d) && (
+                        <button className={action} onClick={() => void editFile(d)} disabled={!!converting} aria-label={`Edit ${d.name}`} title="Open it in the editor to edit it">
+                          {converting === d.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Pencil className="h-4 w-4" aria-hidden />} Edit
+                        </button>
+                      )}
+                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title="Open the file in a new tab">
+                        <Eye className="h-4 w-4" aria-hidden /> View
+                      </button>
+                    </>
                   )}
-                  <button className={action} onClick={() => void download(d)} aria-label={`Download ${d.name}`}
-                    title={d.written ? 'Download as a Word document' : 'Download the file'} disabled={!d.written && !d.url}>
-                    <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
-                  </button>
-                  {!d.written && d.uploadedByUid === uid && isEditableFile(d.name) && (
-                    <button className="rounded-lg p-1.5 text-[#525252] hover:bg-black/5 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-white/5" onClick={() => void editFile(d)}
-                      disabled={!!converting} aria-label={`Edit ${d.name} in the editor`} title="Edit in the editor">
-                      {converting === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePen className="h-4 w-4" />}
+                  {d.written ? (
+                    <button className={action} onClick={() => void download(d)} aria-label={`Download ${d.name}`} title="Download as a Word document">
+                      <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
                     </button>
-                  )}
+                  ) : d.url ? (
+                    <a className={action} href={fileDownloadHref(d.url, d.name)} download aria-label={`Download ${d.name}`} title="Download the file"
+                      onClick={() => void updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined)}>
+                      <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
+                    </a>
+                  ) : null}
                   {(d.uploadedByUid === uid || isCeo) && (
                     <button className="rounded-lg p-1.5 text-[#a3a3a3] hover:bg-red-50 hover:text-[#dc2626] dark:hover:bg-red-500/10" onClick={() => void remove(d)} aria-label={`Delete ${d.name}`}>
                       <Trash2 className="h-4 w-4" />
@@ -240,106 +247,8 @@ export default function Documents() {
           team={team}
           me={me} />
       )}
-      {uploading && <UploadDialog department={department} team={team} me={me} onClose={() => setUploading(false)}
+      {uploading && user && <UploadDialog department={department} team={team} me={me} onClose={() => setUploading(false)}
         onEditable={id => router.push(docPath(id))} />}
     </div>
-  );
-}
-
-function UploadDialog({ department, team, me, onClose, onEditable }: {
-  department: string;
-  /** My AE department: "My team" files are kept under it. */
-  team?: { id: string; name: string };
-  me: Viewer;
-  onClose: () => void;
-  /** Called with the document's id once an uploaded file is opened for editing. */
-  onEditable: (id: string) => void;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [category, setCategory] = useState('General');
-  const [share, setShare] = useState<'department' | 'departments' | 'all'>(team || department ? 'department' : 'all');
-  const [departments, setDepartments] = useState<SharedDepartment[]>(team ? [team] : []);
-  const [description, setDescription] = useState('');
-  // Word, text and web page files can be edited here; Word files open in the editor unless unticked.
-  const [editHere, setEditHere] = useState(true);
-  const [progress, setProgress] = useState<number | null>(null);
-  const [converting, setConverting] = useState(false);
-  const [error, setError] = useState('');
-
-  const editable = !!file && isEditableFile(file.name);
-
-  async function upload() {
-    if (!file) return;
-    if (file.size > MAX_FILE_BYTES) { setError('Files can be up to 25 MB.'); return; }
-    if (share === 'departments' && departments.length === 0) { setError('Choose at least one department to share it with.'); return; }
-    setError('');
-    setProgress(0);
-    try {
-      const id = await uploadFileDoc(file, {
-        category, description,
-        where: share === 'all' ? { department: 'all' } : share === 'departments' ? { departments } : team ? { team } : { department },
-      }, me, setProgress);
-      if (!(editable && editHere)) { onClose(); return; }
-      setConverting(true);
-      try {
-        await makeEditable(id, me);
-        onEditable(id);
-      } catch (e) {
-        // The file is uploaded either way; it can be opened for editing from the list later.
-        setError(`Uploaded, but it could not be opened for editing${e instanceof Error && e.message ? `: ${e.message}` : '.'}`);
-        setConverting(false);
-        setProgress(null);
-        setFile(null);
-      }
-    } catch {
-      setError('The upload failed. Please try again.');
-      setProgress(null);
-    }
-  }
-
-  const busy = progress !== null || converting;
-  return (
-    <Overlay title="Upload a Document" onClose={() => { if (!busy) onClose(); }} footer={
-      <>
-        <button className={btnGhost} onClick={onClose} disabled={busy}>Cancel</button>
-        <button className={btnPrimary} onClick={() => void upload()} disabled={!file || busy}>{converting ? 'Opening in the editor…' : busy ? `Uploading ${progress}%…` : 'Upload'}</button>
-      </>
-    }>
-      <button type="button" onClick={() => input.current?.click()} disabled={busy}
-        className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-[#d4d4d4] px-4 py-6 text-center hover:border-[#f5bd02] dark:border-white/15">
-        <Upload className="h-6 w-6 text-[#a3a3a3]" aria-hidden />
-        <span className="text-[14px] font-medium text-[#292929] dark:text-gray-100">{file ? file.name : 'Choose a file'}</span>
-        <span className="text-[12px] text-[#8a8a8a]">{file ? sizeLabel(file.size) : 'PDF, Word, Excel, PowerPoint, images or zip, up to 25 MB'}</span>
-      </button>
-      <input ref={input} type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] ?? null)} />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Category</span>
-          <select className={field} value={category} onChange={e => setCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Share with</span>
-          <select className={field} value={share} onChange={e => setShare(e.target.value as 'department' | 'departments' | 'all')}>
-            {(team || department) && <option value="department">{team ? `My team (${team.name})` : 'My department'}</option>}
-            <option value="departments">Departments I choose…</option>
-            <option value="all">Everyone (company-wide)</option>
-          </select>
-        </label>
-      </div>
-      {share === 'departments' && <DepartmentPicker value={departments} onChange={setDepartments} ownTeamId={team?.id} />}
-      <label className="block">
-        <span className="mb-1 block text-[13px] font-medium text-[#525252] dark:text-gray-300">Description (optional)</span>
-        <input className={field} value={description} maxLength={300} onChange={e => setDescription(e.target.value)} />
-      </label>
-      {editable && (
-        <label className="flex items-start gap-2 text-[13px] text-[#525252] dark:text-gray-300">
-          <input type="checkbox" checked={editHere} disabled={busy} onChange={e => setEditHere(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
-          <span>Open it in the editor so it can be edited<span className="block text-[12px] text-[#8a8a8a]">It becomes a document you can change here. The original file stays available to download.</span></span>
-        </label>
-      )}
-      {busy && <div className="h-2 overflow-hidden rounded-full bg-[#e5e5e5] dark:bg-white/10"><div className="h-full bg-[#f5bd02] transition-all" style={{ width: `${progress}%` }} /></div>}
-      {error && <p role="alert" className="text-[13px] text-[#b91c1c] dark:text-red-300">{error}</p>}
-    </Overlay>
   );
 }
