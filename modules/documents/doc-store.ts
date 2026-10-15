@@ -61,6 +61,8 @@ export interface WorkDoc {
   sharedDepartments: SharedDepartment[];
   othersCanEdit: boolean;
   orientation: DocOrientation;
+  /** Shown as one long page instead of separate pages (Google Docs' "Pageless"). */
+  pageless: boolean;
   /** An uploaded file opened for editing: the original, still downloadable. */
   originalFile: { name: string; url: string } | null;
   /** Made in the workstation (opens here: a document or a spreadsheet), rather than an uploaded file. */
@@ -108,6 +110,7 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     sharedDepartments: sharedDepartmentsOf(d),
     othersCanEdit: d.othersCanEdit === true,
     orientation: d.orientation === 'landscape' ? 'landscape' : 'portrait',
+    pageless: d.pageless === true,
     originalFile: str(d.originalFileUrl) ? { name: str(d.originalFileName) || 'Original file', url: str(d.originalFileUrl) } : null,
     written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT,
     kind: d.format === DOC_FORMAT ? 'doc' : d.format === SHEET_FORMAT ? 'sheet' : 'file',
@@ -276,7 +279,7 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation' | 'project'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation' | 'pageless' | 'project'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
@@ -312,6 +315,7 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
     if (changes.project !== undefined) Object.assign(update, projectFields(changes.project));
     if (changes.description !== undefined) update.description = changes.description.trim();
     if (changes.orientation !== undefined) update.orientation = changes.orientation === 'landscape' ? 'landscape' : 'portrait';
+    if (changes.pageless !== undefined) update.pageless = changes.pageless === true;
     // Sharing is the owner's call.
     if (can.canShare && changes.share !== undefined) {
       if (changes.share === 'department' && current.aeDepartmentId) {

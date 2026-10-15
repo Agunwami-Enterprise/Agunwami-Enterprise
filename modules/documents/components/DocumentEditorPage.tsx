@@ -14,7 +14,7 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import { CellSelection } from '@tiptap/pm/tables';
 import {
-  ArrowLeft, Bold, Check, ChevronDown, CloudOff, Download, Eye, FileText, Highlighter, Italic, Link2, Loader2, Lock,
+  ArrowLeft, Bold, Check, ChevronDown, CloudOff, Download, Eye, FileText, Files, ScrollText, Highlighter, Italic, Link2, Loader2, Lock,
   PanelRightClose, PanelRightOpen, Pencil, Printer, RectangleHorizontal, RectangleVertical, RemoveFormatting, Replace, Trash2, Underline, Unlink,
 } from 'lucide-react';
 import AeModal, { useConfirm } from '@/app/components/common/AeModal';
@@ -22,6 +22,7 @@ import { useAuth } from '@/lib/workstation/auth-context';
 import { deniedHref } from '@/lib/workstation/access-denied';
 import { subscribeUserProfile } from '@/modules/settings/services';
 import { articleExtensions } from '@/app/components/cpanel/article/extensions';
+import { Pagination, setPaginated } from '@/app/components/cpanel/article/pagination';
 import Toolbar, { Divider, ToolButton, applyFontSize, clearFormatting, currentFontSize } from '@/app/components/cpanel/article/Toolbar';
 import TableMenu, { tableElement } from '@/app/components/cpanel/article/TableMenu';
 import FindReplace from '@/app/components/cpanel/article/FindReplace';
@@ -47,12 +48,12 @@ type Mode = { kind: 'loading' } | { kind: 'checking' } | { kind: 'editing' } | {
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 type LinkState = { from: number; to: number; href: string; newTab: boolean; selectedText: string; editing: boolean };
 type ImageState = { mode: 'insert' | 'replace' | 'details'; pos: number; initial?: { alt: string; caption: string; showCaption: boolean } };
-interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; orientation: DocOrientation; project: DocProject | null }
+interface Form { title: string; category: string; description: string; share: DocShare; othersCanEdit: boolean; sharedDepartments: SharedDepartment[]; orientation: DocOrientation; pageless: boolean; project: DocProject | null }
 type Pending = Partial<Form> & { content?: boolean };
 
 const SHARE_LABELS: Record<DocShare, string> = { private: 'Only me', department: 'My department', departments: 'Departments I choose…', all: 'Everyone in the company' };
 
-const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, orientation: d.orientation, project: d.project });
+const formOf = (d: WorkDoc): Form => ({ title: d.title, category: d.category, description: d.description, share: shareOf(d), othersCanEdit: d.othersCanEdit, sharedDepartments: d.sharedDepartments, orientation: d.orientation, pageless: d.pageless, project: d.project });
 const timeAgo = (iso: string) => {
   if (!iso) return '';
   const date = new Date(iso);
@@ -90,7 +91,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [docData, setDocData] = useState<WorkDoc | null | undefined>(undefined);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'loading' });
-  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], orientation: 'portrait', project: null });
+  const [form, setForm] = useState<Form>({ title: '', category: 'General', description: '', share: 'department', othersCanEdit: false, sharedDepartments: [], orientation: 'portrait', pageless: false, project: null });
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [error, setError] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
@@ -102,6 +103,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const [wordCount, setWordCount] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [zoom, setZoom] = useState(100);
+  // Pages or one long page: saved with the document by people editing it; anyone else can switch it just for themselves.
+  const [ownPageless, setOwnPageless] = useState<boolean | null>(null);
   const [spellcheck, setSpellcheck] = useState(true);
   const [words, setWords] = useState(0);
   const [uploads, setUploads] = useState(0);
@@ -135,7 +138,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   const editor = useEditor({
     immediatelyRender: false,
     editable: false,
-    extensions: articleExtensions('Start writing… Type ## and a space for a heading, or paste an image.'),
+    extensions: [...articleExtensions('Start writing… Type ## and a space for a heading, or paste an image.'), Pagination],
     content: '',
     editorProps: {
       attributes: () => ({
@@ -307,6 +310,11 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   useEffect(() => {
     if (editor && !editor.isDestroyed && editor.isEditable !== editing) editor.setEditable(editing, false); // not an edit
   }, [editor, editing]);
+
+  const pageless = ownPageless ?? form.pageless;
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) setPaginated(editor.view, !pageless);
+  }, [editor, pageless]);
 
   useEffect(() => {
     viewRef.current = { zoom, spellcheck };
@@ -592,6 +600,17 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
               })}
             </div>
           )}
+          {/* Page setup: separate pages or one long page */}
+          <div role="radiogroup" aria-label="Page layout" className="flex rounded-lg border border-[#e5e5e5] bg-white p-0.5 dark:border-white/10 dark:bg-transparent">
+            {([[false, 'Pages', Files, 'Separate pages, with page numbers'], [true, 'Pageless', ScrollText, 'One long page']] as const).map(([value, label, Icon, hint]) => (
+              <button key={label} type="button" role="radio" aria-checked={pageless === value} title={editing ? hint : `${hint} (just for you; people who can edit set it for everyone)`}
+                onClick={() => { if (editing) { setOwnPageless(null); setField('pageless', value); } else setOwnPageless(value); }}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium ${pageless === value
+                  ? 'bg-[#fef3c7] text-[#806013] dark:bg-[#f5bd02]/15 dark:text-[#f5bd02]' : 'text-[#525252] hover:bg-[#f5f5f5] dark:text-gray-300 dark:hover:bg-white/5'}`}>
+                <Icon className="h-4 w-4" aria-hidden="true" /><span className="hidden lg:inline">{label}</span>
+              </button>
+            ))}
+          </div>
           {/* Page setup: portrait or landscape */}
           <div role="radiogroup" aria-label="Page orientation" className="flex rounded-lg border border-[#e5e5e5] bg-white p-0.5 dark:border-white/10 dark:bg-transparent">
             {([['portrait', 'Portrait', RectangleVertical], ['landscape', 'Landscape', RectangleHorizontal]] as const).map(([value, label, Icon]) => (
@@ -844,7 +863,7 @@ function DocFacts({ doc: d, form }: { doc: WorkDoc; form: Form }) {
         {form.project && row('Project', form.project.name)}
         {form.description && row('Description', form.description)}
         {row('Shared with', shareText)}
-        {row('Page', form.orientation === 'landscape' ? 'Landscape' : 'Portrait')}
+        {row('Page', `${form.orientation === 'landscape' ? 'Landscape' : 'Portrait'} · ${form.pageless ? 'Pageless' : 'Pages'}`)}
         {form.share !== 'private' && row('Editing', form.othersCanEdit ? 'Everyone it’s shared with can edit' : 'Only the owner edits')}
       </dl>
     </section>
