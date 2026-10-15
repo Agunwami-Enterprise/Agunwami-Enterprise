@@ -12,7 +12,7 @@ import UploadDialog from './UploadDialog';
 import { useProjects } from './ProjectPicker';
 import type { FeedSource } from '@/backend/modules/projects/projects.types';
 import {
-  canBecomeEditable, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, permissionsOf, subscribeDocs, type Viewer, type WorkDoc,
+  canBecomeEditable, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, permissionsOf, removeDoc, subscribeDocs, type Viewer, type WorkDoc,
 } from '../doc-store';
 import { SkeletonDocuments } from '@/app/components/ceo/Skeleton';
 import {
@@ -114,7 +114,48 @@ export default function DocumentsPage() {
 
   const link = 'text-[12px] font-semibold hover:underline disabled:opacity-50';
   /** A row's actions: Edit or View, and Download (and Edit for uploaded files that can be edited). */
-  const rowActions = (f: DocFile, d: WorkDoc | undefined) => {
+  const [deleting, setDeleting] = useState('');
+
+  // The CEO can delete any workstation document or file, and the enterprise's own entries (e.g. samples).
+  const canRemove = (f: DocFile, d: WorkDoc | undefined) => (d ? !!me && permissionsOf(d, me).canDelete : f.source.id === 'enterprise');
+
+  async function removeRow(f: DocFile, d: WorkDoc | undefined) {
+    const name = d?.title || f.name;
+    const ok = await confirm({
+      title: `Delete “${name}”?`,
+      message: d ? 'It’s removed for everyone, in AE Hub too. This can’t be undone.' : 'It’s removed from the enterprise’s documents. This can’t be undone.',
+      confirmLabel: 'Delete', tone: 'danger',
+    });
+    if (!ok) return;
+    setDeleting(f.key);
+    try {
+      if (d) {
+        await removeDoc(d.id);
+      } else {
+        const res = await fetch(`/api/ceo/documents?id=${encodeURIComponent(f.id)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || 'It could not be deleted.');
+      }
+      toast.success(`“${name}” was deleted.`);
+      void feed.reload();
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : 'It could not be deleted.');
+    } finally {
+      setDeleting('');
+    }
+  }
+
+  const rowActions = (f: DocFile, d: WorkDoc | undefined) => (
+    <span className="inline-flex items-center gap-3">
+      {openActions(f, d)}
+      {canRemove(f, d) && (
+        <button type="button" onClick={() => void removeRow(f, d)} disabled={deleting === f.key} title="Delete it" className={`${link} text-red-600 dark:text-red-400`}>
+          {deleting === f.key ? 'Deleting…' : 'Delete'}
+        </button>
+      )}
+    </span>
+  );
+
+  const openActions = (f: DocFile, d: WorkDoc | undefined) => {
     if (f.written || d?.written) {
       return (
         <span className="inline-flex items-center gap-3">
@@ -125,6 +166,7 @@ export default function DocumentsPage() {
         </span>
       );
     }
+    if (f.sample && !d) return <span className="text-[12px] text-gray-400" title="A sample entry: its link points at no real file">Sample · no file</span>;
     const url = d?.fileUrl || f.url;
     if (!url) return <span className="text-[12px] text-gray-400" title="No download link was shared for this document">No file link</span>;
     return (

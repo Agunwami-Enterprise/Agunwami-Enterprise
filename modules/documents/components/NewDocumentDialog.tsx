@@ -14,7 +14,9 @@ import { Check, FileSpreadsheet, FileText, Loader2, RectangleHorizontal, Rectang
 import AeModal, { useConfirm } from '@/app/components/common/AeModal';
 import { SHEET_TEMPLATES } from '@/lib/documents/sheets';
 import { DOC_CATEGORIES, DOC_TEMPLATES, createDoc, docPath, type DocOrientation, type DocProject, type DocShare, type SharedDepartment, type Viewer } from '../doc-store';
-import { addTemplate, deleteTemplate, getTemplate, isTemplateFile, listTemplates, templateFromFile, templateNameOf, type CustomTemplate } from '../template-store';
+import {
+  addTemplate, deleteTemplate, getTemplate, hideBuiltInTemplate, isTemplateFile, listTemplates, restoreBuiltInTemplates, templateFromFile, templateNameOf, type CustomTemplate,
+} from '../template-store';
 import DepartmentPicker from './DepartmentPicker';
 import ProjectPicker from './ProjectPicker';
 
@@ -44,19 +46,31 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
   const [orientation, setOrientation] = useState<DocOrientation>('portrait');
   const [project, setProject] = useState<DocProject | null>(null);
   const [custom, setCustom] = useState<CustomTemplate[] | null>(null);
+  // Built-in templates the CEO removed for everyone, and whether you're the CEO (who can).
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [canManageBuiltIns, setCanManageBuiltIns] = useState(false);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    listTemplates().then(list => { if (!cancelled) setCustom(list); }, () => { if (!cancelled) setCustom([]); });
+    listTemplates().then(list => {
+      if (cancelled) return;
+      setCustom(list.templates);
+      setHidden(list.hidden);
+      setCanManageBuiltIns(list.canManageBuiltIns);
+    }, () => { if (!cancelled) setCustom([]); });
     return () => { cancelled = true; };
   }, []);
 
-  const builtIn = kind === 'doc'
-    ? DOC_TEMPLATES.map(t => ({ key: `b:${t.id}`, label: t.label, description: t.description, category: t.category }))
-    : SHEET_TEMPLATES.map(t => ({ key: `b:${t.id}`, label: t.label, description: t.description, category: t.category }));
+  const allBuiltIn = kind === 'doc'
+    ? DOC_TEMPLATES.map(t => ({ id: t.id, key: `b:${t.id}`, label: t.label, description: t.description, category: t.category }))
+    : SHEET_TEMPLATES.map(t => ({ id: t.id, key: `b:${t.id}`, label: t.label, description: t.description, category: t.category }));
+  // A department guide's own template always shows; blank ones can't be removed.
+  const builtIn = allBuiltIn.filter(t => !hidden.includes(t.id) || `b:${t.id}` === `b:${initial?.templateId}`);
+  const removedCount = allBuiltIn.length - builtIn.length;
+  const removable = (id: string) => canManageBuiltIns && id !== 'blank' && id !== 'blank-sheet';
   const added = (custom ?? []).filter(t => t.kind === kind);
 
   function pick(key: Choice, templateCategory: string) {
@@ -78,6 +92,26 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
       if (choice === `c:${t.id}`) switchKind(kind);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The template could not be deleted.');
+    }
+  }
+
+  async function removeBuiltIn(t: { id: string; label: string }) {
+    if (!(await confirm({ title: `Remove the “${t.label}” template?`, message: 'It’s removed from “New” for everyone. You can bring the built-in templates back here later.', confirmLabel: 'Remove', tone: 'danger' }))) return;
+    try {
+      await hideBuiltInTemplate(t.id);
+      setHidden(list => [...list, t.id]);
+      if (choice === `b:${t.id}`) switchKind(kind);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The template could not be removed.');
+    }
+  }
+
+  async function restoreBuiltIns() {
+    try {
+      await restoreBuiltInTemplates();
+      setHidden([]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The templates could not be restored.');
     }
   }
 
@@ -155,27 +189,25 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
           <legend className="mb-2 text-[13px] font-medium text-[#525252] dark:text-gray-300">Start from</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {builtIn.map(t => (
-              <button key={t.key} type="button" aria-pressed={choice === t.key} onClick={() => pick(t.key, t.category)} className={tile(choice === t.key)}>
-                <Icon className={`h-5 w-5 ${kind === 'sheet' ? 'text-[#16a34a]' : 'text-[#806013] dark:text-[#f5bd02]'}`} aria-hidden="true" />
-                <span className="text-[13px] font-semibold text-[#292929] dark:text-white">{t.label}</span>
-                <span className="text-[12px] leading-snug text-[#8a8a8a]">{t.description}</span>
-                {choice === t.key && <Check className="absolute right-2.5 top-2.5 h-4 w-4 text-[#806013] dark:text-[#f5bd02]" aria-hidden="true" />}
-              </button>
+              <div key={t.key} className="relative">
+                <button type="button" aria-pressed={choice === t.key} onClick={() => pick(t.key, t.category)} className={`${tile(choice === t.key)} ${removable(t.id) ? 'pb-9' : ''}`}>
+                  <Icon className={`h-5 w-5 ${kind === 'sheet' ? 'text-[#16a34a]' : 'text-[#806013] dark:text-[#f5bd02]'}`} aria-hidden="true" />
+                  <span className="text-[13px] font-semibold text-[#292929] dark:text-white">{t.label}</span>
+                  <span className="text-[12px] leading-snug text-[#8a8a8a]">{t.description}</span>
+                </button>
+                {choice === t.key && <Check className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-[#806013] dark:text-[#f5bd02]" aria-hidden="true" />}
+                {removable(t.id) && <DeleteChip label={`Remove the ${t.label} template`} text="Remove" onClick={() => void removeBuiltIn(t)} />}
+              </div>
             ))}
             {added.map(t => (
               <div key={t.id} className="relative">
-                <button type="button" aria-pressed={choice === `c:${t.id}`} onClick={() => pick(`c:${t.id}`, t.category)} className={tile(choice === `c:${t.id}`)}>
+                <button type="button" aria-pressed={choice === `c:${t.id}`} onClick={() => pick(`c:${t.id}`, t.category)} className={`${tile(choice === `c:${t.id}`)} ${t.canDelete ? 'pb-9' : ''}`}>
                   <Icon className={`h-5 w-5 ${kind === 'sheet' ? 'text-[#16a34a]' : 'text-[#2563eb]'}`} aria-hidden="true" />
                   <span className="pr-6 text-[13px] font-semibold text-[#292929] dark:text-white">{t.label}</span>
                   <span className="text-[12px] leading-snug text-[#8a8a8a]">{t.description || `Added by ${t.createdBy || 'a colleague'}`}</span>
                 </button>
                 {choice === `c:${t.id}` && <Check className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-[#806013] dark:text-[#f5bd02]" aria-hidden="true" />}
-                {t.canDelete && (
-                  <button type="button" onClick={() => void removeTemplate(t)} aria-label={`Delete the ${t.label} template`} title="Delete this template"
-                    className="absolute bottom-2 right-2 rounded-md p-1 text-[#a3a3a3] hover:bg-red-50 hover:text-[#dc2626] dark:hover:bg-red-500/10">
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                )}
+                {t.canDelete && <DeleteChip label={`Delete the ${t.label} template`} text="Delete" onClick={() => void removeTemplate(t)} />}
               </div>
             ))}
             <button type="button" onClick={() => setAdding(true)} className="flex flex-col items-start gap-1 rounded-xl border border-dashed border-[#d4d4d4] p-3 text-left hover:border-[#f5bd02] dark:border-white/15">
@@ -185,6 +217,11 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
             </button>
           </div>
           {custom === null && <p className="mt-2 flex items-center gap-1.5 text-[12px] text-[#8a8a8a]"><Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> Loading the company’s templates…</p>}
+          {canManageBuiltIns && removedCount > 0 && (
+            <button type="button" onClick={() => void restoreBuiltIns()} className="mt-2 text-[12px] font-semibold text-[#806013] hover:underline dark:text-[#f5bd02]">
+              Bring back {removedCount} removed built-in template{removedCount === 1 ? '' : 's'}
+            </button>
+          )}
         </fieldset>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -240,6 +277,16 @@ export default function NewDocumentDialog({ me, basePath, onClose, team, initial
         }} />
       )}
     </AeModal>
+  );
+}
+
+/** The delete (or remove) button on a template tile. */
+function DeleteChip({ label, text, onClick }: { label: string; text: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label}
+      className="absolute bottom-2 left-3 inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-500/10">
+      <Trash2 className="h-3 w-3" aria-hidden="true" /> {text}
+    </button>
   );
 }
 

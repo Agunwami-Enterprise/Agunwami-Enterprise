@@ -28,6 +28,8 @@ export interface DocumentFeedItem {
   size?: string;
   /** Written in the AE Workstation: opens in its document editor rather than as a file. */
   written?: boolean;
+  /** A sample entry whose link points at no real file. */
+  sample?: boolean;
 }
 
 export interface DocumentsFeed {
@@ -66,7 +68,16 @@ function writtenIdOf(url: string | undefined): string | null {
   }
 }
 
-const httpLink = (value: string) => (/^https?:\/\//i.test(value) ? value : undefined);
+/** Links to sample files that don't exist (the seed script's placeholder.docs, example.com, …). */
+const isPlaceholderLink = (value: string) => {
+  try {
+    return /(^|\.)(placeholder\.docs|example\.(com|org|net)|invalid|test|localhost)$/i.test(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
+
+const httpLink = (value: string) => (/^https?:\/\//i.test(value) && !isPlaceholderLink(value) ? value : undefined);
 
 function enterpriseItem(raw: RawRecord): DocumentFeedItem {
   const id = text(raw._id) || text(raw.id);
@@ -86,6 +97,7 @@ function enterpriseItem(raw: RawRecord): DocumentFeedItem {
     ...(text(raw.uploadedByName) || text(raw.uploadedBy) ? { uploadedBy: text(raw.uploadedByName) || text(raw.uploadedBy) } : {}),
     ...(text(raw.fileSize) || text(raw.size) ? { size: text(raw.fileSize) || text(raw.size) } : {}),
     ...(text(raw.format) === 'ae-doc' ? { written: true } : {}),
+    ...(url && isPlaceholderLink(url) ? { sample: true } : {}),
   };
 }
 
@@ -110,7 +122,8 @@ export async function getDocumentsFeed(): Promise<DocumentsFeed> {
         category: document.category,
         date: document.createdAt,
         tab: tabFor(document.department ?? ''),
-        ...(document.url ? { url: document.url } : {}),
+        ...(document.url && !isPlaceholderLink(document.url) ? { url: document.url } : {}),
+        ...(document.url && isPlaceholderLink(document.url) ? { sample: true } : {}),
         ...(document.uploadedBy ? { uploadedBy: document.uploadedBy } : {}),
         ...(document.size ? { size: document.size } : {}),
         ...(writtenId ? { written: true } : {}),

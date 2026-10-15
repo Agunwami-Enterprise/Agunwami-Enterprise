@@ -3,18 +3,35 @@
  *
  * Templates people added for new documents and spreadsheets (company-wide,
  * next to the built-in ones), kept in the enterprise database.
- * GET: the list (without contents), with whether the caller may delete each.
+ * GET: the list (without contents), with whether the caller may delete each,
+ *   and the built-in templates the CEO removed (`hidden`).
  * GET ?id=: one template with its contents.
  * POST { label, description, category, kind: "doc" | "sheet", content | sheets }: add one.
+ * POST { restoreBuiltIns: true }: bring back the built-in templates the CEO removed (CEO only).
  * DELETE ?id=: remove one (whoever added it, or the CEO).
+ * DELETE ?builtin=: remove a built-in template for everyone (CEO only; blank ones stay).
  */
 
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/workstation/api-auth';
 import { getWorkstationAccess } from '@/lib/workstation/access';
-import { createDoc, deleteDoc, getDoc, listDocs } from '@/backend/core/firestore';
+import { createDoc, deleteDoc, getDoc, listDocs, updateDoc } from '@/backend/core/firestore';
 
 const COLLECTION = 'documentTemplates';
+/** Which built-in templates the CEO removed: documentTemplateSettings/builtIns { hidden: string[] }. */
+const SETTINGS = 'documentTemplateSettings';
+const BUILT_INS = 'builtIns';
+const KEEP = new Set(['blank', 'blank-sheet']);
+
+async function hiddenBuiltIns(): Promise<string[]> {
+  const raw = await getDoc(SETTINGS, BUILT_INS).catch(() => null) as { hidden?: unknown } | null;
+  return Array.isArray(raw?.hidden) ? raw.hidden.filter((x): x is string => typeof x === 'string') : [];
+}
+
+async function saveHidden(hidden: string[]): Promise<boolean> {
+  const updated = await updateDoc(SETTINGS, BUILT_INS, { hidden }).catch(() => null);
+  return !!updated || !!(await createDoc(SETTINGS, { hidden }, BUILT_INS).catch(() => null));
+}
 const MAX_BYTES = 900 * 1024;
 const str = (v: unknown, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
@@ -42,9 +59,9 @@ export async function GET(request: Request) {
       if (!raw) return NextResponse.json({ error: 'That template was deleted.' }, { status: 404 });
       return NextResponse.json({ template: { ...summary(raw, auth.session.uid, isCeo), content: str(raw.content, MAX_BYTES), sheets: str(raw.sheets, MAX_BYTES) } });
     }
-    const all = await listDocs(COLLECTION, 300) as Record<string, unknown>[];
+    const [all, hidden] = await Promise.all([listDocs(COLLECTION, 300) as Promise<Record<string, unknown>[]>, hiddenBuiltIns()]);
     const templates = all.map(raw => summary(raw, auth.session.uid, isCeo)).sort((a, b) => a.label.localeCompare(b.label));
-    return NextResponse.json({ templates });
+    return NextResponse.json({ templates, hidden, canManageBuiltIns: isCeo });
   } catch (err) {
     console.error('[GET /api/documents/templates]', err);
     return NextResponse.json({ error: 'Templates could not be loaded.' }, { status: 500 });
@@ -55,6 +72,10 @@ export async function POST(request: Request) {
   const auth = await requireSession();
   if (auth.error) return auth.error;
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  if (body.restoreBuiltIns === true) {
+    if ((await getWorkstationAccess(auth.session)).kind !== 'ceo') return NextResponse.json({ error: 'Only the CEO can bring back built-in templates.' }, { status: 403 });
+    return (await saveHidden([])) ? NextResponse.json({ ok: true }) : NextResponse.json({ error: 'The templates could not be restored.' }, { status: 502 });
+  }
   const kind = body.kind === 'sheet' ? 'sheet' : 'doc';
   const content = kind === 'doc' && typeof body.content === 'string' ? body.content : '';
   const sheets = kind === 'sheet' && typeof body.sheets === 'string' ? body.sheets : '';
@@ -78,7 +99,18 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const auth = await requireSession();
   if (auth.error) return auth.error;
-  const id = new URL(request.url).searchParams.get('id') ?? '';
+  const params = new URL(request.url).searchParams;
+  const builtIn = params.get('builtin');
+  if (builtIn) {
+    if ((await getWorkstationAccess(auth.session)).kind !== 'ceo') return NextResponse.json({ error: 'Only the CEO can remove built-in templates.' }, { status: 403 });
+    if (KEEP.has(builtIn)) return NextResponse.json({ error: 'The blank templates always stay.' }, { status: 400 });
+    const hidden = await hiddenBuiltIns();
+    if (!hidden.includes(builtIn) && !(await saveHidden([...hidden, builtIn.slice(0, 60)]))) {
+      return NextResponse.json({ error: 'The template could not be removed.' }, { status: 502 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+  const id = params.get('id') ?? '';
   try {
     const raw = await getDoc(COLLECTION, id) as Record<string, unknown> | null;
     if (!raw) return NextResponse.json({ ok: true });
