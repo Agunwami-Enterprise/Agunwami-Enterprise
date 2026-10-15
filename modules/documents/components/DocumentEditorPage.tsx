@@ -207,9 +207,9 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
   }, [editor, id, showStored]);
 
   const isFile = !!docData && !docData.written;
-  const previewable = !!docData && isFile && isPreviewableFile(docData.title, docData.fileUrl);
+  const previewable = !!docData && isFile && isPreviewableFile(docData.fileName);
   const fileUrl = docData && isFile ? docData.fileUrl : '';
-  const fileName = docData?.title ?? '';
+  const fileName = docData?.fileName ?? '';
   useEffect(() => {
     if (!previewable || !fileUrl) return;
     let cancelled = false;
@@ -262,7 +262,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
     if (!docData || !me) return;
     const ok = await confirm({
       title: `Edit ${docData.title}?`,
-      message: `It becomes a written document in the same place, shared the same way, and opens for editing. The original file stays available to download from the details. ${editNote(docData.title, docData.fileUrl)}${docData.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      message: `It becomes a written document in the same place, shared the same way, and opens for editing. The original file stays available to download from the details. ${editNote(docData.fileName)}${docData.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Edit it',
     });
     if (!ok) return;
@@ -517,11 +517,11 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
             </a>
           )}
           {docData.fileUrl && (
-            <a href={fileDownloadHref(docData.fileUrl, docData.title)} download className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] px-4 py-2 text-[14px] font-medium text-[#292929] hover:bg-[#f5f5f5] dark:border-white/10 dark:text-gray-200">
+            <a href={fileDownloadHref(docData.fileUrl, docData.fileName)} download className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] px-4 py-2 text-[14px] font-medium text-[#292929] hover:bg-[#f5f5f5] dark:border-white/10 dark:text-gray-200">
               <Download className="h-4 w-4" aria-hidden="true" /> Download
             </a>
           )}
-          {canEdit && isEditableFile(docData.title, docData.fileUrl) && (
+          {canEdit && isEditableFile(docData.fileName) && (
             <button type="button" onClick={() => void editUpload()} disabled={converting} className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] px-4 py-2 text-[14px] font-medium text-[#292929] hover:bg-[#f5f5f5] disabled:opacity-50 dark:border-white/10 dark:text-gray-200">
               {converting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Pencil className="h-4 w-4" aria-hidden="true" />} Edit
             </button>
@@ -602,7 +602,7 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
             ))}
           </div>
           {isFile && docData ? (
-            <a href={fileDownloadHref(docData.fileUrl, docData.title)} download title="Download the original file"
+            <a href={fileDownloadHref(docData.fileUrl, docData.fileName)} download title="Download the original file"
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e5e5] bg-white px-3 py-2 text-[13px] font-medium text-[#292929] hover:bg-[#f5f5f5] dark:border-white/10 dark:bg-transparent dark:text-gray-200 dark:hover:bg-white/5">
               <Download className="h-4 w-4" aria-hidden="true" /> Download
             </a>
@@ -649,7 +649,8 @@ export default function DocumentEditorPage({ id, basePath, isCeo, aeDepartmentId
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
       {isFile && preview && 'error' in preview && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-          {preview.error} You can still download it.
+          {preview.error}{' '}
+          {docData?.fileUrl && <a href={docData.fileUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Open the file</a>} or download it.
         </p>
       )}
       {isFile && can?.canEdit && (

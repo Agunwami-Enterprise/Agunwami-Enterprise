@@ -12,7 +12,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { authDb } from '@/lib/workstation/firebase';
 import DocumentEditorPage from './DocumentEditorPage';
 import SpreadsheetPage from './SpreadsheetPage';
-import { SHEET_FORMAT, isSheetFile } from '../doc-store';
+import { SHEET_FORMAT, fileNameWithType, fileUrlOf, isSheetFile } from '../doc-store';
 
 type Props = { id: string; basePath: string; isCeo: boolean; aeDepartmentId?: string; startInView?: boolean };
 
@@ -24,8 +24,8 @@ export default function DocumentScreen(props: Props) {
     getDoc(doc(authDb, 'documents', props.id)).then(snap => {
       if (cancelled) return;
       const data = snap.data();
-      const name = String(data?.name ?? '');
-      const url = String(data?.url ?? '');
+      const url = data ? fileUrlOf(data) : '';
+      const name = data ? fileNameWithType(String(data.name || data.fileName || data.title || ''), url, String(data.type ?? '')) : '';
       setKind(data?.format === SHEET_FORMAT || (data && !data.format && isSheetFile(name, url)) ? 'sheet' : 'doc');
     }, () => { if (!cancelled) setKind('doc'); });
     return () => { cancelled = true; };

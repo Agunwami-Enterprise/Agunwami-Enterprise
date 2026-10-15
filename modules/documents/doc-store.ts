@@ -71,6 +71,8 @@ export interface WorkDoc {
   project: DocProject | null;
   /** An uploaded file's address. */
   fileUrl: string;
+  /** An uploaded file's name with its type (from its address or AE Hub's type when the name has none). */
+  fileName: string;
   owner: DocPerson;
   createdAt: string;
   updatedAt: string;
@@ -96,7 +98,7 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
   const lock = d.lock && typeof d.lock === 'object' ? d.lock as Record<string, unknown> : null;
   return {
     id,
-    title: str(d.name) || 'Untitled document',
+    title: str(d.name) || str(d.fileName) || str(d.title) || 'Untitled document',
     content: str(d.content),
     category: str(d.category) || 'General',
     description: str(d.description),
@@ -111,7 +113,8 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     kind: d.format === DOC_FORMAT ? 'doc' : d.format === SHEET_FORMAT ? 'sheet' : 'file',
     sheets: d.format === SHEET_FORMAT ? str(d.sheets) : '',
     project: str(d.projectId) ? { id: str(d.projectId), name: str(d.projectName) || 'Project' } : null,
-    fileUrl: d.format === DOC_FORMAT || d.format === SHEET_FORMAT ? '' : str(d.url),
+    fileUrl: d.format === DOC_FORMAT || d.format === SHEET_FORMAT ? '' : fileUrlOf(d),
+    fileName: d.format === DOC_FORMAT || d.format === SHEET_FORMAT ? '' : fileNameWithType(str(d.name) || str(d.fileName) || str(d.title), fileUrlOf(d), str(d.type)),
     owner: { uid: str(d.uploadedByUid), name: str(d.uploadedBy), email: str(d.uploadedByEmail) },
     createdAt: str(d.createdAt),
     updatedAt: str(d.updatedAt),
@@ -400,6 +403,21 @@ export async function uploadFileDoc(file: File, opts: {
 
 /** Uploaded files that can be opened in the editor (keep in step with /api/documents/convert). */
 export const EDITABLE_FILE_TYPES = ['docx', 'pdf', 'txt', 'md', 'html', 'htm'];
+/** An uploaded file's address, whichever field it's kept in. */
+export function fileUrlOf(d: Record<string, unknown>): string {
+  return str(d.url) || str(d.fileUrl) || str(d.downloadURL) || str(d.downloadUrl) || str(d.fileURL);
+}
+
+/** AE Hub's file types, for files whose name and address don't say. */
+const TYPE_EXTENSIONS: Record<string, string> = { PDF: 'pdf', DOCX: 'docx', DOC: 'docx', XLSX: 'xlsx', XLS: 'xlsx', CSV: 'csv', TXT: 'txt', MD: 'md', HTML: 'html' };
+
+/** A file's name with its type added when the name has none (from its address, else AE Hub's type). */
+export function fileNameWithType(name: string, url = '', type = ''): string {
+  const ext = fileExtOf(name, url) || TYPE_EXTENSIONS[type.toUpperCase()] || '';
+  const base = name.trim() || 'document';
+  return ext && !base.toLowerCase().endsWith(`.${ext}`) ? `${base}.${ext}` : base;
+}
+
 /** A file's type (extension), from its name or, for files named without one, its address. */
 export function fileExtOf(name: string, url = ''): string {
   const fromName = /\.([a-z0-9]{1,5})$/i.exec(name.trim())?.[1];
@@ -422,10 +440,10 @@ export function fileNameOf(name: string, url = ''): string {
 export const isEditableFile = (name: string, url = '') => EDITABLE_FILE_TYPES.includes(fileExtOf(name, url));
 
 /**
- * Files shown read-only in the document view (converted on the fly, the file itself unchanged).
- * PDFs and images open in the browser's own viewer instead, which shows them as they are.
+ * Files shown read-only in the document view (converted on the fly, the file itself unchanged):
+ * Word, PDF, text and web pages. Files with no viewer here (images, PowerPoint...) open in the browser.
  */
-export const isPreviewableFile = (name: string, url = '') => isEditableFile(name, url) && fileExtOf(name, url) !== 'pdf';
+export const isPreviewableFile = (name: string, url = '') => isEditableFile(name, url);
 
 /** An uploaded Word, PDF, text or web page file as HTML for the editor (converted on the server). */
 export async function convertFile(url: string, name: string): Promise<string> {
@@ -459,8 +477,8 @@ export async function makeSheetEditable(id: string, me: Viewer): Promise<void> {
   if (data.format === SHEET_FORMAT) return;
   const current = toWorkDoc(id, data);
   if (!permissionsOf(current, me).canEdit) throw new Error('You can’t edit this file. Ask its owner to let others edit it.');
-  const fileUrl = str(data.url);
-  const name = fileNameOf(str(data.name), fileUrl);
+  const fileUrl = current.fileUrl;
+  const name = current.fileName;
   if (!isSheetFile(name)) throw new Error('Only Excel (.xlsx) and CSV files open in the spreadsheet.');
   const sheets = await convertSheetFile(fileUrl, name);
   if (bytesOf(sheets) > MAX_CONTENT_BYTES) throw new Error('This spreadsheet is too large to edit here. Download it instead.');
@@ -536,8 +554,8 @@ export async function makeEditable(id: string, me: Viewer): Promise<void> {
   if (data.format === DOC_FORMAT) return;
   const current = toWorkDoc(id, data);
   if (!permissionsOf(current, me).canEdit) throw new Error('You can’t edit this file. Ask its owner to let others edit it.');
-  const fileUrl = str(data.url);
-  const name = fileNameOf(str(data.name), fileUrl);
+  const fileUrl = current.fileUrl;
+  const name = current.fileName;
   if (!isEditableFile(name)) throw new Error('Only Word (.docx), PDF, text and web page files can be edited.');
   const html = cleanPastedHtml(await storeInlineImages(await convertFile(fileUrl, name), me));
   if (bytesOf(html) > MAX_CONTENT_BYTES) throw new Error('This file is too long to edit here. Download it instead.');

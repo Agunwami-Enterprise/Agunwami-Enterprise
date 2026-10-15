@@ -1,12 +1,12 @@
 /**
- * The file a conversion request is about: either one in AE Hub's storage
- * (JSON { url, name }) or one sent with the request (form data "file", e.g.
+ * The file a conversion request is about: either one at an address (JSON
+ * { url, name }: AE Hub's storage or a public https link, see remote-file) or one sent with the request (form data "file", e.g.
  * a template being added).
  */
 
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { hubFileUrl } from './hub-storage';
+import { fetchFile } from './remote-file';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -23,10 +23,9 @@ export async function readSource(request: Request): Promise<Source | NextRespons
   }
   const body = await request.json().catch(() => ({})) as { url?: unknown; name?: unknown };
   const name = typeof body.name === 'string' ? body.name : '';
-  const url = hubFileUrl(typeof body.url === 'string' ? body.url : '');
-  if (!url) return NextResponse.json({ error: 'Only files uploaded to Documents can be opened.' }, { status: 400 });
-  const res = await fetch(url, { cache: 'no-store' }).catch(() => null);
-  if (!res?.ok) return NextResponse.json({ error: 'The file could not be read.' }, { status: 502 });
+  const res = await fetchFile(typeof body.url === 'string' ? body.url : '');
+  if (!res) return NextResponse.json({ error: 'This file’s address can’t be opened here. Download it instead.' }, { status: 400 });
+  if (!res.ok) return NextResponse.json({ error: 'The file could not be read (it may have been moved or deleted).' }, { status: 502 });
   if (Number(res.headers.get('content-length') ?? 0) > MAX_BYTES) return NextResponse.json({ error: 'The file is too large (over 25 MB).' }, { status: 413 });
   const buffer = Buffer.from(await res.arrayBuffer());
   if (buffer.length > MAX_BYTES) return NextResponse.json({ error: 'The file is too large (over 25 MB).' }, { status: 413 });

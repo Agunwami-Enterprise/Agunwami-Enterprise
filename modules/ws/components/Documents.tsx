@@ -21,14 +21,16 @@ import { Card, Empty, ErrorNote, PageHeader, Pill, StatTile, Tabs, btnGhost, btn
 import { useWorkstationAccess } from '@/lib/workstation/access-context';
 import NewDocumentDialog from '@/modules/documents/components/NewDocumentDialog';
 import {
-  DOC_FORMAT, SHEET_FORMAT, canBecomeEditable, docPath, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, sharedDepartmentsOf, type SharedDepartment, type Viewer,
+  DOC_FORMAT, SHEET_FORMAT, canBecomeEditable, fileNameWithType, fileUrlOf, docPath, downloadDocCopy, editNote, fileDownloadHref, makeFileEditable, opensHere, sharedDepartmentsOf, type SharedDepartment, type Viewer,
 } from '@/modules/documents/doc-store';
 import UploadDialog, { UPLOAD_CATEGORIES as CATEGORIES } from '@/modules/documents/components/UploadDialog';
 import DepartmentResources from '@/modules/documents/components/DepartmentResources';
 
 
 interface WsDocument {
-  id: string; name: string; url: string; storagePath: string; size: number; formattedSize: string;
+  id: string; name: string; url: string; storagePath: string;
+  /** The file's name with its type (for files named without one). */
+  fileName: string; size: number; formattedSize: string;
   type: string; category: string; department: string; uploadedBy: string; uploadedByUid: string;
   description: string; createdAt: string; downloadCount: number;
   /** Written in the workstation (opens in the editor) rather than uploaded. */
@@ -43,7 +45,8 @@ interface WsDocument {
 
 function toDocument(id: string, d: Record<string, unknown>): WsDocument {
   return {
-    id, name: String(d.name ?? 'Untitled'), url: String(d.url ?? ''), storagePath: String(d.storagePath ?? ''),
+    id, name: String(d.name || d.fileName || d.title || 'Untitled'), url: fileUrlOf(d), storagePath: String(d.storagePath ?? ''),
+    fileName: fileNameWithType(String(d.name || d.fileName || d.title || ''), fileUrlOf(d), String(d.type ?? '')),
     size: Number(d.size ?? 0) || 0, formattedSize: String(d.formattedSize ?? ''), type: String(d.type ?? 'OTHER'),
     category: String(d.category ?? 'General'), department: String(d.department ?? 'all'), uploadedBy: String(d.uploadedBy ?? ''),
     uploadedByUid: String(d.uploadedByUid ?? ''), description: String(d.description ?? ''), createdAt: String(d.createdAt ?? ''),
@@ -114,7 +117,7 @@ export default function Documents() {
   // Written documents open here, for editing when you can (you can switch to viewing there) and for reading otherwise.
   async function open(d: WsDocument) {
     // Word, text and web page files are shown in the document view; PDFs and others in the browser's viewer.
-    if (d.written || opensHere(d.name, d.url)) router.push(docPath(d.id));
+    if (d.written || opensHere(d.fileName, d.url)) router.push(docPath(d.id));
     else window.open(d.url, '_blank', 'noopener,noreferrer');
     await updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined);
   }
@@ -133,13 +136,13 @@ export default function Documents() {
   async function editFile(d: WsDocument) {
     if (!(await confirm({
       title: `Edit ${d.name} here?`,
-      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. ${editNote(d.name, d.url)}${d.uploadedByUid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      message: `It opens in the document editor and is kept as a written document in the same place, shared the same way. The original file stays available to download from the document’s details. ${editNote(d.fileName)}${d.uploadedByUid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Open in editor',
     }))) return;
     setConverting(d.id);
     setError('');
     try {
-      await makeFileEditable(d.id, me, d.name, d.url);
+      await makeFileEditable(d.id, me, d.fileName, d.url);
       router.push(docPath(d.id));
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : `${d.name} could not be opened for editing.`);
@@ -225,12 +228,12 @@ export default function Documents() {
                     </button>
                   ) : (
                     <>
-                      {canBecomeEditable(d.name, d.url) && canEditDoc(d) && (
+                      {canBecomeEditable(d.fileName, d.url) && canEditDoc(d) && (
                         <button className={action} onClick={() => void editFile(d)} disabled={!!converting} aria-label={`Edit ${d.name}`} title="Open it in the editor to edit it">
                           {converting === d.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Pencil className="h-4 w-4" aria-hidden />} Edit
                         </button>
                       )}
-                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title={opensHere(d.name, d.url) ? 'Look at it here' : 'Open the file in a new tab'}>
+                      <button className={action} onClick={() => void open(d)} disabled={!d.url} aria-label={`View ${d.name}`} title={opensHere(d.fileName, d.url) ? 'Look at it here' : 'Open the file in a new tab'}>
                         <Eye className="h-4 w-4" aria-hidden /> View
                       </button>
                     </>
@@ -240,7 +243,7 @@ export default function Documents() {
                       <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
                     </button>
                   ) : d.url ? (
-                    <a className={action} href={fileDownloadHref(d.url, d.name)} download aria-label={`Download ${d.name}`} title="Download the file"
+                    <a className={action} href={fileDownloadHref(d.url, d.fileName)} download aria-label={`Download ${d.name}`} title="Download the file"
                       onClick={() => void updateDoc(doc(authDb, 'documents', d.id), { downloadCount: increment(1) }).catch(() => undefined)}>
                       <Download className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Download</span>
                     </a>

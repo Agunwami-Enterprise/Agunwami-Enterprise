@@ -138,7 +138,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
 
   // An uploaded Excel or CSV file: read it into the grid (read-only).
   const fileUrl = docData && isFile ? docData.fileUrl : '';
-  const fileName = docData?.title ?? '';
+  const fileName = docData?.fileName ?? '';
   useEffect(() => {
     if (!fileUrl) return;
     let cancelled = false;
@@ -278,7 +278,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
     if (!docData || !me) return;
     const ok = await confirm({
       title: `Edit ${docData.title}?`,
-      message: `It becomes a spreadsheet in the same place, shared the same way, and opens for editing. The original file stays available to download from the details. ${editNote(docData.title, docData.fileUrl)}${docData.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
+      message: `It becomes a spreadsheet in the same place, shared the same way, and opens for editing. The original file stays available to download from the details. ${editNote(docData.fileName)}${docData.owner.uid ? '' : ' It has no owner yet, so you’ll become its owner.'}`,
       confirmLabel: 'Edit it',
     });
     if (!ok) return;
@@ -388,7 +388,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
             </div>
           )}
           {isFile && docData ? (
-            <a href={fileDownloadHref(docData.fileUrl, docData.title)} download title="Download the original file" className={button}>
+            <a href={fileDownloadHref(docData.fileUrl, docData.fileName)} download title="Download the original file" className={button}>
               <Download className="h-4 w-4" aria-hidden="true" /> Download
             </a>
           ) : (
@@ -423,7 +423,7 @@ export default function SpreadsheetPage({ id, basePath, isCeo, aeDepartmentId = 
       </div>
 
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
-      {fileError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{fileError} You can still download it.</p>}
+      {fileError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{fileError}{' '}{docData?.fileUrl && <a href={docData.fileUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Open the file</a>} or download it.</p>}
       {isFile && canEdit && !fileError && (
         <p role="status" className="flex items-center gap-2 rounded-lg border border-[#e5e5e5] bg-white px-4 py-2.5 text-[13px] text-[#525252] dark:border-white/10 dark:bg-[#1e1e1e] dark:text-gray-300">
           <Eye className="h-4 w-4 shrink-0" aria-hidden="true" /> This is the uploaded file, shown read-only. Choose Edit to turn it into a spreadsheet you can change.

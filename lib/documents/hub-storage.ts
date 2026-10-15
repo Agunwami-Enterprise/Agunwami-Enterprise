@@ -1,8 +1,8 @@
 /**
- * Files uploaded to Documents live in AE Hub's Firebase Storage. The server
- * reads them for the browser (converting for the editor, downloading),
- * because AE Hub's storage doesn't let the browser read them directly; only
- * AE Hub's own storage addresses are accepted, never an arbitrary one.
+ * Files uploaded to Documents live in AE Hub's Firebase Storage, which the
+ * browser can't read directly, so the server reads them (converting for the
+ * editor, downloading). This recognises AE Hub's storage addresses; other
+ * public links go through the checks in remote-file.
  */
 
 import 'server-only';
