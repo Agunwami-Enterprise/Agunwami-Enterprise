@@ -36,8 +36,13 @@ import {
   Smile, Paperclip, Calendar, Zap, Hash, Trash2, Shield, Clock,
   LogOut, Settings, UserPlus, ClipboardList, Edit3, Crown,
   Camera, Upload, Sticker, Image as ImageIcon, FileText, AtSign, AlertTriangle, AlertCircle, Bookmark, Reply,
-  Bell, BellOff, SlidersHorizontal, MessagesSquare,
+  Bell, BellOff, SlidersHorizontal, MessagesSquare, FileSpreadsheet, FolderOpen, Download,
 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useOptionalWorkstationAccess } from "@/lib/workstation/access-context";
+import PickDocumentDialog from "@/modules/documents/components/PickDocumentDialog";
+import { fileDownloadHref, isEditableFile, isSheetFile, type Viewer, type WorkDoc } from "@/modules/documents/doc-store";
 import { toast } from "react-toastify";
 import {
   checkStaffArrangement,
@@ -100,7 +105,10 @@ interface Message {
   stickerId?: string;
   sentAt?: number;
   readBy?: Record<string, boolean>;
-  type?: "text" | "sticker" | "image" | "file";
+  type?: "text" | "sticker" | "image" | "file" | "document";
+  /** A document from Documents shared in the chat (type "document"). */
+  docId?: string;
+  docKind?: "doc" | "sheet" | "file";
   deleted?: boolean;
   deletedBy?: string;
   deletedByRole?: "self" | "admin";
@@ -3233,6 +3241,9 @@ function EditInviteesModal({
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
+/** The time a message is sent (read when sending, never while rendering). */
+const sentAtNow = () => Date.now();
+
 /** Whether the window is at least `px` wide (false while rendering on the server). */
 function useMinWidth(px: number): boolean {
   const query = `(min-width: ${px}px)`;
@@ -3533,6 +3544,54 @@ export default function MessagingClient() {
   const myColor = colorFromStr(myName);
   const myPhotoURL = profile?.photoURL || null;
   const myUid = user?.uid || "";
+
+  // Documents: shared in chats and opened in the editor, in this workstation (the CEO's or the department's).
+  const pathname = usePathname();
+  const inCeo = pathname?.startsWith("/ceo") ?? false;
+  const documentsBase = inCeo ? "/ceo/documents" : "/ws/documents";
+  const wsAccess = useOptionalWorkstationAccess();
+  const [pickingDocument, setPickingDocument] = useState(false);
+  const docViewer: Viewer | null = myUid ? {
+    uid: myUid, name: myName, email: user?.email || "", department: String(profile?.department ?? "").toLowerCase(),
+    isCeo: inCeo || wsAccess?.kind === "ceo", aeDepartmentId: wsAccess?.departmentId ?? "",
+  } : null;
+
+  // ─── Share a document (a link to it in Documents, opened in the editor) ───
+  const shareDocument = async (d: WorkDoc) => {
+    setPickingDocument(false);
+    if (!activeConvId || !myUid) return;
+    try {
+      const now = sentAtNow();
+      const convo = conversations.find(c => c.id === activeConvId);
+      await push(ref(rtdb, `messages/${activeConvId}`), {
+        senderId: myUid,
+        senderName: myName,
+        senderInitials: myInitials,
+        senderAvatarColor: myColor,
+        senderPhotoURL: myPhotoURL || null,
+        text: d.title,
+        docId: d.id,
+        docKind: d.kind,
+        sentAt: now,
+        readBy: { [myUid]: true },
+        type: "document",
+      });
+      const batch: Record<string, unknown> = {
+        [`conversations/${activeConvId}/lastMessage`]: `📄 ${d.title}`,
+        [`conversations/${activeConvId}/lastMessageSenderId`]: myUid,
+        [`conversations/${activeConvId}/lastMessageSenderName`]: myName,
+        [`conversations/${activeConvId}/lastMessageAt`]: now,
+      };
+      Object.keys(convo?.memberIds || {}).forEach(uid => {
+        if (uid !== myUid) batch[`conversations/${activeConvId}/unreadCount/${uid}`] = (convo?.unreadCount?.[uid] || 0) + 1;
+      });
+      await update(ref(rtdb), batch);
+      scrollToBottom(true);
+    } catch (err) {
+      console.error("Failed to share document:", err);
+      toast.error("The document could not be shared.");
+    }
+  };
 
   // ─── File Attachment Upload Handler ───
   const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4746,6 +4805,8 @@ export default function MessagingClient() {
                                           ? "📷 Image"
                                           : msg.type === "file"
                                           ? `📎 ${msg.fileName || "File"}`
+                                          : msg.type === "document"
+                                          ? `📄 ${msg.text}`
                                           : msg.text;
                                         const replyCtx = {
                                           id: msg.id,
@@ -4876,19 +4937,41 @@ export default function MessagingClient() {
                                         />
                                         {msg.text && msg.text !== msg.fileName && <p><FormattedMessageText text={msg.text} isMe={isMe} validMemberNames={validMemberNames} /></p>}
                                       </div>
-                                    ) : msg.type === "file" && msg.mediaUrl ? (
-                                      <a
-                                        href={msg.mediaUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2.5 hover:underline"
-                                      >
-                                        <FileText className="w-5 h-5 shrink-0" />
+                                    ) : msg.type === "document" && msg.docId ? (
+                                      /* A document from Documents: opens in the editor (if the person can see it) */
+                                      <Link href={`${documentsBase}/${msg.docId}`} className="flex items-center gap-2.5 hover:underline" title="Open it in Documents">
+                                        {msg.docKind === "sheet" ? <FileSpreadsheet className="w-5 h-5 shrink-0" /> : <FileText className="w-5 h-5 shrink-0" />}
                                         <div className="min-w-0">
-                                          <p className="font-semibold text-xs truncate max-w-[180px]">{msg.fileName || msg.text}</p>
-                                          <p className="text-[10px] opacity-75">Click to download</p>
+                                          <p className="font-semibold text-xs truncate max-w-[200px]">{msg.text || "Document"}</p>
+                                          <p className="text-[10px] opacity-75">{msg.docKind === "sheet" ? "Spreadsheet" : msg.docKind === "file" ? "File" : "Document"} · Tap to open</p>
                                         </div>
-                                      </a>
+                                      </Link>
+                                    ) : msg.type === "file" && msg.mediaUrl ? (
+                                      /* Word, PDF, text, Excel and CSV files open read-only in the editor; others download */
+                                      (() => {
+                                        const name = msg.fileName || msg.text || "File";
+                                        const opensHere = isEditableFile(name, msg.mediaUrl) || isSheetFile(name, msg.mediaUrl);
+                                        const sheet = isSheetFile(name, msg.mediaUrl);
+                                        const body = (
+                                          <>
+                                            {sheet ? <FileSpreadsheet className="w-5 h-5 shrink-0" /> : <FileText className="w-5 h-5 shrink-0" />}
+                                            <div className="min-w-0">
+                                              <p className="font-semibold text-xs truncate max-w-[180px]">{name}</p>
+                                              <p className="text-[10px] opacity-75">{opensHere ? "Tap to open" : "Click to download"}</p>
+                                            </div>
+                                          </>
+                                        );
+                                        return opensHere ? (
+                                          <div className="flex items-center gap-2">
+                                            <Link href={`${documentsBase}/file?${new URLSearchParams({ url: msg.mediaUrl, name })}`} className="flex min-w-0 items-center gap-2.5 hover:underline">{body}</Link>
+                                            <a href={fileDownloadHref(msg.mediaUrl, name)} download title="Download" aria-label={`Download ${name}`} className="shrink-0 rounded-lg p-1 opacity-75 hover:bg-black/10 hover:opacity-100">
+                                              <Download className="w-3.5 h-3.5" />
+                                            </a>
+                                          </div>
+                                        ) : (
+                                          <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 hover:underline">{body}</a>
+                                        );
+                                      })()
                                     ) : (
                                       (() => {
                                         const isInviteMsg = msg.text.includes("Invitation") || msg.text.includes("New Meeting") || msg.text.includes("New Event") || msg.text.includes("Live Meeting");
@@ -5283,6 +5366,11 @@ export default function MessagingClient() {
                     >
                       <Paperclip className="w-4 h-4" />
                     </button>
+                    <button type="button" onClick={() => setPickingDocument(true)} disabled={sending || !docViewer}
+                      title="Share a document from Documents" aria-label="Share a document"
+                      className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors shrink-0 mb-0.5">
+                      <FolderOpen className="w-4 h-4" />
+                    </button>
                     
                     <textarea ref={inputRef} rows={1} value={newMessage}
                       maxLength={10000}
@@ -5358,6 +5446,10 @@ export default function MessagingClient() {
       </div>
 
       {/* Modals */}
+      {pickingDocument && docViewer && (
+        <PickDocumentDialog me={docViewer} onPick={d => void shareDocument(d)} onClose={() => setPickingDocument(false)}
+          note="People in this chat open it in their own Documents. Anyone it isn't shared with is told they don't have access." />
+      )}
       <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)}
         myUid={myUid} myName={myName} myDept={profile?.department} onCreated={id => { setActiveConvId(id); setShowMobileChat(true); }} />
 

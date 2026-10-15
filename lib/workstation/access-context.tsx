@@ -21,6 +21,11 @@ const AccessContext = createContext<ClientAccess | null>(null);
 
 export const AccessProvider = AccessContext.Provider;
 
+/** The department workstation's access, or null outside it (e.g. in the CEO Workstation). */
+export function useOptionalWorkstationAccess(): ClientAccess | null {
+  return useContext(AccessContext);
+}
+
 export function useWorkstationAccess(): ClientAccess {
   const access = useContext(AccessContext);
   if (!access) throw new Error('useWorkstationAccess must be used inside the /ws workstation.');

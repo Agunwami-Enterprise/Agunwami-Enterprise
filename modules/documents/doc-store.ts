@@ -399,6 +399,23 @@ export async function uploadFileDoc(file: File, opts: {
   return record.id;
 }
 
+/**
+ * Lists a file that's already stored somewhere (e.g. a chat attachment) in
+ * Documents, for only the person adding it, so it can be shared or edited
+ * like an upload. The file itself isn't copied or moved. Returns the id.
+ */
+export async function addFileRecord(file: { url: string; name: string; size?: number }, me: Viewer): Promise<string> {
+  const now = new Date();
+  const record = doc(collection(authDb, 'documents'));
+  await setDoc(record, {
+    name: file.name, url: file.url, storagePath: '', size: file.size ?? 0, formattedSize: file.size ? sizeLabel(file.size) : '',
+    dateModified: dayLabel(now), type: fileTypeOf(file.name, ''), category: 'General', department: 'private', sharedDepartments: [],
+    uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email, description: '',
+    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0,
+  });
+  return record.id;
+}
+
 // ── Editing uploaded files ──────────────────────────────────────────────────
 
 /** Uploaded files that can be opened in the editor (keep in step with /api/documents/convert). */
