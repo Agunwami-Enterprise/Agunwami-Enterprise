@@ -1,20 +1,19 @@
 /**
- * POST /api/documents/convert { url, name }
+ * POST /api/documents/convert { url, name } | form data "file"
  *
- * Turns an uploaded Word (.docx), PDF, text (.txt, .md) or web page (.html)
- * file into HTML for the document editor, so an uploaded document can be edited.
- * Runs here because AE Hub's storage doesn't let the browser read files
- * directly. Only files in AE Hub's own storage are fetched. Images in Word
- * files come back inline (data: addresses); the editor stores them.
+ * Turns a Word (.docx), PDF, text (.txt, .md) or web page (.html) file into
+ * HTML for the document editor: an uploaded document being shown or edited
+ * (fetched from AE Hub's storage, which the browser can't read directly; only
+ * AE Hub's own storage is fetched), or a file sent with the request (a
+ * template being added). Images in Word files come back inline (data:
+ * addresses); the editor stores them.
  */
 
 import { NextResponse } from 'next/server';
 import mammoth from 'mammoth';
 import { requireSession } from '@/lib/workstation/api-auth';
-import { hubFileUrl } from '@/lib/documents/hub-storage';
+import { readSource } from '@/lib/documents/read-source';
 import { ScannedPdfError, pdfToHtml } from '@/lib/documents/pdf-to-html';
-
-const MAX_BYTES = 25 * 1024 * 1024;
 
 // Keep in step with EDITABLE_FILE_TYPES in modules/documents/doc-store.ts.
 const EDITABLE_EXTENSIONS = ['docx', 'pdf', 'txt', 'md', 'html', 'htm'];
@@ -37,25 +36,14 @@ export async function POST(request: Request) {
   const auth = await requireSession();
   if (auth.error) return auth.error;
 
-  const body = await request.json().catch(() => ({})) as { url?: unknown; name?: unknown };
-  const url = typeof body.url === 'string' ? body.url : '';
-  const name = typeof body.name === 'string' ? body.name : '';
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  const source = await readSource(request);
+  if (source instanceof NextResponse) return source;
+  const { buffer, ext } = source;
   if (!EDITABLE_EXTENSIONS.includes(ext)) {
-    return NextResponse.json({ error: 'Only Word (.docx), PDF, text (.txt, .md) and web page (.html) files can be edited. Download other files instead.' }, { status: 400 });
+    return NextResponse.json({ error: 'Only Word (.docx), PDF, text (.txt, .md) and web page (.html) files can be opened as documents.' }, { status: 400 });
   }
-  // Only AE Hub's own storage, never an arbitrary address.
-  const parsed = hubFileUrl(url);
-  if (!parsed) return NextResponse.json({ error: 'Only files uploaded to Documents can be edited.' }, { status: 400 });
 
   try {
-    const res = await fetch(parsed, { cache: 'no-store' });
-    if (!res.ok) return NextResponse.json({ error: 'The file could not be read.' }, { status: 502 });
-    const size = Number(res.headers.get('content-length') ?? 0);
-    if (size > MAX_BYTES) return NextResponse.json({ error: 'The file is too large to edit (over 25 MB).' }, { status: 413 });
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length > MAX_BYTES) return NextResponse.json({ error: 'The file is too large to edit (over 25 MB).' }, { status: 413 });
-
     if (ext === 'docx') {
       const result = await mammoth.convertToHtml({ buffer });
       return NextResponse.json({ html: result.value || '<p></p>', warnings: result.messages.filter(m => m.type === 'warning').length });
@@ -69,6 +57,6 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof ScannedPdfError) return NextResponse.json({ error: err.message }, { status: 422 });
     console.error('[POST /api/documents/convert]', err);
-    return NextResponse.json({ error: 'The file could not be opened for editing. It may be damaged or password-protected.' }, { status: 422 });
+    return NextResponse.json({ error: 'The file could not be opened. It may be damaged or password-protected.' }, { status: 422 });
   }
 }

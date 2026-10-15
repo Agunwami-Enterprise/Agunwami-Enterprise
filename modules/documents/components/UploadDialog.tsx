@@ -11,7 +11,7 @@ import { useRef, useState } from 'react';
 import { Loader2, Upload } from 'lucide-react';
 import AeModal from '@/app/components/common/AeModal';
 import {
-  MAX_FILE_BYTES, editNote, fileExtOf, isEditableFile, makeEditable, sizeLabel, uploadFileDoc, type SharedDepartment, type Viewer,
+  MAX_FILE_BYTES, canBecomeEditable, editNote, fileExtOf, isSheetFile, makeFileEditable, sizeLabel, uploadFileDoc, type SharedDepartment, type Viewer,
 } from '../doc-store';
 import DepartmentPicker from './DepartmentPicker';
 
@@ -54,7 +54,7 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
   const [converting, setConverting] = useState(false);
   const [error, setError] = useState('');
 
-  const editable = !!file && isEditableFile(file.name);
+  const editable = !!file && canBecomeEditable(file.name);
   const editHere = editChoice ?? (!!file && fileExtOf(file.name) !== 'pdf');
 
   async function upload() {
@@ -78,7 +78,7 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
     if (!(editable && editHere)) { onClose(); return; }
     setConverting(true);
     try {
-      await makeEditable(id, me);
+      await makeFileEditable(id, me, file.name);
       onEditable(id);
     } catch (e) {
       // The file is uploaded either way; it can be opened for editing from the list later.
@@ -138,7 +138,7 @@ export default function UploadDialog({ me, department, team, onClose, onUploaded
         {editable && (
           <label className="flex items-start gap-2 text-[13px] text-[#525252] dark:text-gray-300">
             <input type="checkbox" checked={editHere} disabled={busy} onChange={e => setEditChoice(e.target.checked)} className="mt-0.5 accent-[#f5bd02]" />
-            <span>Open it in the editor so it can be edited<span className="block text-[12px] text-[#8a8a8a]">It becomes a document you can change here. The original file stays available to download. {editNote(file.name)}</span></span>
+            <span>Open it in the editor so it can be edited<span className="block text-[12px] text-[#8a8a8a]">It becomes a {isSheetFile(file.name) ? 'spreadsheet' : 'document'} you can change here. The original file stays available to download. {editNote(file.name)}</span></span>
           </label>
         )}
         {busy && <div className="h-2 overflow-hidden rounded-full bg-[#e5e5e5] dark:bg-white/10"><div className="h-full bg-[#f5bd02] transition-all" style={{ width: `${progress ?? 100}%` }} /></div>}
