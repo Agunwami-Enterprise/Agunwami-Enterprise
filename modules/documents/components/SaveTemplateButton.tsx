@@ -6,16 +6,19 @@ import { useState } from 'react';
 import { LayoutTemplate, Loader2 } from 'lucide-react';
 import AeModal from '@/app/components/common/AeModal';
 import { toast } from 'react-toastify';
-import { DOC_CATEGORIES, type Viewer } from '../doc-store';
+import { DOC_CATEGORIES, type DocOrientation, type Letterhead, type Viewer } from '../doc-store';
 import { addTemplate } from '../template-store';
 
-export default function SaveTemplateButton({ me, kind, title, category, body }: {
+export default function SaveTemplateButton({ me, kind, title, category, body, letterhead, orientation }: {
   me: Viewer;
   kind: 'doc' | 'sheet';
   title: string;
   category: string;
   /** The contents when saving: HTML for a document, sheets (JSON) for a spreadsheet. */
   body: () => string;
+  /** A document's letterhead and page orientation, kept with the template. */
+  letterhead?: Letterhead | null;
+  orientation?: DocOrientation;
 }) {
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState(title);
@@ -29,7 +32,7 @@ export default function SaveTemplateButton({ me, kind, title, category, body }: 
     setError('');
     try {
       const contents = body();
-      await addTemplate({ label: label.trim(), description, category: templateCategory, kind, ...(kind === 'sheet' ? { sheets: contents } : { content: contents }) }, me);
+      await addTemplate({ label: label.trim(), description, category: templateCategory, kind, ...(kind === 'sheet' ? { sheets: contents } : { content: contents, letterhead, orientation }) }, me);
       toast.success(`“${label.trim()}” is now a template everyone can start from.`);
       setOpen(false);
     } catch (e) {

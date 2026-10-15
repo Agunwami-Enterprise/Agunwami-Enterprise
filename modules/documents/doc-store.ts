@@ -26,12 +26,32 @@ import { authDb, storage } from '@/lib/workstation/firebase';
 
 export const DOC_FORMAT = 'ae-doc';
 /** A spreadsheet made in the workstation (its sheets in `sheets`, as JSON; see lib/documents/sheets). */
+/** Marks records made in the workstation (AE Hub's own app adds documents to the same collection). */
+const CREATED_IN = 'workstation';
 export const SHEET_FORMAT = 'ae-sheet';
 export const DOC_CATEGORIES = ['General', 'Policy & Handbook', 'Finance & Budget', 'Operations', 'Onboarding', 'Templates', 'Technical', 'Legal', 'Meeting Notes', 'Reports'];
 /** How long an edit lock lasts without the editor renewing it. */
 export const LOCK_MS = 2 * 60 * 1000;
 /** Firestore documents are capped at 1 MB; leave room for the other fields. */
 export const MAX_CONTENT_BYTES = 900 * 1024;
+
+/**
+ * A letterhead: a page's design (header and footer bands, logos, a
+ * watermark) shown behind every page, from a PDF template. `top` and
+ * `bottom` are the space kept clear for it, as shares of the page's height.
+ */
+export interface Letterhead { src: string; top: number; bottom: number }
+
+/** A stored letterhead, or null if it's missing or malformed. */
+export function letterheadOf(value: unknown): Letterhead | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const share = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? Math.min(0.45, Math.max(0, n)) : null);
+  const top = share(v.top);
+  const bottom = share(v.bottom);
+  if (typeof v.src !== 'string' || !/^(https:|data:image\/)/.test(v.src) || top === null || bottom === null) return null;
+  return { src: v.src, top, bottom };
+}
 
 /** Page orientation, as in Google Docs' page setup. */
 export type DocOrientation = 'portrait' | 'landscape';
@@ -63,10 +83,14 @@ export interface WorkDoc {
   orientation: DocOrientation;
   /** Shown as one long page instead of separate pages (Google Docs' "Pageless"). */
   pageless: boolean;
+  /** Shown behind every page (from a PDF letterhead or template). */
+  letterhead: Letterhead | null;
   /** An uploaded file opened for editing: the original, still downloadable. */
   originalFile: { name: string; url: string } | null;
   /** Made in the workstation (opens here: a document or a spreadsheet), rather than an uploaded file. */
   written: boolean;
+  /** Made or uploaded in the workstation (not in AE Hub's own app): with no project, it's the enterprise's. */
+  fromWorkstation: boolean;
   kind: 'doc' | 'sheet' | 'file';
   /** A spreadsheet's sheets (JSON). */
   sheets: string;
@@ -111,8 +135,10 @@ export function toWorkDoc(id: string, d: Record<string, unknown>): WorkDoc {
     othersCanEdit: d.othersCanEdit === true,
     orientation: d.orientation === 'landscape' ? 'landscape' : 'portrait',
     pageless: d.pageless === true,
+    letterhead: letterheadOf(d.letterhead),
     originalFile: str(d.originalFileUrl) ? { name: str(d.originalFileName) || 'Original file', url: str(d.originalFileUrl) } : null,
     written: d.format === DOC_FORMAT || d.format === SHEET_FORMAT,
+    fromWorkstation: d.createdIn === CREATED_IN || d.format === DOC_FORMAT || d.format === SHEET_FORMAT,
     kind: d.format === DOC_FORMAT ? 'doc' : d.format === SHEET_FORMAT ? 'sheet' : 'file',
     sheets: d.format === SHEET_FORMAT ? str(d.sheets) : '',
     project: str(d.projectId) ? { id: str(d.projectId), name: str(d.projectName) || 'Project' } : null,
@@ -189,7 +215,7 @@ export async function downloadDocCopy(id: string): Promise<void> {
     return;
   }
   // In the type it came as (an uploaded .docx downloads as .docx).
-  await downloadDocument(d.title, d.content, d.orientation, defaultDocFormat(d));
+  await downloadDocument(d.title, d.content, d.orientation, defaultDocFormat(d), d.letterhead);
 }
 
 /** Every document in Documents, written and uploaded, live (the CEO's page uses it for who can do what). */
@@ -232,6 +258,7 @@ export async function createDoc(input: {
   /** A spreadsheet instead of a document: its sheets (JSON). */
   sheets?: string;
   project?: DocProject | null;
+  letterhead?: Letterhead | null;
 }, me: Viewer): Promise<string> {
   const ref_ = doc(collection(authDb, 'documents'));
   const body = input.sheets ?? input.content;
@@ -260,11 +287,13 @@ export async function createDoc(input: {
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
     // Made in the workstation only.
+    createdIn: CREATED_IN,
     format: input.sheets ? SHEET_FORMAT : DOC_FORMAT,
     content: input.sheets ? '' : input.content,
     ...(input.sheets ? { sheets: input.sheets } : {}),
     othersCanEdit: input.othersCanEdit,
     orientation: input.orientation ?? 'portrait',
+    ...(input.letterhead ? { letterhead: input.letterhead } : {}),
     updatedBy: me.name,
     lock: { uid: me.uid, name: me.name, email: me.email, at: now.toISOString() },
     serverUpdatedAt: serverTimestamp(),
@@ -279,7 +308,7 @@ export class DocConflictError extends Error {}
  * after `baseUpdatedAt` (what this editor last loaded or saved). Returns the
  * new updatedAt.
  */
-export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation' | 'pageless' | 'project'>> & { share?: DocShare },
+export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title' | 'content' | 'sheets' | 'category' | 'description' | 'othersCanEdit' | 'sharedDepartments' | 'orientation' | 'pageless' | 'project' | 'letterhead'>> & { share?: DocShare },
   baseUpdatedAt: string, me: Viewer): Promise<string> {
   if (changes.content !== undefined && bytesOf(changes.content) > MAX_CONTENT_BYTES) {
     throw new Error('This document is too long to save. Split it into two documents.');
@@ -316,6 +345,7 @@ export async function saveDoc(id: string, changes: Partial<Pick<WorkDoc, 'title'
     if (changes.description !== undefined) update.description = changes.description.trim();
     if (changes.orientation !== undefined) update.orientation = changes.orientation === 'landscape' ? 'landscape' : 'portrait';
     if (changes.pageless !== undefined) update.pageless = changes.pageless === true;
+    if (changes.letterhead !== undefined) update.letterhead = letterheadOf(changes.letterhead);
     // Sharing is the owner's call.
     if (can.canShare && changes.share !== undefined) {
       if (changes.share === 'department' && current.aeDepartmentId) {
@@ -407,7 +437,7 @@ export async function uploadFileDoc(file: File, opts: {
     name: file.name, url, storagePath, size: file.size, formattedSize: sizeLabel(file.size), dateModified: dayLabel(now),
     type: fileTypeOf(file.name, file.type), category: opts.category, ...placement, ...projectFields(opts.project),
     uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email, description: opts.description.trim(),
-    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0,
+    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0, createdIn: CREATED_IN,
   });
   return record.id;
 }
@@ -424,7 +454,7 @@ export async function addFileRecord(file: { url: string; name: string; size?: nu
     name: file.name, url: file.url, storagePath: '', size: file.size ?? 0, formattedSize: file.size ? sizeLabel(file.size) : '',
     dateModified: dayLabel(now), type: fileTypeOf(file.name, ''), category: 'General', department: 'private', sharedDepartments: [],
     uploadedBy: me.name, uploadedByUid: me.uid, uploadedByEmail: me.email, description: '',
-    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0,
+    createdAt: now.toISOString(), updatedAt: now.toISOString(), downloadCount: 0, createdIn: CREATED_IN,
   });
   return record.id;
 }
@@ -475,14 +505,41 @@ export const isEditableFile = (name: string, url = '') => EDITABLE_FILE_TYPES.in
  */
 export const isPreviewableFile = (name: string, url = '') => isEditableFile(name, url);
 
-/** An uploaded Word, PDF, text or web page file as HTML for the editor (converted on the server). */
-export async function convertFile(url: string, name: string): Promise<string> {
-  const res = await fetch('/api/documents/convert', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, name: fileNameOf(name, url) }),
-  });
-  const body = await res.json().catch(() => ({})) as { html?: string; error?: string };
+/** A file converted for the editor: its HTML, and a PDF's page design as a letterhead (its picture inline until stored). */
+export interface ConvertedDoc { html: string; letterhead: Letterhead | null; landscape: boolean }
+
+/** /api/documents/convert's answer. */
+export async function convertedFrom(res: Response): Promise<ConvertedDoc> {
+  const body = await res.json().catch(() => ({})) as { html?: string; error?: string; background?: Letterhead & { landscape?: boolean } };
   if (!res.ok || typeof body.html !== 'string') throw new Error(body.error || 'The file could not be opened.');
-  return body.html;
+  return { html: body.html, letterhead: letterheadOf(body.background), landscape: body.background?.landscape === true };
+}
+
+/** An uploaded Word, PDF, text or web page file for the editor (converted on the server). */
+export async function convertFile(url: string, name: string): Promise<ConvertedDoc> {
+  return convertedFrom(await fetch('/api/documents/convert', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, name: fileNameOf(name, url) }),
+  }));
+}
+
+/** A converted letterhead's picture put in storage (it comes inline). */
+export async function storeLetterhead(letterhead: Letterhead | null, me: Pick<Viewer, 'uid'>): Promise<Letterhead | null> {
+  if (!letterhead || !letterhead.src.startsWith('data:')) return letterhead;
+  const blob = await (await fetch(letterhead.src)).blob();
+  const src = await uploadDocImage(new File([blob], 'letterhead.png', { type: blob.type || 'image/png' }), me, 'letterhead');
+  return { ...letterhead, src };
+}
+
+/** A converted letterhead for showing read-only: its inline picture as a blob address (lighter in the page). */
+export function previewLetterhead(letterhead: Letterhead | null): Letterhead | null {
+  const match = letterhead && /^data:([^;,]+);base64,([^]*)$/.exec(letterhead.src);
+  if (!letterhead || !match) return letterhead;
+  try {
+    const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+    return { ...letterhead, src: URL.createObjectURL(new Blob([bytes], { type: match[1] })) };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -608,8 +665,10 @@ export async function makeEditable(id: string, me: Viewer): Promise<void> {
   const fileUrl = current.fileUrl;
   const name = current.fileName;
   if (!isEditableFile(name)) throw new Error('Only Word (.docx), PDF, text and web page files can be edited.');
-  const html = cleanPastedHtml(await storeInlineImages(await convertFile(fileUrl, name), me));
+  const converted = await convertFile(fileUrl, name);
+  const html = cleanPastedHtml(await storeInlineImages(converted.html, me));
   if (bytesOf(html) > MAX_CONTENT_BYTES) throw new Error('This file is too long to edit here. Download it instead.');
+  const letterhead = await storeLetterhead(converted.letterhead, me);
   const now = new Date();
   await updateDoc(ref_, {
     format: DOC_FORMAT,
@@ -622,7 +681,8 @@ export async function makeEditable(id: string, me: Viewer): Promise<void> {
     size: bytesOf(html),
     formattedSize: sizeLabel(bytesOf(html)),
     othersCanEdit: data.othersCanEdit === true,
-    orientation: 'portrait',
+    orientation: converted.landscape ? 'landscape' : 'portrait',
+    letterhead,
     updatedAt: now.toISOString(),
     updatedBy: me.name,
     dateModified: dayLabel(now),
@@ -647,19 +707,44 @@ export async function uploadDocImage(file: File, me: Pick<Viewer, 'uid'>, name?:
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** A standalone HTML page of the document (for Word and printing), on a page of the given orientation. */
-function standalone(title: string, html: string, orientation: DocOrientation, extraHead = ''): string {
+function standalone(title: string, html: string, orientation: DocOrientation, letterhead: Letterhead | null = null): string {
   const landscape = orientation === 'landscape';
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${extraHead}
-<style>
-@page{size:${landscape ? '11in 8.5in' : '8.5in 11in'};margin:1in}
-body{font-family:Arial,Helvetica,sans-serif;font-size:12pt;line-height:1.6;color:#1f2937;max-width:${landscape ? '960px' : '720px'};margin:40px auto;padding:0 24px}
-h1{font-size:24pt;margin:0 0 16pt}h2{font-size:18pt}h3{font-size:14pt}h4{font-size:12pt}
+  const [pageW, pageH] = landscape ? [11, 8.5] : [8.5, 11];
+  const base = `h1{font-size:24pt;margin:0 0 16pt}h2{font-size:18pt}h3{font-size:14pt}h4{font-size:12pt}
 table{border-collapse:collapse;width:100%}th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f3f4f6}
-img{max-width:100%;height:auto}figure{margin:0}figcaption{font-size:10pt;color:#6b7280;text-align:center}
+img{max-width:100%;height:auto}img[data-align]{display:block}img[data-align=center]{margin-left:auto;margin-right:auto}img[data-align=right]{margin-left:auto}
+figure{margin:0}figcaption{font-size:10pt;color:#6b7280;text-align:center}
 blockquote{border-left:3px solid #c89b3c;margin-left:0;padding-left:12pt;color:#374151}
-ul[data-type=taskList]{list-style:none;padding-left:0}ul[data-type=taskList] li{display:flex;gap:6pt}
+ul[data-type=taskList]{list-style:none;padding-left:0}ul[data-type=taskList] li{display:flex;gap:6pt}`;
+  if (!letterhead) {
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+@page{size:${pageW}in ${pageH}in;margin:1in}
+body{font-family:Arial,Helvetica,sans-serif;font-size:12pt;line-height:1.6;color:#1f2937;max-width:${landscape ? '960px' : '720px'};margin:40px auto;padding:0 24px}
+${base}
 @media print{body{margin:0;max-width:none}}
 </style></head><body>${html}</body></html>`;
+  }
+  // A letterhead: its picture fills every printed page (a fixed picture repeats on each page; the pages
+  // have no margins of their own), and the text keeps its header and footer clear on every page (the
+  // text's padding is repeated on each page it runs onto). On screen it's one sheet with the letterhead at the top.
+  const top = (letterhead.top * pageH).toFixed(3);
+  const bottom = (letterhead.bottom * pageH).toFixed(3);
+  const side = 0.75;
+  const src = escapeHtml(letterhead.src);
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+@page{size:${pageW}in ${pageH}in;margin:0}
+body{font-family:Arial,Helvetica,sans-serif;font-size:12pt;line-height:1.6;color:#1f2937;margin:0;background:#f1f0ec}
+.sheet{position:relative;box-sizing:border-box;width:${pageW}in;min-height:${pageH}in;margin:24px auto;padding:${top}in ${side}in ${bottom}in;background:#fff url("${src}") top left/100% auto no-repeat;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.letterhead{display:none}
+${base}
+@media print{
+  body{background:none}
+  .sheet{width:auto;min-height:0;margin:0;background:none;box-shadow:none;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+  .letterhead{display:block;position:fixed;top:0;left:0;width:${pageW}in;height:${pageH}in;z-index:-1}
+}
+</style></head><body><img class="letterhead" src="${src}" alt=""><div class="sheet">${html}</div></body></html>`;
 }
 
 function download(name: string, blob: Blob) {
@@ -673,8 +758,8 @@ function download(name: string, blob: Blob) {
 
 const fileName = (title: string) => (title.trim() || 'document').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
 
-export function downloadHtml(title: string, html: string, orientation: DocOrientation = 'portrait') {
-  download(`${fileName(title)}.html`, new Blob([standalone(title, html, orientation)], { type: 'text/html' }));
+export function downloadHtml(title: string, html: string, orientation: DocOrientation = 'portrait', letterhead: Letterhead | null = null) {
+  download(`${fileName(title)}.html`, new Blob([standalone(title, html, orientation, letterhead)], { type: 'text/html' }));
 }
 
 export type DocFormat = 'docx' | 'pdf' | 'html' | 'txt' | 'md';
@@ -705,9 +790,9 @@ function htmlToText(html: string): string {
 }
 
 /** Downloads a document in the chosen format (Word is made on the server; PDF goes through printing). */
-export async function downloadDocument(title: string, html: string, orientation: DocOrientation, format: DocFormat): Promise<void> {
-  if (format === 'pdf') { printDoc(title, html, orientation); return; }
-  if (format === 'html') { downloadHtml(title, html, orientation); return; }
+export async function downloadDocument(title: string, html: string, orientation: DocOrientation, format: DocFormat, letterhead: Letterhead | null = null): Promise<void> {
+  if (format === 'pdf') { printDoc(title, html, orientation, letterhead); return; }
+  if (format === 'html') { downloadHtml(title, html, orientation, letterhead); return; }
   if (format === 'txt') { download(`${fileName(title)}.txt`, new Blob([htmlToText(html)], { type: 'text/plain;charset=utf-8' })); return; }
   if (format === 'md') {
     const { default: TurndownService } = await import('turndown');
@@ -716,21 +801,21 @@ export async function downloadDocument(title: string, html: string, orientation:
     return;
   }
   const res = await fetch('/api/documents/export', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html, title, orientation }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html, title, orientation, letterhead }),
   });
   if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || 'The Word file could not be made.');
   download(`${fileName(title)}.docx`, await res.blob());
 }
 
 /** Opens the print dialog for the document; choose "Save as PDF" there for a PDF. */
-export function printDoc(title: string, html: string, orientation: DocOrientation = 'portrait') {
+export function printDoc(title: string, html: string, orientation: DocOrientation = 'portrait', letterhead: Letterhead | null = null) {
   const frame = Object.assign(document.createElement('iframe'), { title: 'Print' });
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
   document.body.appendChild(frame);
   const win = frame.contentWindow;
   if (!win) { frame.remove(); return; }
   win.document.open();
-  win.document.write(standalone(title, html, orientation));
+  win.document.write(standalone(title, html, orientation, letterhead));
   win.document.close();
   const go = () => { win.focus(); win.print(); setTimeout(() => frame.remove(), 1000); };
   // Let images load before printing.

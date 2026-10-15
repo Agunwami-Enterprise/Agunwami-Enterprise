@@ -6,7 +6,8 @@
  * GET: the list (without contents), with whether the caller may delete each,
  *   and the built-in templates the CEO removed (`hidden`).
  * GET ?id=: one template with its contents.
- * POST { label, description, category, kind: "doc" | "sheet", content | sheets }: add one.
+ * POST { label, description, category, kind: "doc" | "sheet", content | sheets, letterhead?, orientation? }: add one
+ *   (a letterhead: a page design in AE Hub's storage shown behind every page, from a PDF).
  * POST { restoreBuiltIns: true }: bring back the built-in templates the CEO removed (CEO only).
  * DELETE ?id=: remove one (whoever added it, or the CEO).
  * DELETE ?builtin=: remove a built-in template for everyone (CEO only; blank ones stay).
@@ -16,6 +17,7 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/workstation/api-auth';
 import { getWorkstationAccess } from '@/lib/workstation/access';
 import { createDoc, deleteDoc, getDoc, listDocs, updateDoc } from '@/backend/core/firestore';
+import { hubFileUrl } from '@/lib/documents/hub-storage';
 
 const COLLECTION = 'documentTemplates';
 /** Which built-in templates the CEO removed: documentTemplateSettings/builtIns { hidden: string[] }. */
@@ -34,6 +36,17 @@ async function saveHidden(hidden: string[]): Promise<boolean> {
 }
 const MAX_BYTES = 900 * 1024;
 const str = (v: unknown, max = 200) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+
+/** A letterhead whose picture is in AE Hub's storage, or null. */
+function letterheadOf(value: unknown): { src: string; top: number; bottom: number } | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const share = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? Math.min(0.45, Math.max(0, n)) : null);
+  const top = share(v.top);
+  const bottom = share(v.bottom);
+  if (typeof v.src !== 'string' || !hubFileUrl(v.src) || top === null || bottom === null) return null;
+  return { src: v.src, top, bottom };
+}
 
 function summary(raw: Record<string, unknown>, uid: string, isCeo: boolean) {
   return {
@@ -57,7 +70,10 @@ export async function GET(request: Request) {
     if (id) {
       const raw = await getDoc(COLLECTION, id) as Record<string, unknown> | null;
       if (!raw) return NextResponse.json({ error: 'That template was deleted.' }, { status: 404 });
-      return NextResponse.json({ template: { ...summary(raw, auth.session.uid, isCeo), content: str(raw.content, MAX_BYTES), sheets: str(raw.sheets, MAX_BYTES) } });
+      return NextResponse.json({ template: {
+        ...summary(raw, auth.session.uid, isCeo), content: str(raw.content, MAX_BYTES), sheets: str(raw.sheets, MAX_BYTES),
+        letterhead: letterheadOf(raw.letterhead), orientation: raw.orientation === 'landscape' ? 'landscape' : 'portrait',
+      } });
     }
     const [all, hidden] = await Promise.all([listDocs(COLLECTION, 300) as Promise<Record<string, unknown>[]>, hiddenBuiltIns()]);
     const templates = all.map(raw => summary(raw, auth.session.uid, isCeo)).sort((a, b) => a.label.localeCompare(b.label));
@@ -80,12 +96,15 @@ export async function POST(request: Request) {
   const content = kind === 'doc' && typeof body.content === 'string' ? body.content : '';
   const sheets = kind === 'sheet' && typeof body.sheets === 'string' ? body.sheets : '';
   const label = str(body.label, 80);
+  const letterhead = kind === 'doc' ? letterheadOf(body.letterhead) : null;
   if (!label) return NextResponse.json({ error: 'Give the template a name.' }, { status: 400 });
-  if (!(content || sheets)) return NextResponse.json({ error: 'The template is empty.' }, { status: 400 });
+  // A letterhead alone (a page design with no text, like a blank company letter) is a template too.
+  if (!(content || sheets || letterhead)) return NextResponse.json({ error: 'The template is empty.' }, { status: 400 });
   if (Buffer.byteLength(content || sheets) > MAX_BYTES) return NextResponse.json({ error: 'This template is too large. Use a shorter file.' }, { status: 413 });
   try {
     const created = await createDoc(COLLECTION, {
-      label, description: str(body.description, 300), category: str(body.category) || 'Templates', kind, content, sheets,
+      label, description: str(body.description, 300), category: str(body.category) || 'Templates', kind, content: content || (letterhead ? '<p></p>' : ''), sheets,
+      ...(letterhead ? { letterhead } : {}), orientation: body.orientation === 'landscape' ? 'landscape' : 'portrait',
       createdBy: str(body.createdBy) || auth.session.email, createdByUid: auth.session.uid, createdAt: new Date().toISOString(),
     });
     if (!created) return NextResponse.json({ error: 'The template could not be saved.' }, { status: 502 });

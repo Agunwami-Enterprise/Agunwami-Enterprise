@@ -429,8 +429,14 @@ html.ae-reduce-motion .ae-lift:hover { transform: none; }
   box-shadow: inset 0 6px 6px -6px rgba(0, 0, 0, 0.18), inset 0 -6px 6px -6px rgba(0, 0, 0, 0.18);
 }
 .dark .article-editor .page-break-gap { background: #151515; }
-/* A page starts at its top margin, like the first one. */
-.article-editor .page-break + * { margin-top: 0 !important; }
+/* A letterhead behind each page (pagination.ts): under the text, over the white page. */
+.article-editor.has-letterhead { position: relative; isolation: isolate; }
+.article-editor .page-break { position: relative; }
+.article-editor .page-letterhead {
+  position: absolute; left: 0; width: 100%; z-index: -1;
+  background-size: 100% 100%; background-repeat: no-repeat;
+  pointer-events: none; user-select: none;
+}
 .article-editor .page-break-number {
   position: absolute;
   right: 12px;

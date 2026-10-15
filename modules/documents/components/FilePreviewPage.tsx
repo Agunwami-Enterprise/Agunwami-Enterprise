@@ -16,9 +16,10 @@ import '@fortune-sheet/react/dist/index.css';
 import { useAuth } from '@/lib/workstation/auth-context';
 import { subscribeUserProfile } from '@/modules/settings/services';
 import { articleExtensions } from '@/app/components/cpanel/article/extensions';
+import { Pagination, setLetterhead, type PageLetterhead } from '@/app/components/cpanel/article/pagination';
 import { articleFontsUrl } from '@/backend/modules/site-content/site-content.types';
 import { parseSheets, prepareSheets, type StoredSheet } from '@/lib/documents/sheets';
-import { addFileRecord, convertFile, convertSheetFile, docPath, fileDownloadHref, fileExtOf, isEditableFile, isSheetFile, pdfViewHref, previewHtml } from '../doc-store';
+import { addFileRecord, convertFile, convertSheetFile, docPath, fileDownloadHref, fileExtOf, isEditableFile, isSheetFile, pdfViewHref, previewHtml, previewLetterhead } from '../doc-store';
 
 const Workbook = dynamic(() => import('@fortune-sheet/react').then(m => m.Workbook), { ssr: false });
 
@@ -31,6 +32,8 @@ export default function FilePreviewPage({ url, name, basePath, isCeo, aeDepartme
   const sheet = isSheetFile(name, url);
   const shown = sheet || isEditableFile(name, url);
   const [html, setHtml] = useState<string | null>(null);
+  // A PDF's page design, behind every page.
+  const [letterhead, setPageLetterhead] = useState<PageLetterhead | null>(null);
   const [sheets, setSheets] = useState<StoredSheet[] | null>(null);
   const [error, setError] = useState(shown ? '' : 'This kind of file opens in your browser.');
   const [saving, setSaving] = useState(false);
@@ -44,7 +47,7 @@ export default function FilePreviewPage({ url, name, basePath, isCeo, aeDepartme
   const editor = useEditor({
     immediatelyRender: false,
     editable: false,
-    extensions: articleExtensions(''),
+    extensions: [...articleExtensions(''), Pagination.configure({ enabled: true })],
     content: '',
     editorProps: { attributes: { class: 'article-content article-editor ProseMirror min-h-[60vh] px-5 py-8 sm:px-10 md:px-16 md:py-14', 'aria-label': name } },
   });
@@ -54,13 +57,22 @@ export default function FilePreviewPage({ url, name, basePath, isCeo, aeDepartme
     let cancelled = false;
     const done = (e: unknown) => { if (!cancelled) setError(e instanceof Error && e.message ? e.message : 'The file could not be shown here.'); };
     if (sheet) convertSheetFile(url, name).then(json => { if (!cancelled) setSheets(parseSheets(json)); }, done);
-    else convertFile(url, name).then(previewHtml).then(result => { if (!cancelled) setHtml(result); }, done);
+    else convertFile(url, name).then(result => {
+      if (cancelled) return;
+      const design = previewLetterhead(result.letterhead);
+      setPageLetterhead(design ? { ...design, landscape: result.landscape } : null);
+      setHtml(previewHtml(result.html));
+    }, done);
     return () => { cancelled = true; };
   }, [shown, sheet, url, name]);
 
   useEffect(() => {
     if (editor && !editor.isDestroyed && html !== null) editor.commands.setContent(html, { emitUpdate: false });
   }, [editor, html]);
+
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) setLetterhead(editor.view, letterhead);
+  }, [editor, letterhead]);
 
   async function save() {
     if (!user || department === null) return;
@@ -113,7 +125,7 @@ export default function FilePreviewPage({ url, name, basePath, isCeo, aeDepartme
         </div>
       ) : (
         <div className="rounded-xl border border-[#e5e5e5] bg-[#f1f0ec] dark:border-white/10 dark:bg-[#151515] sm:py-6 md:py-10">
-          <div className="mx-auto max-w-[860px] bg-white shadow-sm dark:bg-[#1e1e1e]">
+          <div data-orientation={letterhead?.landscape ? 'landscape' : 'portrait'} className={`mx-auto bg-white shadow-sm ${letterhead?.landscape ? 'max-w-[1120px]' : 'max-w-[860px]'}`}>
             {html === null
               ? <div className="flex min-h-[40vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[#a3a3a3]" aria-hidden="true" /></div>
               : <EditorContent editor={editor} />}

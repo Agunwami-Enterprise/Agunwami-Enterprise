@@ -16,6 +16,7 @@
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { extractTextItems, getDocumentProxy, getResolvedPDFJS, type StructuredTextItem } from 'unpdf';
+import { pdfBackground, type Box, type PdfBackground } from './pdf-background';
 
 export class ScannedPdfError extends Error {
   constructor() {
@@ -109,7 +110,7 @@ function pictureObject(page: Page, key: string): Promise<RawImage | null> {
   });
 }
 
-interface Placed { image: RawImage | string; box: { left: number; right: number; top: number; bottom: number } }
+interface Placed { image: RawImage | string; box: Box }
 
 /** The pictures drawn on a page and where (PDF units, from the page's top), following the drawing's transforms. */
 async function placedPictures(page: Page, pageHeight: number): Promise<Placed[]> {
@@ -141,45 +142,60 @@ async function placedPictures(page: Page, pageHeight: number): Promise<Placed[]>
   return placed;
 }
 
-/** The pictures in a PDF, in reading order, ready to place among the text. */
-async function pdfPictures(pdf: Pdf, pages: Array<{ top: number; width: number; height: number; hasText: boolean }>, textLeft: number): Promise<Picture[]> {
-  const pictures: Picture[] = [];
-  const seenAtEdge = new Set<string>();
+interface Found { page: number; box: Box; src: string; hash: string }
+type PageInfo = { top: number; width: number; height: number; hasText: boolean };
+
+/** Every picture drawn in a PDF (but rules and specks), with where it sits on its page. */
+async function findPictures(pdf: Pdf, pages: PageInfo[]): Promise<Found[]> {
+  const found: Found[] = [];
   let bytes = 0;
-  for (let index = 0; index < pages.length && pictures.length < MAX_PICTURES; index++) {
-    const { top: pageTop, width, height, hasText } = pages[index];
+  for (let index = 0; index < pages.length; index++) {
+    const { width, height, hasText } = pages[index];
     const page = await pdf.getPage(index + 1);
     let placed: Placed[];
     try { placed = await placedPictures(page, height); } catch { continue; }
     placed.sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left);
-    // The text column: between the text's left margin and the same margin on the right.
-    const margin = Number.isFinite(textLeft) && textLeft < width / 3 ? textLeft : width * 0.1;
-    const column = Math.max(width - margin * 2, width * 0.5);
     for (const { image, box } of placed) {
-      if (pictures.length >= MAX_PICTURES || bytes > MAX_PICTURE_BYTES) break;
-      const w = box.right - box.left;
-      const h = box.bottom - box.top;
-      // A picture behind a whole page of text is its background; it can't sit behind text here.
-      if (hasText && w > width * 0.9 && h > height * 0.9) continue;
+      if (found.length >= MAX_PICTURES * 2 || bytes > MAX_PICTURE_BYTES * 2) return found;
+      // A picture behind a whole page of text is its background (kept only in a letterhead's).
+      if (index > 0 && hasText && box.right - box.left > width * 0.9 && box.bottom - box.top > height * 0.9) continue;
       const raw = typeof image === 'string' ? await pictureObject(page, image) : image;
       const encoded = raw ? await encodePicture(raw) : null;
       if (!encoded) continue;
-      // A logo in the header or footer of every page is kept once.
-      const edge = box.top < height * 0.15 || box.bottom > height * 0.85;
-      if (edge && seenAtEdge.has(encoded.hash)) continue;
-      if (edge) seenAtEdge.add(encoded.hash);
-      const centre = (box.left + box.right) / 2;
-      const percent = Math.max(5, Math.min(100, Math.round((w / column) * 100)));
-      pictures.push({
-        src: encoded.src,
-        top: pageTop + box.top,
-        bottom: pageTop + box.bottom,
-        page: index,
-        percent,
-        align: percent >= 100 || Math.abs(centre - width / 2) < width * 0.06 ? 'center' : box.left > width / 2 ? 'right' : 'left',
-      });
+      found.push({ page: index, box, ...encoded });
       bytes += encoded.src.length;
     }
+  }
+  return found;
+}
+
+/** Pictures placed among the text: their size and alignment, in reading order (a logo in every page's header once). */
+function layoutPictures(found: Found[], pages: PageInfo[], textLeft: number): Picture[] {
+  const pictures: Picture[] = [];
+  const seenAtEdge = new Set<string>();
+  let bytes = 0;
+  for (const { page, box, src, hash } of found) {
+    if (pictures.length >= MAX_PICTURES || bytes > MAX_PICTURE_BYTES) break;
+    const { top: pageTop, width, height, hasText } = pages[page];
+    const w = box.right - box.left;
+    if (hasText && w > width * 0.9 && box.bottom - box.top > height * 0.9) continue;
+    const edge = box.top < height * 0.15 || box.bottom > height * 0.85;
+    if (edge && seenAtEdge.has(hash)) continue;
+    if (edge) seenAtEdge.add(hash);
+    // The text column: between the text's left margin and the same margin on the right.
+    const margin = Number.isFinite(textLeft) && textLeft < width / 3 ? textLeft : width * 0.1;
+    const column = Math.max(width - margin * 2, width * 0.5);
+    const centre = (box.left + box.right) / 2;
+    const percent = Math.max(5, Math.min(100, Math.round((w / column) * 100)));
+    pictures.push({
+      src,
+      top: pageTop + box.top,
+      bottom: pageTop + box.bottom,
+      page,
+      percent,
+      align: percent >= 100 || Math.abs(centre - width / 2) < width * 0.06 ? 'center' : box.left > width / 2 ? 'right' : 'left',
+    });
+    bytes += src.length;
   }
   return pictures;
 }
@@ -189,6 +205,7 @@ interface Line {
   /** Distance from the top of the document (pages stacked), in PDF units. */
   top: number;
   left: number;
+  right: number;
   size: number;
   page: number;
   /** Text in columns (wide gaps between pieces): a table row. */
@@ -238,6 +255,7 @@ function pageLines(items: StructuredTextItem[], page: number, pageTop: number, p
       text: text.replace(/\s+/g, ' ').trim(),
       top: pageTop + fromTop,
       left: Math.min(...row.map(p => p.x)),
+      right: end,
       size: Math.max(...row.map(p => p.fontSize)),
       page,
       cells: cells.length > 1 ? cells.map(c => c.replace(/\s+/g, ' ').trim()) : [],
@@ -256,14 +274,16 @@ function bodySize(lines: Line[]): number {
   return [...weight.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 12;
 }
 
-export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages: number }> {
+export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages: number; background: PdfBackground | null }> {
+  // pdf.js may take over the bytes it's given; the background is drawn from a copy.
+  const copy = data.slice();
   const pdf = await getDocumentProxy(data);
   const { totalPages, items } = await extractTextItems(pdf);
 
   // Pages stacked top to bottom, so spacing between lines carries across pages.
   let offset = 0;
-  const lines: Line[] = [];
-  const pages: Array<{ top: number; width: number; height: number; hasText: boolean }> = [];
+  let lines: Line[] = [];
+  const pages: PageInfo[] = [];
   for (let page = 0; page < totalPages; page++) {
     const viewport = (await pdf.getPage(page + 1)).getViewport({ scale: 1 });
     const pageText = pageLines(items[page] ?? [], page, offset, viewport.height);
@@ -271,9 +291,40 @@ export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages
     pages.push({ top: offset, width: viewport.width, height: viewport.height, hasText: pageText.length > 0 });
     offset += viewport.height;
   }
-  const pictures = await pdfPictures(pdf, pages, Math.min(...lines.map(l => l.left)));
-  const characters = lines.reduce((n, l) => n + l.text.length, 0);
-  if (characters === 0 && pictures.length === 0) throw new ScannedPdfError();
+  let found = await findPictures(pdf, pages);
+  let characters = lines.reduce((n, l) => n + l.text.length, 0);
+
+  // A letterhead or designed template: page 1's design (everything but its body text) goes behind every
+  // page, with the text in its header and footer, and the pictures that are part of it. Not for scanned
+  // documents (several pages of pictures and no text): those come through as pictures of the pages.
+  let background: PdfBackground | null = null;
+  if (characters > 0 || totalPages === 1) {
+    const firstLines = lines.filter(l => l.page === 0);
+    const firstPictures = found.filter(f => f.page === 0);
+    try {
+      const result = await pdfBackground(copy, {
+        width: pages[0].width,
+        height: pages[0].height,
+        lines: firstLines.map(l => ({ left: l.left, right: l.right, top: l.top - l.size, bottom: l.top + l.size * 0.3 })),
+        pictures: firstPictures.map(f => f.box),
+      });
+      if (result) {
+        background = result.background;
+        const absorbed = firstLines.filter((_, i) => result.lines.has(i));
+        // The header's and footer's text, on page 1 and repeated on later pages, is the letterhead's.
+        const letterheadText = new Set(absorbed.map(l => pattern(l.text)));
+        lines = lines.filter(l => !(l.page === 0 ? absorbed.includes(l) : letterheadText.has(pattern(l.text)) && (l.edge || l.top - pages[l.page].top < pages[l.page].height * background!.top)));
+        // Its pictures, and the same pictures on later pages, are part of the background too.
+        const inBackground = new Set(firstPictures.filter((_, i) => result.pictures.has(i)).map(f => f.hash));
+        found = found.filter(f => !inBackground.has(f.hash));
+        characters = lines.reduce((n, l) => n + l.text.length, 0);
+      }
+    } catch (err) {
+      console.error('[pdfToHtml] the page design could not be drawn', err);
+    }
+  }
+  const pictures = layoutPictures(found, pages, Math.min(...lines.map(l => l.left)));
+  if (characters === 0 && pictures.length === 0 && !background) throw new ScannedPdfError();
 
   // Headers and footers: the same line at the top or bottom of most pages, and bare page numbers.
   const repeated = new Map<string, Set<number>>();
@@ -302,7 +353,7 @@ export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages
   const placePictures = (before: number) => {
     while (nextPicture < pictures.length && (pictures[nextPicture].top + pictures[nextPicture].bottom) / 2 < before) {
       const picture = pictures[nextPicture++];
-      blocks.push({ kind: 'img', lines: [], picture, last: { text: '', top: picture.bottom, left: 0, size: body, page: picture.page, cells: [], edge: null } });
+      blocks.push({ kind: 'img', lines: [], picture, last: { text: '', top: picture.bottom, left: 0, right: 0, size: body, page: picture.page, cells: [], edge: null } });
     }
   };
   for (const line of content) {
@@ -341,7 +392,9 @@ export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages
       blocks.at(-1)!.last = line;
       continue;
     }
-    const continues = prev && gap <= lineGap * 1.45
+    // (Lines further apart than about one and a half lines of text start a new paragraph, even when
+    // every gap in the file is that wide: one-line paragraphs.)
+    const continues = prev && gap <= Math.min(lineGap * 1.45, body * 1.8)
       // A list item's text wrapping onto an indented next line.
       && (prev.kind === 'p' || ((prev.kind === 'ul' || prev.kind === 'ol') && line.left > leftEdge + body));
     // A paragraph carried over to the next page (no full stop, next line starts in lower case).
@@ -374,5 +427,5 @@ export async function pdfToHtml(data: Uint8Array): Promise<{ html: string; pages
     }
     return `<${block.kind}>${escapeHtml(block.lines.join(' '))}</${block.kind}>`;
   }).join('');
-  return { html: html || '<p></p>', pages: totalPages };
+  return { html: html || '<p></p>', pages: totalPages, background };
 }
